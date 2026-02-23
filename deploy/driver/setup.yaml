@@ -1,0 +1,381 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: btrfs-nfs-csi
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: btrfs-nfs-csi
+spec:
+  attachRequired: true
+  podInfoOnMount: false
+  fsGroupPolicy: File
+  volumeLifecycleModes:
+    - Persistent
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: btrfs-nfs-csi-controller
+  namespace: btrfs-nfs-csi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: btrfs-nfs-csi-node
+  namespace: btrfs-nfs-csi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: btrfs-nfs-csi-controller
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments/status"]
+    verbs: ["patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents/status"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots/status"]
+    verbs: ["update"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: btrfs-nfs-csi-controller
+subjects:
+  - kind: ServiceAccount
+    name: btrfs-nfs-csi-controller
+    namespace: btrfs-nfs-csi
+roleRef:
+  kind: ClusterRole
+  name: btrfs-nfs-csi-controller
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: btrfs-nfs-csi-node
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: btrfs-nfs-csi-node
+subjects:
+  - kind: ServiceAccount
+    name: btrfs-nfs-csi-node
+    namespace: btrfs-nfs-csi
+roleRef:
+  kind: ClusterRole
+  name: btrfs-nfs-csi-node
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: btrfs-nfs
+driver: btrfs-nfs-csi
+deletionPolicy: Delete
+parameters:
+  csi.storage.k8s.io/snapshotter-secret-name: btrfs-nfs-creds
+  csi.storage.k8s.io/snapshotter-secret-namespace: btrfs-nfs-csi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: btrfs-nfs-csi-controller
+  namespace: btrfs-nfs-csi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: btrfs-nfs-csi
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: btrfs-nfs-csi
+        app.kubernetes.io/component: controller
+    spec:
+      serviceAccountName: btrfs-nfs-csi-controller
+      priorityClassName: system-cluster-critical
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: csi-driver
+          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.5
+          imagePullPolicy: Always
+          args: ["controller"]
+          env:
+            - name: DRIVER_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DRIVER_METRICS_ADDR
+              value: ":9090"
+          ports:
+            - name: metrics
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v5.3.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election
+            - --extra-create-metadata
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+        - name: csi-attacher
+          image: registry.k8s.io/sig-storage/csi-attacher:v4.11.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+        - name: csi-snapshotter
+          image: registry.k8s.io/sig-storage/csi-snapshotter:v8.5.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v2.1.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+        - name: liveness-probe
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.18.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --health-port=9808
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: btrfs-nfs-csi-node
+  namespace: btrfs-nfs-csi
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: btrfs-nfs-csi
+      app.kubernetes.io/component: node
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: btrfs-nfs-csi
+        app.kubernetes.io/component: node
+    spec:
+      serviceAccountName: btrfs-nfs-csi-node
+      priorityClassName: system-node-critical
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+        - operator: Exists
+          effect: NoSchedule
+      # Uncomment if using DRIVER_STORAGE_INTERFACE or DRIVER_STORAGE_CIDR
+      #hostNetwork: true
+      containers:
+        - name: csi-driver
+          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.5
+          imagePullPolicy: Always
+          args: ["driver"]
+          securityContext:
+            privileged: true
+          env:
+            - name: DRIVER_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # Node IP for NFS exports. Pick ONE of the following options:
+            # Option 1: Single network - use the node's primary IP (default)
+            - name: DRIVER_NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            # Option 2: Dedicated storage NIC - resolve IP from interface name (requires hostNetwork: true)
+            #- name: DRIVER_STORAGE_INTERFACE
+            #  value: "eth1"
+            # Option 3: Storage subnet - resolve IP matching a CIDR (requires hostNetwork: true)
+            #- name: DRIVER_STORAGE_CIDR
+            #  value: "10.10.0.0/24"
+            - name: DRIVER_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DRIVER_METRICS_ADDR
+              value: ":9090"
+          ports:
+            - name: metrics
+              containerPort: 9090
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet
+              mountPropagation: Bidirectional
+
+        - name: node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.16.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/btrfs-nfs-csi/csi.sock
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+
+        - name: liveness-probe
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.18.0
+          args:
+            - --csi-address=/csi/csi.sock
+            - --health-port=9808
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/btrfs-nfs-csi
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory

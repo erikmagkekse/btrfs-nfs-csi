@@ -1,0 +1,36 @@
+# Each StorageClass binds one agent + one tenant.
+# The SC name is used in volume IDs - do not rename it after creating volumes.
+# The agentURL can be changed safely (e.g. IP change, port change).
+#
+# Adjust these values to match your environment:
+#   - agentToken: tenant token from AGENT_TENANTS on the agent
+#   - nfsServer: NFS server IP
+#   - agentURL: agent REST API URL
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: btrfs-nfs-creds
+  namespace: btrfs-nfs-csi
+type: Opaque
+stringData:
+  agentToken: "changeme"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: btrfs-nfs
+provisioner: btrfs-nfs-csi
+parameters:
+  nfsServer: "10.0.0.5"
+  agentURL: "http://10.0.0.5:8080"
+  nfsMountOptions: "nfsvers=4.2,hard,noatime,rsize=1048576,wsize=1048576,nconnect=8"
+  csi.storage.k8s.io/provisioner-secret-name: btrfs-nfs-creds
+  csi.storage.k8s.io/provisioner-secret-namespace: btrfs-nfs-csi
+  csi.storage.k8s.io/controller-expand-secret-name: btrfs-nfs-creds
+  csi.storage.k8s.io/controller-expand-secret-namespace: btrfs-nfs-csi
+  csi.storage.k8s.io/controller-publish-secret-name: btrfs-nfs-creds
+  csi.storage.k8s.io/controller-publish-secret-namespace: btrfs-nfs-csi
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate

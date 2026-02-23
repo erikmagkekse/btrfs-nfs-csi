@@ -1,0 +1,8 @@
+btrfs-nfs-csi
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+.env
