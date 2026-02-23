@@ -8,6 +8,10 @@ Kubernetes Enterprise storage vibes for your homelab. A single-binary CSI driver
 
 > **⚠️ Early stage** - this project is new and has only been tested with a single setup for a few weeks. Expect rough edges. Feedback and bug reports welcome.
 
+### Dashboard
+
+![Agent Dashboard](docs/imgs/dashboard.png)
+
 ## Architecture
 
 ```

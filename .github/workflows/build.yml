@@ -4,8 +4,22 @@ on:
   push:
     branches: ["*"]
     tags: ["v*"]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "Containerfile"
+      - "VERSION"
+      - ".github/workflows/build.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "Containerfile"
+      - "VERSION"
+      - ".github/workflows/build.yml"
 
 env:
   REGISTRY: ghcr.io
