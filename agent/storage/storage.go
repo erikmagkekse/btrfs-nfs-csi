@@ -291,11 +291,14 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		}
 	}
 
-	if req.NoCOW != nil && *req.NoCOW {
+	if req.NoCOW != nil && *req.NoCOW && !cur.NoCOW {
 		if err := btrfs.SetNoCOW(ctx, dataDir); err != nil {
 			log.Error().Err(err).Msg("failed to set nocow")
 			return nil, fmt.Errorf("chattr +C failed: %w", err)
 		}
+	} else if req.NoCOW != nil && !*req.NoCOW && cur.NoCOW {
+		log.Warn().Str("volume", name).Msg("nocow cannot be reverted, ignoring")
+		req.NoCOW = nil
 	}
 
 	if req.Compression != nil && *req.Compression != "" && *req.Compression != "none" {

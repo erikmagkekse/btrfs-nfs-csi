@@ -42,12 +42,15 @@ jobs:
         id: version
         run: |
           BASE_VERSION=$(cat VERSION)
-          BRANCH=${GITHUB_REF_NAME}
-          if [ "$BRANCH" = "main" ]; then
+          REF=${GITHUB_REF_NAME}
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=${REF#v}" >> "$GITHUB_OUTPUT"
+          elif [ "$REF" = "main" ]; then
             echo "version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
             echo "tag=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
           else
-            SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            SAFE_BRANCH=$(echo "$REF" | sed 's/[^a-zA-Z0-9._-]/-/g')
             echo "version=${SAFE_BRANCH}-${BASE_VERSION}" >> "$GITHUB_OUTPUT"
             echo "tag=${SAFE_BRANCH}-${BASE_VERSION}" >> "$GITHUB_OUTPUT"
           fi
