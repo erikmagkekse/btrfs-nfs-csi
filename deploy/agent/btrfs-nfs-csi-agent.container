@@ -1,0 +1,18 @@
+[Unit]
+Description=btrfs-nfs-csi agent
+After=network-online.target nfs-server.service
+
+[Container]
+Image=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.5
+Exec=agent
+EnvironmentFile=/etc/btrfs-nfs-csi/agent.env
+# host network + pid + nfs state required for exportfs to manage the host NFS server
+Network=host
+PodmanArgs=--privileged --pid=host
+SecurityLabelDisable=true
+Volume=/var/lib/nfs:/var/lib/nfs
+# Adjust to match AGENT_BASE_PATH in agent.env
+Volume=/export/data:/export/data
+
+[Install]
+WantedBy=multi-user.target

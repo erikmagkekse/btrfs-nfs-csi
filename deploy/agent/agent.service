@@ -1,0 +1,12 @@
+[Unit]
+Description=btrfs-nfs-csi agent
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/btrfs-nfs-csi agent
+EnvironmentFile=/etc/btrfs-nfs-csi/agent.env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
