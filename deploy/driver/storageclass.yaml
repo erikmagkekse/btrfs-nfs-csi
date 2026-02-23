@@ -34,3 +34,13 @@ parameters:
 reclaimPolicy: Delete
 allowVolumeExpansion: true
 volumeBindingMode: Immediate
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: btrfs-nfs
+driver: btrfs-nfs-csi
+deletionPolicy: Delete
+parameters:
+  csi.storage.k8s.io/snapshotter-secret-name: btrfs-nfs-creds
+  csi.storage.k8s.io/snapshotter-secret-namespace: btrfs-nfs-csi
