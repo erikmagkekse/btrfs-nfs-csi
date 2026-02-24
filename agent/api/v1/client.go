@@ -112,7 +112,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, result a
 	if err != nil {
 		return fmt.Errorf("request %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -122,7 +122,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, result a
 	if resp.StatusCode >= 400 {
 		// on 409 Conflict, parse body into result so caller gets the existing record
 		if resp.StatusCode == http.StatusConflict && result != nil && len(respBody) > 0 {
-			json.Unmarshal(respBody, result)
+			_ = json.Unmarshal(respBody, result)
 		}
 		var errResp ErrorResponse
 		if json.Unmarshal(respBody, &errResp) == nil && errResp.Error != "" {

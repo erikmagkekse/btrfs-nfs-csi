@@ -104,8 +104,8 @@ func QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, error) {
 		fields := strings.Fields(line)
 		if len(fields) >= 3 && fields[0] == qgroupID {
 			var info QgroupInfo
-			fmt.Sscanf(fields[1], "%d", &info.Referenced)
-			fmt.Sscanf(fields[2], "%d", &info.Exclusive)
+			_, _ = fmt.Sscanf(fields[1], "%d", &info.Referenced)
+			_, _ = fmt.Sscanf(fields[2], "%d", &info.Exclusive)
 			return info, nil
 		}
 	}
