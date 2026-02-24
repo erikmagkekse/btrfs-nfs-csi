@@ -55,7 +55,7 @@ Most Kubernetes storage solutions are built for the data center: Ceph, Longhorn,
 - **Leverages what btrfs already gives you** - subvolumes become PVs, btrfs snapshots become `VolumeSnapshots`, quotas become capacity tracking. No reinvention.
 - **Data integrity without ECC** - btrfs checksums every block. In a homelab where your hardware has no ECC RAM, that's your best defense against silent data corruption.
 - **NFS "just works"** - every node can mount every volume without iSCSI initiators, multipath, or block device fencing. ReadWriteMany is the default, not a special case.
-- **Homelab-friendly HA** - pair two servers with DRBD + Pacemaker for active/passive failover. No quorum games, no split-brain drama with three nodes you don't have.
+- **Homelab-friendly HA** - pair two servers with DRBD + Pacemaker for active/passive failover.
 - **Multi-tenant from day one** - a single agent can serve multiple clusters or teams, each isolated by tenant with its own subvolume tree.
 
 If you run a homelab, a small on-prem cluster, or an edge deployment and want real storage features without the operational tax of a full SDS stack, this driver is for you.
