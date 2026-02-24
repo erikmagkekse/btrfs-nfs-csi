@@ -150,12 +150,12 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	cleanup := func() {
-		btrfs.SubvolumeDelete(ctx, dataDir)
-		os.RemoveAll(volDir)
+		_ = btrfs.SubvolumeDelete(ctx, dataDir)
+		_ = os.RemoveAll(volDir)
 	}
 
 	if err := btrfs.SubvolumeCreate(ctx, dataDir); err != nil {
-		os.RemoveAll(volDir)
+		_ = os.RemoveAll(volDir)
 		log.Error().Err(err).Str("path", dataDir).Msg("failed to create subvolume")
 		return nil, fmt.Errorf("btrfs subvolume create failed: %w", err)
 	}
@@ -566,7 +566,7 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 
 	dstData := filepath.Join(snapDir, DataDir)
 	if err := btrfs.SubvolumeSnapshot(ctx, srcData, dstData, true); err != nil {
-		os.RemoveAll(snapDir)
+		_ = os.RemoveAll(snapDir)
 		log.Error().Err(err).Msg("failed to create snapshot")
 		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
 	}
@@ -584,8 +584,8 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 
 	if err := writeMetadataAtomic(filepath.Join(snapDir, MetadataFile), meta); err != nil {
 		log.Error().Err(err).Msg("failed to write snapshot metadata")
-		btrfs.SubvolumeDelete(ctx, dstData)
-		os.RemoveAll(snapDir)
+		_ = btrfs.SubvolumeDelete(ctx, dstData)
+		_ = os.RemoveAll(snapDir)
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -694,7 +694,7 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 
 	dstData := filepath.Join(cloneDir, DataDir)
 	if err := btrfs.SubvolumeSnapshot(ctx, srcData, dstData, false); err != nil {
-		os.RemoveAll(cloneDir)
+		_ = os.RemoveAll(cloneDir)
 		log.Error().Err(err).Msg("failed to create clone")
 		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
 	}
@@ -709,8 +709,8 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 
 	if err := writeMetadataAtomic(filepath.Join(cloneDir, MetadataFile), meta); err != nil {
 		log.Error().Err(err).Msg("failed to write clone metadata")
-		btrfs.SubvolumeDelete(ctx, dstData)
-		os.RemoveAll(cloneDir)
+		_ = btrfs.SubvolumeDelete(ctx, dstData)
+		_ = os.RemoveAll(cloneDir)
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 
