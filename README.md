@@ -6,7 +6,7 @@
 
 Kubernetes Enterprise storage vibes for your homelab. A single-binary CSI driver that turns any Linux box with a btrfs disk into a full-featured storage backend - instant snapshots, writable clones, per-volume quotas, live compression tuning, NoCOW for databases, and automatic NFS exports. Even with HA via DRBD. No iSCSI, no Ceph, no PhD required.
 
-> **⚠️ Early stage** - this project is new and has only been tested with a single setup for a few weeks. Expect rough edges. Feedback and bug reports welcome.
+> **⚠️ Early stage** - this project is new and has only been tested with a few setups, and mine for a few weeks. Expect rough edges. Feedback and bug reports welcome.
 
 ### Dashboard
 
