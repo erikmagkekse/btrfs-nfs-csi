@@ -53,6 +53,7 @@ Most Kubernetes storage solutions are built for the data center: Ceph, Longhorn,
 - **Minimal resource footprint** - the agent and driver are single Go binaries with nearly no overhead. No JVM, no database. Runs comfortably on a Raspberry Pi or a 2-core VM.
 - **Zero infrastructure overhead** - no etcd, no separate storage cluster, no distributed consensus. One binary on your NFS server, one driver in your cluster.
 - **Leverages what btrfs already gives you** - subvolumes become PVs, btrfs snapshots become `VolumeSnapshots`, quotas become capacity tracking. No reinvention.
+- **Data integrity without ECC** - btrfs checksums every block. In a homelab where your hardware has no ECC RAM, that's your best defense against silent data corruption.
 - **NFS "just works"** - every node can mount every volume without iSCSI initiators, multipath, or block device fencing. ReadWriteMany is the default, not a special case.
 - **Homelab-friendly HA** - pair two servers with DRBD + Pacemaker for active/passive failover. No quorum games, no split-brain drama with three nodes you don't have.
 - **Multi-tenant from day one** - a single agent can serve multiple clusters or teams, each isolated by tenant with its own subvolume tree.
