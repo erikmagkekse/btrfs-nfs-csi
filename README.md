@@ -44,14 +44,30 @@ Kubernetes Enterprise storage vibes for your homelab. A single-binary CSI driver
 
 Each StorageClass binds one agent + one tenant. Volume IDs use the StorageClass name, so agent URLs can change without breaking existing volumes.
 
+## Why btrfs-nfs-csi?
+
+Most Kubernetes storage solutions are built for the data center: Ceph, Longhorn, and OpenEBS bring clustering overhead, complex operations, and resource requirements that don't fit a homelab or small self-hosted setup. If all you have is a single Linux server (or two for HA) with a btrfs filesystem, you shouldn't need a distributed storage cluster just to get snapshots and quotas.
+
+**btrfs-nfs-csi** bridges that gap:
+
+- **Minimal resource footprint** - the agent and driver are single Go binaries with nearly no overhead. No JVM, no database. Runs comfortably on a Raspberry Pi or a 2-core VM.
+- **Zero infrastructure overhead** - no etcd, no separate storage cluster, no distributed consensus. One binary on your NFS server, one driver in your cluster.
+- **Leverages what btrfs already gives you** - subvolumes become PVs, btrfs snapshots become `VolumeSnapshots`, quotas become capacity tracking. No reinvention.
+- **NFS "just works"** - every node can mount every volume without iSCSI initiators, multipath, or block device fencing. ReadWriteMany is the default, not a special case.
+- **Homelab-friendly HA** - pair two servers with DRBD + Pacemaker for active/passive failover. No quorum games, no split-brain drama with three nodes you don't have.
+- **Multi-tenant from day one** - a single agent can serve multiple clusters or teams, each isolated by tenant with its own subvolume tree.
+
+If you run a homelab, a small on-prem cluster, or an edge deployment and want real storage features without the operational tax of a full SDS stack, this driver is for you.
+
 ## Features
 
 - Instant snapshots and writable clones (btrfs CoW)
 - Online volume expansion
 - Per-volume quota enforcement and usage reporting
-- Compression (`zstd`, `lzo`, `zlib` with levels)
-- NoCOW mode (`chattr +C`) for databases
-- Per-volume UID/GID/mode via PVC annotations
+- Per-volume tuning via StorageClass parameters or PVC annotations:
+  - Compression (`zstd`, `lzo`, `zlib` with levels)
+  - NoCOW mode (`chattr +C`) for databases
+  - UID/GID/mode
 - Per-node NFS exports (auto-managed via `exportfs`)
 - Multi-tenant: one agent serves multiple clusters
 - Prometheus `/metrics` on all components
