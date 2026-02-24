@@ -62,13 +62,13 @@ To build from source: `CGO_ENABLED=0 go build -o btrfs-nfs-csi .`
 install -d -m 700 /etc/btrfs-nfs-csi
 cat > /etc/btrfs-nfs-csi/agent.env <<EOF
 AGENT_BASE_PATH=/export/data
-AGENT_TENANTS=default:$(openssl rand -hex 16) # tenantName:token,tenant2:pass
+AGENT_TENANTS=default:$(openssl rand -hex 16)
 AGENT_LISTEN_ADDR=:8080
 EOF
 chmod 600 /etc/btrfs-nfs-csi/agent.env
 
 systemctl daemon-reload
-systemctl enable --now btrfs-nfs-csi-agent
+systemctl start btrfs-nfs-csi-agent
 ```
 
 Verify:
