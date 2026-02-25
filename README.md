@@ -1,6 +1,6 @@
 # btrfs-nfs-csi
 
-[![Build](https://github.com/erikmagkekse/btrfs-nfs-csi/actions/workflows/build.yml/badge.svg)](https://github.com/erikmagkekse/btrfs-nfs-csi/actions/workflows/build.yml)
+[![Build](https://github.com/erikmagkekse/btrfs-nfs-csi/actions/workflows/release.yml/badge.svg)](https://github.com/erikmagkekse/btrfs-nfs-csi/actions/workflows/release.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/erikmagkekse/btrfs-nfs-csi)](https://goreportcard.com/report/github.com/erikmagkekse/btrfs-nfs-csi)
 [![License](https://img.shields.io/github/license/erikmagkekse/btrfs-nfs-csi)](LICENSE)
 
