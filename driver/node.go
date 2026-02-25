@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"sync"
 	"time"
 
@@ -136,23 +135,6 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	}
 	mountOpsTotal.WithLabelValues("bind_mount", "success").Inc()
 
-	if mount := req.VolumeCapability.GetMount(); mount != nil && mount.VolumeMountGroup != "" {
-		gid, err := strconv.Atoi(mount.VolumeMountGroup)
-		if err == nil {
-			chownErr := os.Chown(req.TargetPath, -1, gid)
-			chmodErr := os.Chmod(req.TargetPath, os.FileMode(0o2770))
-			if chownErr != nil || chmodErr != nil {
-				mountOpsTotal.WithLabelValues("fsgroup-chown", "error").Inc()
-				log.Error().AnErr("chown", chownErr).AnErr("chmod", chmodErr).Str("path", req.TargetPath).Int("gid", gid).Msg("fsGroup failed")
-			} else {
-				mountOpsTotal.WithLabelValues("fsgroup-chown", "success").Inc()
-				log.Info().Int("gid", gid).Str("path", req.TargetPath).Msg("fsGroup applied")
-			}
-		}
-	} else {
-		log.Warn().Msg("no volumeMountGroup in request - pod securityContext.fsGroup set?")
-	}
-
 	if req.Readonly {
 		start = time.Now()
 		out, err = exec.CommandContext(mountCtx, "mount", "-o", "remount,ro,bind", req.TargetPath).CombinedOutput()
@@ -197,13 +179,6 @@ func (s *NodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabi
 				Type: &csi.NodeServiceCapability_Rpc{
 					Rpc: &csi.NodeServiceCapability_RPC{
 						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
-					},
-				},
-			},
-			{
-				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{
-						Type: csi.NodeServiceCapability_RPC_VOLUME_MOUNT_GROUP,
 					},
 				},
 			},

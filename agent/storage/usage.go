@@ -62,7 +62,7 @@ func updateAll(ctx context.Context, basePath string, tenant string) {
 		if info, err := os.Stat(dataDir); err == nil {
 			if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 				fsUID, fsGID = int(stat.Uid), int(stat.Gid)
-				fsMode = fmt.Sprintf("%o", info.Mode().Perm()|info.Mode()&os.ModeSetgid)
+				fsMode = fmt.Sprintf("%o", unixMode(info.Mode()))
 				changed = fsUID != meta.UID || fsGID != meta.GID || fsMode != meta.Mode
 			}
 		}
@@ -75,14 +75,13 @@ func updateAll(ctx context.Context, basePath string, tenant string) {
 		if meta.QuotaBytes > 0 {
 			u, err := btrfs.QgroupUsage(ctx, dataDir)
 			if err != nil {
-				log.Debug().Err(err).Str("volume", e.Name()).Msg("usage updater: qgroup query failed")
+				log.Warn().Err(err).Str("volume", e.Name()).Msg("usage updater: qgroup query failed, skipping volume - if issue persists check your quotas")
 				failed++
-			} else {
-				log.Debug().Str("volume", e.Name()).Uint64("used", u).Uint64("quota", meta.QuotaBytes).Msg("usage updater: volume stats")
-				used = u
-				if used != meta.UsedBytes {
-					changed = true
-				}
+				continue
+			}
+			used = u
+			if used != meta.UsedBytes {
+				changed = true
 			}
 		}
 
@@ -90,15 +89,28 @@ func updateAll(ctx context.Context, basePath string, tenant string) {
 			continue
 		}
 
+		ev := log.Debug().Str("volume", e.Name())
+		if fsUID != meta.UID {
+			ev = ev.Int("oldUID", meta.UID).Int("newUID", fsUID)
+		}
+		if fsGID != meta.GID {
+			ev = ev.Int("oldGID", meta.GID).Int("newGID", fsGID)
+		}
+		if fsMode != meta.Mode {
+			ev = ev.Str("oldMode", meta.Mode).Str("newMode", fsMode)
+		}
+		if used != meta.UsedBytes {
+			ev = ev.Uint64("oldUsedBytes", meta.UsedBytes).Uint64("newUsedBytes", used)
+		}
+		ev.Msg("usage updater: updating metadata")
+
 		if err := UpdateMetadata(metaPath, func(m *VolumeMetadata) {
 			if fsMode != "" {
 				m.UID = fsUID
 				m.GID = fsGID
 				m.Mode = fsMode
 			}
-			if used != 0 {
-				m.UsedBytes = used
-			}
+			m.UsedBytes = used
 			m.UpdatedAt = time.Now().UTC()
 		}); err != nil {
 			log.Error().Err(err).Str("volume", e.Name()).Msg("usage updater: failed to write metadata")

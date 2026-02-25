@@ -95,7 +95,7 @@ spec:
     fsGroup: 1000
 ```
 
-Node driver applies `chown(-1, gid)` + `chmod(2770)` after bind mount. Requires `fsGroupPolicy: File` (set in setup.yaml).
+Handled by kubelet via `fsGroupPolicy: File` (set in setup.yaml). Kubelet applies recursive chown + setgid after bind mount.
 
 ## UID / GID / Mode
 
@@ -106,7 +106,7 @@ annotations:
   btrfs-nfs-csi/mode: "0750"
 ```
 
-Default mode: `0750`. Applied at creation via `chown`/`chmod`. Updated on attach if annotations change. Usage updater detects drift from NFS-level changes.
+Default mode: `2770` (configurable via `AGENT_DEFAULT_DATA_MODE`). Applied at creation via `chown`/`chmod`. Updated on attach if annotations change. Usage updater detects drift from NFS-level changes.
 
 ## NFS Exports
 
