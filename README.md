@@ -10,45 +10,14 @@ Kubernetes Enterprise storage vibes for your homelab. A single-binary CSI driver
 
 ### Dashboard
 
-![Agent Dashboard](docs/imgs/dashboard.png)
-
-## Architecture
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                    Kubernetes Cluster                    │
-│                                                          │
-│  ┌─────────────────────┐     ┌────────────────────────┐  │
-│  │   CSI Controller    │     │   CSI Node (DaemonSet) │  │
-│  │   (Deployment)      │     │                        │  │
-│  │                     │     │  NFS mount + bind mount│  │
-│  │  Create/Delete ─────┼──┐  │  NodeGetVolumeStats    │  │
-│  │  Snapshot/Clone     │  │  │                        │  │
-│  │  Update             │  │  └────────────────────────┘  │
-│  │  Publish/Unpublish  │  │                              │
-│  └─────────────────────┘  │                              │
-│                           │                              │
-└───────────────────────────┼──────────────────────────────┘
-                            │ HTTP/REST
-                            ▼
-              ┌──────────────────────────┐
-              │     Agent (NFS Server)   │
-              │                          │
-              │  btrfs subvolume mgmt    │
-              │  NFS export management   │
-              │  multi-tenant isolation  │
-              │  quota + usage tracking  │
-              │  dashboard + metrics     │
-              └──────────────────────────┘
-```
-
-Each StorageClass binds one agent + one tenant. Volume IDs use the StorageClass name, so agent URLs can change without breaking existing volumes.
+![Agent Dashboard](docs/assets/dashboard.png)
 
 ## Why btrfs-nfs-csi?
 
 Most Kubernetes storage solutions are built for the data center: Ceph, Longhorn, and OpenEBS bring clustering overhead, complex operations, and resource requirements that don't fit a homelab or small self-hosted setup. If all you have is a single Linux server (or two for HA) with a btrfs filesystem, you shouldn't need a distributed storage cluster just to get snapshots and quotas.
 
-**btrfs-nfs-csi** bridges that gap:
+<details>
+<summary><b>btrfs-nfs-csi</b> bridges that gap</summary>
 
 - **Minimal resource footprint** - the agent and driver are single Go binaries with nearly no overhead. No JVM, no database. Runs comfortably on a Raspberry Pi or a 2-core VM.
 - **Zero infrastructure overhead** - no etcd, no separate storage cluster, no distributed consensus. One binary on your NFS server, one driver in your cluster.
@@ -57,6 +26,8 @@ Most Kubernetes storage solutions are built for the data center: Ceph, Longhorn,
 - **NFS "just works"** - every node can mount every volume without iSCSI initiators, multipath, or block device fencing. ReadWriteMany is the default, not a special case.
 - **Homelab-friendly HA** - pair two servers with DRBD + Pacemaker for active/passive failover.
 - **Multi-tenant from day one** - a single agent can serve multiple clusters or teams, each isolated by tenant with its own subvolume tree.
+
+</details>
 
 If you run a homelab, a small on-prem cluster, or an edge deployment and want real storage features without the operational tax of a full SDS stack, this driver is for you.
 
@@ -76,15 +47,70 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - TLS support
 - HA via DRBD + Pacemaker (active/passive failover)
 
-### Roadmap
-
-- NFS-Ganesha userspace NFS server support (no more root requirement)
-- CSI `LIST_VOLUMES` / `LIST_SNAPSHOTS`
-- CSI `VOLUME_CONDITION` health reporting
+**Roadmap:**
+NFS-Ganesha support, `LIST_VOLUMES` / `LIST_SNAPSHOTS`, `VOLUME_CONDITION` health reporting, Helm chart
 
 ## Quick Start
 
-See [docs/installation.md](docs/installation.md) for agent setup, driver deployment, and PVC examples.
+For a detailed setup description, see [docs/installation.md](docs/installation.md).
+
+**1. Install the agent** on a Linux host with a btrfs filesystem:
+
+```bash
+# The agent runs as a privileged Podman container with host networking -
+# it listens on port 8080 and manages the host's NFS exports directly.
+#
+# Environment variables (defaults shown - adjust as needed):
+# export AGENT_BASE_PATH=/export/data
+# export AGENT_TENANTS=default:$(openssl rand -hex 16)
+# export AGENT_LISTEN_ADDR=:8080
+# export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH
+# export VERSION=0.9.5
+# export SKIP_PACKAGE_INSTALL=1
+
+curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
+
+# Save the tenant token printed at the end!
+```
+
+**2. Deploy the CSI driver and StorageClass** in your Kubernetes cluster:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/deploy/driver/setup.yaml
+
+# Download the StorageClass template and fill in your agent's details:
+curl -LO https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/deploy/driver/storageclass.yaml
+
+# Edit storageclass.yaml: set agentToken, nfsServer and agentURL.
+# nfsServer must be reachable from the K8s nodes' IP (used for NFS exports by default).
+# For separate storage networks, see DRIVER_STORAGE_INTERFACE / DRIVER_STORAGE_CIDR.
+vi storageclass.yaml
+
+kubectl apply -f storageclass.yaml
+
+# Wait for the controller to connect to your agent:
+kubectl logs -n btrfs-nfs-csi deploy/btrfs-nfs-csi-controller -c csi-driver -f
+# Look for: "agent healthy - vibes immaculate, bits aligned, absolutely bussin"
+```
+
+**3. That's it, test it!**
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-data
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: btrfs-nfs
+  resources:
+    requests:
+      storage: 10Gi
+EOF
+```
+
+See [docs/installation.md](docs/installation.md) for full setup details, snapshots, clones, and more.
 
 ## Documentation
 
@@ -96,6 +122,13 @@ See [docs/installation.md](docs/installation.md) for agent setup, driver deploym
 | [Operations](docs/operations.md) | Snapshots, clones, expansion, compression, NoCOW, quota, fsGroup, NFS exports |
 | [Agent API](docs/agent-api.md) | All endpoints, request/response models, error codes, curl examples |
 | [Metrics](docs/metrics.md) | All Prometheus metrics, PromQL examples |
+
+
+## Architecture
+
+![Architecture](docs/assets/architecture.png)
+
+Each StorageClass binds one agent + one tenant. Volume IDs use the StorageClass name, so agent URLs can change without breaking existing volumes.
 
 ## Building
 
