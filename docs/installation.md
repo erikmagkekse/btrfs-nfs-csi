@@ -15,13 +15,13 @@ The fastest way to get the agent running. Requires a mounted btrfs filesystem wi
 > **Note:** Piping `curl | sudo bash` is convenient but runs remote code as root. If you prefer, download the script first, review it, then execute it manually.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/install-agent.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh | sudo bash
 ```
 
 Customize with environment variables:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/install-agent.sh \
+curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh \
   | sudo AGENT_BASE_PATH=/export/data AGENT_TENANTS=mycluster:mytoken VERSION=0.9.5 bash
 ```
 

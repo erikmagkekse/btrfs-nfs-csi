@@ -28,29 +28,9 @@ Most Kubernetes storage solutions are built for the data center: Ceph, Longhorn,
 
 If you run a homelab, a small on-prem cluster, or an edge deployment and want real storage features without the operational tax of a full SDS stack, this driver is for you.
 
-## Features
-
-- Instant snapshots and writable clones (btrfs CoW)
-- Online volume expansion
-- Per-volume quota enforcement and usage reporting
-- Per-volume tuning via StorageClass parameters or PVC annotations:
-  - Compression (`zstd`, `lzo`, `zlib` with levels)
-  - NoCOW mode (`chattr +C`) for databases
-  - UID/GID/mode
-- Per-node NFS exports (auto-managed via `exportfs`)
-- Multi-tenant: one agent serves multiple clusters
-- Prometheus `/metrics` on all components
-- Web dashboard (`/v1/dashboard`)
-- TLS support
-- HA via DRBD + Pacemaker (active/passive failover)
-
-### Roadmap
-
-- NFS-Ganesha userspace NFS server support (no more root requirement)
-- CSI `LIST_VOLUMES` / `LIST_SNAPSHOTS`
-- CSI `VOLUME_CONDITION` health reporting
-
 ## Quick Start
+
+For a detailed setup description, see [docs/installation.md](docs/installation.md).
 
 **1. Install the agent** on a Linux host with a btrfs filesystem:
 
@@ -66,7 +46,7 @@ export AGENT_LISTEN_ADDR=:8080
 # export VERSION=0.9.5
 # export SKIP_PACKAGE_INSTALL=1
 
-curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/install-agent.sh # | sudo -E bash
+curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
 
 # Save the tenant token printed at the end!
 ```
@@ -109,6 +89,29 @@ EOF
 ```
 
 See [docs/installation.md](docs/installation.md) for full setup details, snapshots, clones, and more.
+
+## Features
+
+- Instant snapshots and writable clones (btrfs CoW)
+- Online volume expansion
+- Per-volume quota enforcement and usage reporting
+- Per-volume tuning via StorageClass parameters or PVC annotations:
+  - Compression (`zstd`, `lzo`, `zlib` with levels)
+  - NoCOW mode (`chattr +C`) for databases
+  - UID/GID/mode
+- Per-node NFS exports (auto-managed via `exportfs`)
+- Multi-tenant: one agent serves multiple clusters
+- Prometheus `/metrics` on all components
+- Web dashboard (`/v1/dashboard`)
+- TLS support
+- HA via DRBD + Pacemaker (active/passive failover)
+
+### Roadmap
+
+- NFS-Ganesha userspace NFS server support (no more root requirement)
+- CSI `LIST_VOLUMES` / `LIST_SNAPSHOTS`
+- CSI `VOLUME_CONDITION` health reporting
+- Helm chart
 
 ## Architecture
 
