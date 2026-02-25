@@ -14,7 +14,7 @@
 CreateVolume   → POST /v1/volumes (btrfs subvolume create, compression, quota, chown)
 Publish        → POST /v1/volumes/:name/export (exportfs, retry 3x)
 NodeStage      → mount -t nfs server:path staging
-NodePublish    → mount --bind staging/data target + fsGroup
+NodePublish    → mount --bind staging/data target
 NodeUnpublish  → umount target
 NodeUnstage    → umount staging
 Unpublish      → DELETE /v1/volumes/:name/export
@@ -48,7 +48,7 @@ DeleteVolume   → DELETE /v1/volumes/:name (subvolume delete)
 
 **Controller:** `CREATE_DELETE_VOLUME`, `CREATE_DELETE_SNAPSHOT`, `EXPAND_VOLUME`, `CLONE_VOLUME`, `PUBLISH_UNPUBLISH_VOLUME`
 
-**Node:** `STAGE_UNSTAGE_VOLUME`, `GET_VOLUME_STATS`, `VOLUME_MOUNT_GROUP`
+**Node:** `STAGE_UNSTAGE_VOLUME`, `GET_VOLUME_STATS`
 
 **Plugin:** `CONTROLLER_SERVICE`
 

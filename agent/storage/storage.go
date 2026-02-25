@@ -184,7 +184,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		}
 	}
 
-	if err := os.Chmod(dataDir, os.FileMode(mode)); err != nil {
+	if err := os.Chmod(dataDir, fileMode(mode)); err != nil {
 		log.Error().Err(err).Msg("failed to chmod")
 	}
 	if err := os.Chown(dataDir, req.UID, req.GID); err != nil {
@@ -324,7 +324,7 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	}
 
 	if req.Mode != nil {
-		if err := os.Chmod(dataDir, os.FileMode(parsedMode)); err != nil {
+		if err := os.Chmod(dataDir, fileMode(parsedMode)); err != nil {
 			log.Error().Err(err).Msg("failed to chmod")
 			return nil, fmt.Errorf("chmod failed: %w", err)
 		}
