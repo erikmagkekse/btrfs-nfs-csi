@@ -244,7 +244,7 @@ HTML dashboard (requires auth, use Basic in browser).
 ```json
 {
   "status": "ok",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "commit": "abc123",
   "uptime_seconds": 3600,
   "features": {

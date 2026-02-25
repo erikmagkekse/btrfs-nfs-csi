@@ -65,7 +65,7 @@ For a detailed setup description, see [docs/installation.md](docs/installation.m
 # export AGENT_TENANTS=default:$(openssl rand -hex 16)
 # export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH
-# export VERSION=0.9.5
+# export VERSION=0.9.6
 # export SKIP_PACKAGE_INSTALL=1
 
 curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
