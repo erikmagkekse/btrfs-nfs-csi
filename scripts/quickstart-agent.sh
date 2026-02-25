@@ -2,21 +2,36 @@
 # quickstart-agent.sh - quick start installer for the btrfs-nfs-csi agent (Podman Quadlet)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh | sudo bash
+#   Install:    curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh | sudo -E bash
+#   Update:     curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh | sudo -E bash
+#               (detects existing install, preserves config, updates image + quadlet)
+#   Uninstall:  curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh | sudo -E bash -s -- --uninstall
+#
+# Flags:
+#   --yes, -y             skip confirmation prompts (e.g. for CI/automation)
+#   --uninstall           remove agent (config + quadlet, keeps data)
 #
 # Environment variables:
 #   AGENT_BASE_PATH       btrfs mount point            (default: /export/data)
 #   AGENT_TENANTS         tenant:token pairs            (default: default:<random>)
 #   AGENT_LISTEN_ADDR     listen address                (default: :8080)
 #   VERSION               image tag                     (default: 0.9.5)
-#   AGENT_BLOCK_DISK      block device to auto-format as btrfs and mount (e.g. /dev/sdb, installer-only, uses mkfs.btrfs -f!)
+#   AGENT_BLOCK_DISK      block device to auto-format as btrfs and mount (e.g. /dev/sdb, install-only, uses mkfs.btrfs -f!)
 #   SKIP_PACKAGE_INSTALL  set to 1 to skip apt/dnf/pacman
-#
-# Uninstall:
-#   curl -fsSL .../quickstart-agent.sh | sudo bash -s -- --uninstall
 
 set -euo pipefail
 
+# flags
+YES=false
+UNINSTALL=false
+for arg in "$@"; do
+    case "${arg}" in
+        --yes|-y) YES=true ;;
+        --uninstall) UNINSTALL=true ;;
+    esac
+done
+
+# defaults
 AGENT_BASE_PATH="${AGENT_BASE_PATH:-/export/data}"
 AGENT_LISTEN_ADDR="${AGENT_LISTEN_ADDR:-:8080}"
 VERSION="${VERSION:-0.9.5}"
@@ -30,14 +45,47 @@ QUADLET_DIR="/etc/containers/systemd"
 QUADLET_FILE="${QUADLET_DIR}/btrfs-nfs-csi-agent.container"
 SERVICE_NAME="btrfs-nfs-csi-agent"
 
+# helpers
 info()  { printf '\033[1;34m[INFO]\033[0m  %s\n' "$*"; }
 warn()  { printf '\033[1;33m[WARN]\033[0m  %s\n' "$*"; }
 error() { printf '\033[1;31m[ERROR]\033[0m %s\n' "$*" >&2; }
 fatal() { error "$@"; exit 1; }
 
-# Uninstall mode
-if [[ "${1:-}" == "--uninstall" ]]; then
+confirm() {
+    if ${YES}; then return 0; fi
+    printf '\033[1;33m[?]\033[0m     %s [y/N] ' "$1"
+    read -r answer </dev/tty
+    [[ "${answer}" =~ ^[Yy]$ ]]
+}
+
+detect_distro() {
+    if [[ -f /etc/os-release ]]; then
+        # shellcheck source=/dev/null
+        . /etc/os-release
+        case "${ID:-}${ID_LIKE:-}" in
+            *debian*|*ubuntu*) echo "debian" ;;
+            *rhel*|*fedora*|*centos*) echo "rhel" ;;
+            *arch*) echo "arch" ;;
+            *suse*|*opensuse*) echo "suse" ;;
+            *) echo "unknown" ;;
+        esac
+    else
+        echo "unknown"
+    fi
+}
+
+generate_token() {
+    if command -v openssl &>/dev/null; then
+        openssl rand -hex 16
+    else
+        head -c 16 /dev/urandom | od -A n -t x1 | tr -d ' \n'
+    fi
+}
+
+# uninstall
+if ${UNINSTALL}; then
     [[ $EUID -eq 0 ]] || fatal "This script must be run as root."
+    confirm "Uninstall btrfs-nfs-csi agent? Data on ${AGENT_BASE_PATH} will be kept." || { info "Aborted."; exit 0; }
     info "Uninstalling btrfs-nfs-csi agent..."
 
     if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
@@ -60,75 +108,28 @@ if [[ "${1:-}" == "--uninstall" ]]; then
     exit 0
 fi
 
-info "btrfs-nfs-csi agent installer v${VERSION}"
+# install / upgrade
+UPGRADE=false
+[[ -f "${CONFIG_DIR}/agent.env" ]] && UPGRADE=true
 
 [[ $EUID -eq 0 ]] || fatal "This script must be run as root."
 
-# Detect distro family
-detect_distro() {
-    if [[ -f /etc/os-release ]]; then
-        # shellcheck source=/dev/null
-        . /etc/os-release
-        case "${ID:-}${ID_LIKE:-}" in
-            *debian*|*ubuntu*) echo "debian" ;;
-            *rhel*|*fedora*|*centos*) echo "rhel" ;;
-            *arch*) echo "arch" ;;
-            *suse*|*opensuse*) echo "suse" ;;
-            *) echo "unknown" ;;
-        esac
-    else
-        echo "unknown"
-    fi
-}
+if ${UPGRADE}; then
+    info "Existing installation detected at ${CONFIG_DIR}/agent.env"
+    confirm "Upgrade/reinstall agent to v${VERSION}?" || { info "Aborted."; exit 0; }
+    info "btrfs-nfs-csi agent upgrade/reinstall to v${VERSION}"
+else
+    info "btrfs-nfs-csi agent install v${VERSION}"
+fi
 
+# 1. packages
 DISTRO=$(detect_distro)
 info "Detected distro family: ${DISTRO}"
 
-# Auto-format block device as btrfs and mount to AGENT_BASE_PATH
-setup_block_disk() {
-    if [[ -z "${AGENT_BLOCK_DISK}" ]]; then
-        return
-    fi
-
-    if [[ ! -b "${AGENT_BLOCK_DISK}" ]]; then
-        fatal "${AGENT_BLOCK_DISK} is not a block device."
-    fi
-
-    # Safety: refuse if already mounted somewhere
-    if findmnt -n "${AGENT_BLOCK_DISK}" &>/dev/null; then
-        local existing_mount
-        existing_mount=$(findmnt -n -o TARGET "${AGENT_BLOCK_DISK}")
-        fatal "${AGENT_BLOCK_DISK} is already mounted at ${existing_mount}. Unmount it first or remove AGENT_BLOCK_DISK."
-    fi
-
-    info "Formatting ${AGENT_BLOCK_DISK} as btrfs..."
-    mkfs.btrfs -f "${AGENT_BLOCK_DISK}"
-
-    mkdir -p "${AGENT_BASE_PATH}"
-
-    info "Mounting ${AGENT_BLOCK_DISK} at ${AGENT_BASE_PATH}..."
-    mount "${AGENT_BLOCK_DISK}" "${AGENT_BASE_PATH}"
-
-    # Add to fstab if not already there
-    local disk_uuid
-    disk_uuid=$(blkid -s UUID -o value "${AGENT_BLOCK_DISK}")
-    if ! grep -q "${disk_uuid}" /etc/fstab; then
-        echo "UUID=${disk_uuid}  ${AGENT_BASE_PATH}  btrfs  defaults  0  0" >> /etc/fstab
-        info "Added fstab entry for UUID=${disk_uuid}."
-    fi
-
-    info "Enabling btrfs quotas..."
-    btrfs quota enable "${AGENT_BASE_PATH}"
-}
-
-install_packages() {
-    if [[ "${SKIP_PACKAGE_INSTALL}" == "1" ]]; then
-        info "Skipping package installation (SKIP_PACKAGE_INSTALL=1)."
-        return
-    fi
-
+if [[ "${SKIP_PACKAGE_INSTALL}" == "1" ]]; then
+    info "Skipping package installation (SKIP_PACKAGE_INSTALL=1)."
+else
     info "Installing prerequisites..."
-
     case "${DISTRO}" in
         debian)
             export DEBIAN_FRONTEND=noninteractive
@@ -150,47 +151,58 @@ install_packages() {
             fatal "Cannot auto-install packages for distro: ${DISTRO}"
             ;;
     esac
-
     info "Packages installed."
-}
+fi
 
-install_packages
+# 2. block device (fresh install only)
+if [[ -n "${AGENT_BLOCK_DISK}" ]]; then
+    [[ -b "${AGENT_BLOCK_DISK}" ]] || fatal "${AGENT_BLOCK_DISK} is not a block device."
 
-setup_block_disk
-
-# Check btrfs mount
-check_btrfs() {
-    if ! mountpoint -q "${AGENT_BASE_PATH}" 2>/dev/null; then
-        fatal "${AGENT_BASE_PATH} is not a mount point. Mount a btrfs filesystem there first."
+    if findmnt -n -S "${AGENT_BLOCK_DISK}" &>/dev/null; then
+        existing_mount=$(findmnt -n -S -o TARGET "${AGENT_BLOCK_DISK}")
+        fatal "${AGENT_BLOCK_DISK} is already mounted at ${existing_mount}. Unmount it first or remove AGENT_BLOCK_DISK."
     fi
 
-    local fstype
-    fstype=$(findmnt -n -o FSTYPE "${AGENT_BASE_PATH}")
-    if [[ "${fstype}" != "btrfs" ]]; then
-        fatal "${AGENT_BASE_PATH} is ${fstype}, not btrfs."
+    info "Formatting ${AGENT_BLOCK_DISK} as btrfs..."
+    mkfs.btrfs -f "${AGENT_BLOCK_DISK}"
+
+    mkdir -p "${AGENT_BASE_PATH}"
+    info "Mounting ${AGENT_BLOCK_DISK} at ${AGENT_BASE_PATH}..."
+    mount "${AGENT_BLOCK_DISK}" "${AGENT_BASE_PATH}"
+
+    disk_uuid=$(blkid -s UUID -o value "${AGENT_BLOCK_DISK}")
+    if ! grep -q "${disk_uuid}" /etc/fstab; then
+        echo "UUID=${disk_uuid}  ${AGENT_BASE_PATH}  btrfs  defaults  0  0" >> /etc/fstab
+        info "Added fstab entry for UUID=${disk_uuid}."
     fi
 
-    if ! btrfs qgroup show "${AGENT_BASE_PATH}" &>/dev/null; then
-        warn "btrfs quotas not enabled on ${AGENT_BASE_PATH}, enabling now..."
-        btrfs quota enable "${AGENT_BASE_PATH}"
-        info "Quotas enabled."
-    fi
-}
+    info "Enabling btrfs quotas..."
+    btrfs quota enable "${AGENT_BASE_PATH}"
+fi
 
-check_btrfs
+# 3. verify btrfs
+mountpoint -q "${AGENT_BASE_PATH}" 2>/dev/null || fatal "${AGENT_BASE_PATH} is not a mount point. Mount a btrfs filesystem there first."
 
-# Enable NFS server
+fstype=$(findmnt -n -o FSTYPE "${AGENT_BASE_PATH}")
+[[ "${fstype}" == "btrfs" ]] || fatal "${AGENT_BASE_PATH} is ${fstype}, not btrfs."
+
+if ! btrfs qgroup show "${AGENT_BASE_PATH}" &>/dev/null; then
+    warn "btrfs quotas not enabled on ${AGENT_BASE_PATH}, enabling now..."
+    btrfs quota enable "${AGENT_BASE_PATH}"
+    info "Quotas enabled."
+fi
+
+# 4. NFS server
 info "Enabling nfs-server..."
 systemctl enable --now nfs-server
 
-generate_token() {
-    # prefer openssl, fall back to /dev/urandom
-    if command -v openssl &>/dev/null; then
-        openssl rand -hex 16
-    else
-        head -c 16 /dev/urandom | od -A n -t x1 | tr -d ' \n'
+# 5. tenant config
+if ${UPGRADE} && [[ -z "${AGENT_TENANTS:-}" ]]; then
+    AGENT_TENANTS=$(grep -oP '^AGENT_TENANTS=\K.*' "${CONFIG_DIR}/agent.env" || true)
+    if [[ -n "${AGENT_TENANTS}" ]]; then
+        info "Preserving existing tenant config from ${CONFIG_DIR}/agent.env"
     fi
-}
+fi
 
 if [[ -z "${AGENT_TENANTS:-}" ]]; then
     TOKEN=$(generate_token)
@@ -201,6 +213,7 @@ if [[ -z "${AGENT_TENANTS:-}" ]]; then
     echo ""
 fi
 
+# 6. write config
 install -d -m 700 "${CONFIG_DIR}"
 
 cat > "${CONFIG_DIR}/agent.env" <<EOF
@@ -209,34 +222,45 @@ AGENT_TENANTS=${AGENT_TENANTS}
 AGENT_LISTEN_ADDR=${AGENT_LISTEN_ADDR}
 EOF
 chmod 600 "${CONFIG_DIR}/agent.env"
-info "Config written to ${CONFIG_DIR}/agent.env"
 
+if ${UPGRADE}; then
+    info "Config updated at ${CONFIG_DIR}/agent.env"
+else
+    info "Config written to ${CONFIG_DIR}/agent.env"
+fi
+
+# 7. quadlet
 install -d -m 755 "${QUADLET_DIR}"
 
 info "Downloading Quadlet unit file..."
 curl -fsSL "${REPO_RAW}/deploy/agent/btrfs-nfs-csi-agent.container" -o "${QUADLET_FILE}"
 
-# Patch Image= to match VERSION
 sed -i "s|^Image=.*|Image=${IMAGE}|" "${QUADLET_FILE}"
-
-# Patch Volume= for AGENT_BASE_PATH (the second Volume line, not the nfs state one)
 sed -i "s|^Volume=/export/data:/export/data|Volume=${AGENT_BASE_PATH}:${AGENT_BASE_PATH}|" "${QUADLET_FILE}"
 
 info "Quadlet file installed to ${QUADLET_FILE}"
 
-info "Starting ${SERVICE_NAME}..."
-systemctl daemon-reload
-# Quadlet: [Install] WantedBy= handles enable, daemon-reload triggers the generator
-systemctl start "${SERVICE_NAME}"
+# 8. pull + start / restart
+info "Pulling image ${IMAGE}..."
+podman pull "${IMAGE}"
 
-# Wait for healthz
+systemctl daemon-reload
+if ${UPGRADE}; then
+    info "Restarting ${SERVICE_NAME}..."
+    systemctl restart "${SERVICE_NAME}"
+else
+    info "Starting ${SERVICE_NAME}..."
+    systemctl start "${SERVICE_NAME}"
+fi
+
+# 9. health check
 LISTEN_PORT="${AGENT_LISTEN_ADDR##*:}"
 LISTEN_PORT="${LISTEN_PORT:-8080}"
 HEALTHZ_URL="http://localhost:${LISTEN_PORT}/healthz"
 
 info "Waiting for agent to become healthy..."
 healthy=false
-for i in $(seq 1 10); do
+for _ in $(seq 1 10); do
     if curl -sf "${HEALTHZ_URL}" &>/dev/null; then
         healthy=true
         break
@@ -252,9 +276,12 @@ else
     warn "Check logs: journalctl -u ${SERVICE_NAME} -f"
 fi
 
+# 10. summary
+if ${UPGRADE}; then ACTION="upgraded"; else ACTION="installed"; fi
+
 cat <<EOF
 
-  btrfs-nfs-csi agent installed successfully!
+  btrfs-nfs-csi agent ${ACTION} successfully!
 
   Config:     ${CONFIG_DIR}/agent.env
   Quadlet:    ${QUADLET_FILE}
@@ -265,6 +292,10 @@ cat <<EOF
   Tenant config:
     ${AGENT_TENANTS}
 
+EOF
+
+if ! ${UPGRADE}; then
+    cat <<EOF
   Next steps:
     1. Save the tenant token above - you'll need it for the
        Kubernetes StorageClass secret.
@@ -273,3 +304,4 @@ cat <<EOF
     3. See full docs: https://github.com/erikmagkekse/btrfs-nfs-csi/blob/main/docs/installation.md
 
 EOF
+fi

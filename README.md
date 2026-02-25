@@ -61,7 +61,7 @@ For a detailed setup description, see [docs/installation.md](docs/installation.m
 # it listens on port 8080 and manages the host's NFS exports directly.
 #
 # Environment variables (defaults shown - adjust as needed):
-# export AGENT_BASE_PATH=/export/data
+# export AGENT_BASE_PATH=/export/data  # must be a btrfs filesystem
 # export AGENT_TENANTS=default:$(openssl rand -hex 16)
 # export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH

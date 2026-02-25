@@ -17,7 +17,7 @@ The fastest way to get the agent running. Requires a mounted btrfs filesystem wi
 # it listens on port 8080 and manages the host's NFS exports directly.
 #
 # Environment variables (defaults shown - adjust as needed):
-# export AGENT_BASE_PATH=/export/data
+# export AGENT_BASE_PATH=/export/data  # must be a btrfs filesystem
 # export AGENT_TENANTS=default:$(openssl rand -hex 16)
 # export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH
@@ -39,6 +39,14 @@ curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scr
 | `SKIP_PACKAGE_INSTALL` | (unset) | set to `1` to skip package installation |
 
 The script installs prerequisites (podman, NFS server, btrfs-progs), generates a config file, sets up a Podman Quadlet, and starts the service.
+
+**Update:** Run the same command again to update. The script detects an existing installation, preserves your tenant config, updates the container image + Quadlet file, and restarts the service. Pass `--yes` / `-y` to skip the confirmation prompt (e.g. for CI).
+
+**Uninstall:** Removes config and Quadlet file but keeps your data.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh | sudo -E bash -s -- --uninstall
+```
 
 ### Manual Setup
 
