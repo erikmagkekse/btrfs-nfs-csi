@@ -41,7 +41,7 @@
 | `btrfs_nfs_csi_node_mount_ops_total` | Counter | `operation`, `status` |
 | `btrfs_nfs_csi_node_mount_duration_seconds` | Histogram | `operation` |
 
-**Mount operations:** `nfs_mount`, `bind_mount`, `umount`, `force_umount`, `remount_ro`, `fsgroup-chown`
+**Mount operations:** `nfs_mount`, `bind_mount`, `umount`, `force_umount`, `remount_ro`
 
 **Buckets (grpc_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`
 

@@ -95,7 +95,7 @@ spec:
     fsGroup: 1000
 ```
 
-Node driver applies `chown(-1, gid)` + `chmod(2770)` after bind mount. Requires `fsGroupPolicy: File` (set in setup.yaml).
+Handled by kubelet via `fsGroupPolicy: File` (set in setup.yaml). Kubelet applies recursive chown + setgid after bind mount.
 
 ## UID / GID / Mode
 
