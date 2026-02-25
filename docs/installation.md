@@ -10,16 +10,16 @@
 
 ### Quick Install (Recommended)
 
-The fastest way to get the agent running. Requires a mounted btrfs filesystem with quotas enabled.
+The fastest way to get the agent running. Requires a mounted btrfs filesystem with quotas enabled or a clean block device.
 
 ```bash
 # The agent runs as a privileged Podman container with host networking -
 # it listens on port 8080 and manages the host's NFS exports directly.
 #
 # Environment variables (defaults shown - adjust as needed):
-export AGENT_BASE_PATH=/export/data
-export AGENT_TENANTS=default:$(openssl rand -hex 16)
-export AGENT_LISTEN_ADDR=:8080
+# export AGENT_BASE_PATH=/export/data
+# export AGENT_TENANTS=default:$(openssl rand -hex 16)
+# export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH
 # export VERSION=0.9.5
 # export SKIP_PACKAGE_INSTALL=1
