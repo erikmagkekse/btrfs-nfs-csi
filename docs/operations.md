@@ -106,7 +106,7 @@ annotations:
   btrfs-nfs-csi/mode: "0750"
 ```
 
-Default mode: `0750`. Applied at creation via `chown`/`chmod`. Updated on attach if annotations change. Usage updater detects drift from NFS-level changes.
+Default mode: `2770` (configurable via `AGENT_DEFAULT_DATA_MODE`). Applied at creation via `chown`/`chmod`. Updated on attach if annotations change. Usage updater detects drift from NFS-level changes.
 
 ## NFS Exports
 

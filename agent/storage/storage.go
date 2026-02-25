@@ -17,24 +17,32 @@ import (
 )
 
 const (
-	MetadataFile    = "metadata.json"
-	DataDir         = "data"
-	SnapshotsDir    = "snapshots"
-	DefaultDirMode  = 0700
-	DefaultDataMode = "0750"
+	MetadataFile = "metadata.json"
+	DataDir      = "data"
+	SnapshotsDir = "snapshots"
 )
 
 // Storage encapsulates all btrfs volume, snapshot, and clone operations.
 type Storage struct {
-	basePath     string
-	quotaEnabled bool
-	exporter     nfs.Exporter
-	tenants      []string
+	basePath        string
+	quotaEnabled    bool
+	exporter        nfs.Exporter
+	tenants         []string
+	defaultDirMode  os.FileMode
+	defaultDataMode string
 }
 
-func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string) *Storage {
+func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode string) *Storage {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	parsedDirMode, err := strconv.ParseUint(dirMode, 8, 32)
+	if err != nil {
+		log.Fatal().Str("mode", dirMode).Msg("invalid dir mode")
+	}
+	if _, err := strconv.ParseUint(dataMode, 8, 32); err != nil {
+		log.Fatal().Str("mode", dataMode).Msg("invalid data mode")
+	}
 
 	info, err := os.Stat(basePath)
 	if err != nil || !info.IsDir() {
@@ -61,16 +69,16 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 			panic("storage: invalid tenant name: " + name)
 		}
 		td := filepath.Join(basePath, name)
-		if err := os.MkdirAll(td, DefaultDirMode); err != nil {
+		if err := os.MkdirAll(td, os.FileMode(parsedDirMode)); err != nil {
 			panic("storage: failed to create tenant directory: " + err.Error())
 		}
-		if err := os.MkdirAll(filepath.Join(td, SnapshotsDir), DefaultDirMode); err != nil {
+		if err := os.MkdirAll(filepath.Join(td, SnapshotsDir), os.FileMode(parsedDirMode)); err != nil {
 			panic("storage: failed to create tenant snapshots directory: " + err.Error())
 		}
 	}
 	log.Info().Int("count", len(tenants)).Msg("tenants configured")
 
-	return &Storage{basePath: basePath, quotaEnabled: quotaEnabled, exporter: exporter, tenants: tenants}
+	return &Storage{basePath: basePath, quotaEnabled: quotaEnabled, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
 }
 
 func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInterval time.Duration) {
@@ -125,7 +133,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		req.QuotaBytes = req.SizeBytes
 	}
 	if req.Mode == "" {
-		req.Mode = DefaultDataMode
+		req.Mode = s.defaultDataMode
 	}
 	mode, err := strconv.ParseUint(req.Mode, 8, 32)
 	if err != nil {
@@ -144,7 +152,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		return &existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("volume %q already exists", req.Name)}
 	}
 
-	if err := os.MkdirAll(volDir, DefaultDirMode); err != nil {
+	if err := os.MkdirAll(volDir, s.defaultDirMode); err != nil {
 		log.Error().Err(err).Str("path", volDir).Msg("failed to create volume directory")
 		return nil, fmt.Errorf("create volume directory: %w", err)
 	}
@@ -559,7 +567,7 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	}
 
 	// operations
-	if err := os.MkdirAll(snapDir, DefaultDirMode); err != nil {
+	if err := os.MkdirAll(snapDir, s.defaultDirMode); err != nil {
 		log.Error().Err(err).Msg("failed to create snapshot directory")
 		return nil, fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
@@ -687,7 +695,7 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	}
 
 	// operations
-	if err := os.MkdirAll(cloneDir, DefaultDirMode); err != nil {
+	if err := os.MkdirAll(cloneDir, s.defaultDirMode); err != nil {
 		log.Error().Err(err).Msg("failed to create clone directory")
 		return nil, fmt.Errorf("failed to create clone directory: %w", err)
 	}

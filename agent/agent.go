@@ -62,7 +62,7 @@ func (a *Agent) Start(ctx context.Context) {
 	}
 
 	// storage layer + handler
-	store := storage.New(a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames)
+	store := storage.New(a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames, a.cfg.DefaultDirMode, a.cfg.DefaultDataMode)
 	h := &v1.Handler{Store: store}
 
 	// v1 API with auth
