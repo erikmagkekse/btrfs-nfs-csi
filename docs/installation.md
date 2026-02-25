@@ -8,6 +8,39 @@
 
 ## Agent Setup
 
+### Quick Install (Recommended)
+
+The fastest way to get the agent running. Requires a mounted btrfs filesystem with quotas enabled.
+
+> **Note:** Piping `curl | sudo bash` is convenient but runs remote code as root. If you prefer, download the script first, review it, then execute it manually.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/install-agent.sh | sudo bash
+```
+
+Customize with environment variables:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/install-agent.sh \
+  | sudo AGENT_BASE_PATH=/export/data AGENT_TENANTS=mycluster:mytoken VERSION=0.9.5 bash
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENT_BASE_PATH` | `/export/data` | btrfs mount point |
+| `AGENT_TENANTS` | `default:<random>` | tenant:token pairs |
+| `AGENT_LISTEN_ADDR` | `:8080` | listen address |
+| `VERSION` | `0.9.5` | container image tag |
+| `AGENT_BLOCK_DISK` | (unset) | block device to auto-format as btrfs and mount (e.g. `/dev/sdb`) |
+| `SKIP_PACKAGE_INSTALL` | (unset) | set to `1` to skip package installation |
+
+The script installs prerequisites (podman, NFS server, btrfs-progs), generates a config file, sets up a Podman Quadlet, and starts the service. Save the tenant token printed at the end - you'll need it for the Kubernetes StorageClass secret.
+
+### Manual Setup
+
+<details>
+<summary>Step-by-step manual installation</summary>
+
 ### 1. btrfs Filesystem
 
 ```bash
@@ -67,7 +100,7 @@ AGENT_LISTEN_ADDR=:8080
 EOF
 chmod 600 /etc/btrfs-nfs-csi/agent.env
 
-systemctl daemon-reload
+systemctl daemon-reload  # Quadlet generator creates the service, autostart via [Install] WantedBy=multi-user.target
 systemctl start btrfs-nfs-csi-agent
 ```
 
@@ -84,6 +117,8 @@ AGENT_TENANTS=cluster-a:token-aaa,cluster-b:token-bbb
 ```
 
 Each tenant maps to one Kubernetes StorageClass. The StorageClass references the agent via `agentURL` and the tenant via `agentToken` in a Secret.
+
+</details>
 
 ## Driver Setup
 
