@@ -75,13 +75,13 @@ func updateAll(ctx context.Context, basePath string, tenant string) {
 		if meta.QuotaBytes > 0 {
 			u, err := btrfs.QgroupUsage(ctx, dataDir)
 			if err != nil {
-				log.Debug().Err(err).Str("volume", e.Name()).Msg("usage updater: qgroup query failed")
+				log.Warn().Err(err).Str("volume", e.Name()).Msg("usage updater: qgroup query failed, skipping volume - if issue persists check your quotas")
 				failed++
-			} else {
-				used = u
-				if used != meta.UsedBytes {
-					changed = true
-				}
+				continue
+			}
+			used = u
+			if used != meta.UsedBytes {
+				changed = true
 			}
 		}
 
