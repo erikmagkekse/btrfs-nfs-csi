@@ -428,7 +428,7 @@ func (s *Storage) ExportVolume(ctx context.Context, tenant, name, client string)
 			}
 		}
 		now := time.Now().UTC()
-		meta.LastAttachAt = now
+		meta.LastAttachAt = &now
 		meta.UpdatedAt = now
 		if !found {
 			meta.Clients = append(meta.Clients, client)

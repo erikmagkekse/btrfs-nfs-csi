@@ -41,7 +41,7 @@ type VolumeResponse struct {
 	Clients      int       `json:"clients"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
-	LastAttachAt time.Time `json:"last_attach_at,omitempty"`
+	LastAttachAt *time.Time `json:"last_attach_at,omitempty"`
 }
 
 type VolumeListResponse struct {
