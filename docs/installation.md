@@ -12,17 +12,21 @@
 
 The fastest way to get the agent running. Requires a mounted btrfs filesystem with quotas enabled.
 
-> **Note:** Piping `curl | sudo bash` is convenient but runs remote code as root. If you prefer, download the script first, review it, then execute it manually.
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh | sudo bash
-```
+# The agent runs as a privileged Podman container with host networking -
+# it listens on port 8080 and manages the host's NFS exports directly.
+#
+# Environment variables (defaults shown - adjust as needed):
+export AGENT_BASE_PATH=/export/data
+export AGENT_TENANTS=default:$(openssl rand -hex 16)
+export AGENT_LISTEN_ADDR=:8080
+# export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH
+# export VERSION=0.9.5
+# export SKIP_PACKAGE_INSTALL=1
 
-Customize with environment variables:
+curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh \
-  | sudo AGENT_BASE_PATH=/export/data AGENT_TENANTS=mycluster:mytoken VERSION=0.9.5 bash
+# Save the tenant token printed at the end!
 ```
 
 | Variable | Default | Description |
@@ -34,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scr
 | `AGENT_BLOCK_DISK` | (unset) | block device to auto-format as btrfs and mount (e.g. `/dev/sdb`) |
 | `SKIP_PACKAGE_INSTALL` | (unset) | set to `1` to skip package installation |
 
-The script installs prerequisites (podman, NFS server, btrfs-progs), generates a config file, sets up a Podman Quadlet, and starts the service. Save the tenant token printed at the end - you'll need it for the Kubernetes StorageClass secret.
+The script installs prerequisites (podman, NFS server, btrfs-progs), generates a config file, sets up a Podman Quadlet, and starts the service.
 
 ### Manual Setup
 
