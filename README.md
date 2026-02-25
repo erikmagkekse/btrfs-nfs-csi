@@ -16,7 +16,8 @@ Kubernetes Enterprise storage vibes for your homelab. A single-binary CSI driver
 
 Most Kubernetes storage solutions are built for the data center: Ceph, Longhorn, and OpenEBS bring clustering overhead, complex operations, and resource requirements that don't fit a homelab or small self-hosted setup. If all you have is a single Linux server (or two for HA) with a btrfs filesystem, you shouldn't need a distributed storage cluster just to get snapshots and quotas.
 
-**btrfs-nfs-csi** bridges that gap:
+<details>
+<summary><b>btrfs-nfs-csi</b> bridges that gap</summary>
 
 - **Minimal resource footprint** - the agent and driver are single Go binaries with nearly no overhead. No JVM, no database. Runs comfortably on a Raspberry Pi or a 2-core VM.
 - **Zero infrastructure overhead** - no etcd, no separate storage cluster, no distributed consensus. One binary on your NFS server, one driver in your cluster.
@@ -26,7 +27,28 @@ Most Kubernetes storage solutions are built for the data center: Ceph, Longhorn,
 - **Homelab-friendly HA** - pair two servers with DRBD + Pacemaker for active/passive failover.
 - **Multi-tenant from day one** - a single agent can serve multiple clusters or teams, each isolated by tenant with its own subvolume tree.
 
+</details>
+
 If you run a homelab, a small on-prem cluster, or an edge deployment and want real storage features without the operational tax of a full SDS stack, this driver is for you.
+
+## Features
+
+- Instant snapshots and writable clones (btrfs CoW)
+- Online volume expansion
+- Per-volume quota enforcement and usage reporting
+- Per-volume tuning via StorageClass parameters or PVC annotations:
+  - Compression (`zstd`, `lzo`, `zlib` with levels)
+  - NoCOW mode (`chattr +C`) for databases
+  - UID/GID/mode
+- Per-node NFS exports (auto-managed via `exportfs`)
+- Multi-tenant: one agent serves multiple clusters
+- Prometheus `/metrics` on all components
+- Web dashboard (`/v1/dashboard`)
+- TLS support
+- HA via DRBD + Pacemaker (active/passive failover)
+
+**Roadmap:**
+NFS-Ganesha support, `LIST_VOLUMES` / `LIST_SNAPSHOTS`, `VOLUME_CONDITION` health reporting, Helm chart
 
 ## Quick Start
 
@@ -90,35 +112,6 @@ EOF
 
 See [docs/installation.md](docs/installation.md) for full setup details, snapshots, clones, and more.
 
-## Features
-
-- Instant snapshots and writable clones (btrfs CoW)
-- Online volume expansion
-- Per-volume quota enforcement and usage reporting
-- Per-volume tuning via StorageClass parameters or PVC annotations:
-  - Compression (`zstd`, `lzo`, `zlib` with levels)
-  - NoCOW mode (`chattr +C`) for databases
-  - UID/GID/mode
-- Per-node NFS exports (auto-managed via `exportfs`)
-- Multi-tenant: one agent serves multiple clusters
-- Prometheus `/metrics` on all components
-- Web dashboard (`/v1/dashboard`)
-- TLS support
-- HA via DRBD + Pacemaker (active/passive failover)
-
-### Roadmap
-
-- NFS-Ganesha userspace NFS server support (no more root requirement)
-- CSI `LIST_VOLUMES` / `LIST_SNAPSHOTS`
-- CSI `VOLUME_CONDITION` health reporting
-- Helm chart
-
-## Architecture
-
-![Architecture](docs/assets/architecture.png)
-
-Each StorageClass binds one agent + one tenant. Volume IDs use the StorageClass name, so agent URLs can change without breaking existing volumes.
-
 ## Documentation
 
 | Document | Description |
@@ -129,6 +122,13 @@ Each StorageClass binds one agent + one tenant. Volume IDs use the StorageClass 
 | [Operations](docs/operations.md) | Snapshots, clones, expansion, compression, NoCOW, quota, fsGroup, NFS exports |
 | [Agent API](docs/agent-api.md) | All endpoints, request/response models, error codes, curl examples |
 | [Metrics](docs/metrics.md) | All Prometheus metrics, PromQL examples |
+
+
+## Architecture
+
+![Architecture](docs/assets/architecture.png)
+
+Each StorageClass binds one agent + one tenant. Volume IDs use the StorageClass name, so agent URLs can change without breaking existing volumes.
 
 ## Building
 
