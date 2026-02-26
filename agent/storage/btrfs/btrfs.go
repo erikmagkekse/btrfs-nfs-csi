@@ -3,62 +3,52 @@ package btrfs
 import (
 	"context"
 	"fmt"
-	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 )
+
+// TODO: Maybe better scraping?
+// TODO: Add functionality for squota
+// TODO: Add as AGENT ENV
+const btrfsBin = "btrfs"
 
 type SubvolumeInfo struct {
 	Path string
 }
 
-func SubvolumeCreate(ctx context.Context, path string) error {
-	return run(ctx, "btrfs", "subvolume", "create", path)
+type Manager struct {
+	cmd utils.Runner
 }
 
-func SubvolumeDelete(ctx context.Context, path string) error {
-	return run(ctx, "btrfs", "subvolume", "delete", path)
+func NewManager() *Manager {
+	return &Manager{cmd: &utils.ShellRunner{}}
 }
 
-func SubvolumeSnapshot(ctx context.Context, src, dst string, readonly bool) error {
+func (m *Manager) SubvolumeCreate(ctx context.Context, path string) error {
+	return m.run(ctx, btrfsBin, "subvolume", "create", path)
+}
+
+func (m *Manager) SubvolumeDelete(ctx context.Context, path string) error {
+	return m.run(ctx, btrfsBin, "subvolume", "delete", path)
+}
+
+func (m *Manager) SubvolumeSnapshot(ctx context.Context, src, dst string, readonly bool) error {
 	if readonly {
-		return run(ctx, "btrfs", "subvolume", "snapshot", "-r", src, dst)
+		return m.run(ctx, btrfsBin, "subvolume", "snapshot", "-r", src, dst)
 	}
-	return run(ctx, "btrfs", "subvolume", "snapshot", src, dst)
-}
-
-func SubvolumeExists(ctx context.Context, path string) bool {
-	err := run(ctx, "btrfs", "subvolume", "show", path)
-	return err == nil
-}
-
-func SubvolumeList(ctx context.Context, path string) ([]SubvolumeInfo, error) {
-	out, err := output(ctx, "btrfs", "subvolume", "list", "-o", path)
-	if err != nil {
-		return nil, err
-	}
-
-	var subs []SubvolumeInfo
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		if line == "" {
-			continue
-		}
-		// format: ID <id> gen <gen> top level <tl> path <path>
-		parts := strings.Fields(line)
-		if len(parts) >= 9 {
-			subs = append(subs, SubvolumeInfo{Path: parts[8]})
-		}
-	}
-	return subs, nil
+	return m.run(ctx, btrfsBin, "subvolume", "snapshot", src, dst)
 }
 
 // QuotaCheck verifies that btrfs quota is enabled on the filesystem.
-func QuotaCheck(ctx context.Context, path string) error {
-	return run(ctx, "btrfs", "qgroup", "show", path)
+func (m *Manager) QuotaCheck(ctx context.Context, path string) error {
+	return m.run(ctx, btrfsBin, "qgroup", "show", path)
 }
 
-func QgroupLimit(ctx context.Context, path string, bytes uint64) error {
-	return run(ctx, "btrfs", "qgroup", "limit", fmt.Sprintf("%d", bytes), path)
+func (m *Manager) QgroupLimit(ctx context.Context, path string, bytes uint64) error {
+	return m.run(ctx, btrfsBin, "qgroup", "limit", fmt.Sprintf("%d", bytes), path)
 }
 
 type QgroupInfo struct {
@@ -67,8 +57,8 @@ type QgroupInfo struct {
 }
 
 // QgroupUsage returns the referenced bytes used by the subvolume's qgroup.
-func QgroupUsage(ctx context.Context, path string) (uint64, error) {
-	info, err := QgroupUsageEx(ctx, path)
+func (m *Manager) QgroupUsage(ctx context.Context, path string) (uint64, error) {
+	info, err := m.QgroupUsageEx(ctx, path)
 	if err != nil {
 		return 0, err
 	}
@@ -76,9 +66,9 @@ func QgroupUsage(ctx context.Context, path string) (uint64, error) {
 }
 
 // QgroupUsageEx returns both referenced and exclusive bytes for the subvolume's qgroup.
-func QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, error) {
+func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, error) {
 	// get subvolume ID to find the correct qgroup
-	showOut, err := output(ctx, "btrfs", "subvolume", "show", path)
+	showOut, err := m.cmd.Run(ctx, btrfsBin, "subvolume", "show", path)
 	if err != nil {
 		return QgroupInfo{}, err
 	}
@@ -96,7 +86,7 @@ func QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, error) {
 
 	qgroupID := "0/" + subvolID
 
-	out, err := output(ctx, "btrfs", "qgroup", "show", "-re", "--raw", path)
+	out, err := m.cmd.Run(ctx, btrfsBin, "qgroup", "show", "-re", "--raw", path)
 	if err != nil {
 		return QgroupInfo{}, err
 	}
@@ -112,12 +102,38 @@ func QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, error) {
 	return QgroupInfo{}, fmt.Errorf("qgroup %s not found for %s", qgroupID, path)
 }
 
-func SetNoCOW(ctx context.Context, path string) error {
-	return run(ctx, "chattr", "+C", path)
+func (m *Manager) SetNoCOW(ctx context.Context, path string) error {
+	return m.run(ctx, "chattr", "+C", path)
 }
 
-func SetCompression(ctx context.Context, path string, algo string) error {
-	return run(ctx, "btrfs", "property", "set", path, "compression", algo)
+var validCompressionAlgo = map[string]bool{
+	"zstd": true,
+	"lzo":  true,
+	"zlib": true,
+}
+
+func IsValidCompression(s string) bool {
+	if s == "" || s == "none" {
+		return true
+	}
+	parts := strings.SplitN(s, ":", 2)
+	if !validCompressionAlgo[parts[0]] {
+		return false
+	}
+	if len(parts) == 2 {
+		level, err := strconv.Atoi(parts[1])
+		if err != nil || level < 1 || level > 15 {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Manager) SetCompression(ctx context.Context, path string, algo string) error {
+	if !IsValidCompression(algo) {
+		return fmt.Errorf("invalid compression algorithm: %s", algo)
+	}
+	return m.run(ctx, btrfsBin, "property", "set", path, "compression", algo)
 }
 
 // IsBtrfs checks whether the given path resides on a btrfs filesystem
@@ -131,25 +147,40 @@ func IsBtrfs(path string) bool {
 	return st.Type == 0x9123683E
 }
 
-func IsAvailable(ctx context.Context) bool {
-	err := run(ctx, "btrfs", "--version")
+func (m *Manager) IsAvailable(ctx context.Context) bool {
+	err := m.run(ctx, btrfsBin, "--version")
 	return err == nil
 }
 
-func run(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-	}
-	return nil
+func (m *Manager) run(ctx context.Context, bin string, args ...string) error {
+	_, err := m.cmd.Run(ctx, bin, args...)
+	return err
 }
 
-func output(ctx context.Context, name string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	out, err := cmd.CombinedOutput()
+// TODO: use SubvolumeExists and SubvolumeList for a periodic consistency check
+// that compares metadata.json entries against actual btrfs subvolumes.
+// Should be fine since we anyways just list subvols for this specific path.
+func (m *Manager) SubvolumeExists(ctx context.Context, path string) bool {
+	err := m.run(ctx, btrfsBin, "subvolume", "show", path)
+	return err == nil
+}
+
+func (m *Manager) SubvolumeList(ctx context.Context, path string) ([]SubvolumeInfo, error) {
+	out, err := m.cmd.Run(ctx, btrfsBin, "subvolume", "list", "-o", path)
 	if err != nil {
-		return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+		return nil, err
 	}
-	return string(out), nil
+
+	var subs []SubvolumeInfo
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if line == "" {
+			continue
+		}
+		// format: ID <id> gen <gen> top level <tl> path <path>
+		parts := strings.Fields(line)
+		if len(parts) >= 9 {
+			subs = append(subs, SubvolumeInfo{Path: parts[8]})
+		}
+	}
+	return subs, nil
 }
