@@ -4,6 +4,7 @@ package btrfs
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -242,5 +243,103 @@ func TestIntegrationSetCompression(t *testing.T) {
 	}
 	if !strings.Contains(out, "zstd") {
 		t.Errorf("expected compression=zstd, got: %s", strings.TrimSpace(out))
+	}
+}
+
+// not sure how useful they are but who knows :D
+func TestIntegrationConcurrentCreate(t *testing.T) {
+	mnt := setupLoopBtrfs(t)
+	mgr := NewManager()
+	ctx := context.Background()
+
+	errs := make(chan error, 31)
+	for i := range 31 {
+		go func() {
+			name := fmt.Sprintf("vol-%02d", i)
+			errs <- mgr.SubvolumeCreate(ctx, filepath.Join(mnt, name))
+		}()
+	}
+	for range 31 {
+		if err := <-errs; err != nil {
+			t.Errorf("SubvolumeCreate: %v", err)
+		}
+	}
+
+	subs, err := mgr.SubvolumeList(ctx, mnt)
+	if err != nil {
+		t.Fatalf("SubvolumeList: %v", err)
+	}
+	if len(subs) != 31 {
+		t.Errorf("expected 31 subvolumes, got %d", len(subs))
+	}
+}
+
+func TestIntegrationConcurrentDelete(t *testing.T) {
+	mnt := setupLoopBtrfs(t)
+	mgr := NewManager()
+	ctx := context.Background()
+
+	// create 31 subvolumes sequentially
+	for i := range 31 {
+		name := fmt.Sprintf("vol-%02d", i)
+		if err := mgr.SubvolumeCreate(ctx, filepath.Join(mnt, name)); err != nil {
+			t.Fatalf("SubvolumeCreate(%s): %v", name, err)
+		}
+	}
+
+	// delete all concurrently
+	errs := make(chan error, 31)
+	for i := range 31 {
+		go func() {
+			name := fmt.Sprintf("vol-%02d", i)
+			errs <- mgr.SubvolumeDelete(ctx, filepath.Join(mnt, name))
+		}()
+	}
+	for range 31 {
+		if err := <-errs; err != nil {
+			t.Errorf("SubvolumeDelete: %v", err)
+		}
+	}
+
+	subs, err := mgr.SubvolumeList(ctx, mnt)
+	if err != nil {
+		t.Fatalf("SubvolumeList: %v", err)
+	}
+	if len(subs) != 0 {
+		t.Errorf("expected 0 subvolumes, got %d", len(subs))
+	}
+}
+
+func TestIntegrationConcurrentSnapshot(t *testing.T) {
+	mnt := setupLoopBtrfs(t)
+	mgr := NewManager()
+	ctx := context.Background()
+
+	src := filepath.Join(mnt, "srcvol")
+	if err := mgr.SubvolumeCreate(ctx, src); err != nil {
+		t.Fatalf("SubvolumeCreate: %v", err)
+	}
+
+	// 31 concurrent snapshots from same source
+	errs := make(chan error, 31)
+	for i := range 31 {
+		go func() {
+			name := fmt.Sprintf("snap-%02d", i)
+			errs <- mgr.SubvolumeSnapshot(ctx, src, filepath.Join(mnt, name), true)
+		}()
+	}
+	for range 31 {
+		if err := <-errs; err != nil {
+			t.Errorf("SubvolumeSnapshot: %v", err)
+		}
+	}
+
+	// +1 for srcvol itself
+	subs, err := mgr.SubvolumeList(ctx, mnt)
+	if err != nil {
+		t.Fatalf("SubvolumeList: %v", err)
+	}
+	if len(subs) != 32 {
+		t.Errorf("expected 32 subvolumes (1 src + 31 snaps), got %d", len(subs))
 	}
 }
