@@ -14,9 +14,9 @@ import (
 )
 
 // StartUsageUpdater periodically updates used_bytes in each volume's metadata.json.
-func StartUsageUpdater(ctx context.Context, basePath string, interval time.Duration, tenant string) {
+func StartUsageUpdater(ctx context.Context, mgr *btrfs.Manager, basePath string, interval time.Duration, tenant string) {
 	go func() {
-		updateAll(ctx, basePath, tenant)
+		updateAll(ctx, mgr, basePath, tenant)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -24,13 +24,13 @@ func StartUsageUpdater(ctx context.Context, basePath string, interval time.Durat
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				updateAll(ctx, basePath, tenant)
+				updateAll(ctx, mgr, basePath, tenant)
 			}
 		}
 	}()
 }
 
-func updateAll(ctx context.Context, basePath string, tenant string) {
+func updateAll(ctx context.Context, mgr *btrfs.Manager, basePath string, tenant string) {
 	log.Debug().Str("tenant", tenant).Msg("usage updater: starting scan")
 
 	entries, err := os.ReadDir(basePath)
@@ -73,7 +73,7 @@ func updateAll(ctx context.Context, basePath string, tenant string) {
 		// detect usage drift
 		var used uint64
 		if meta.QuotaBytes > 0 {
-			u, err := btrfs.QgroupUsage(ctx, dataDir)
+			u, err := mgr.QgroupUsage(ctx, dataDir)
 			if err != nil {
 				log.Warn().Err(err).Str("volume", e.Name()).Msg("usage updater: qgroup query failed, skipping volume - if issue persists check your quotas")
 				failed++
@@ -144,7 +144,7 @@ func updateAll(ctx context.Context, basePath string, tenant string) {
 			continue
 		}
 
-		info, err := btrfs.QgroupUsageEx(ctx, dataDir)
+		info, err := mgr.QgroupUsageEx(ctx, dataDir)
 		if err != nil {
 			log.Debug().Err(err).Str("snapshot", e.Name()).Msg("usage updater: snapshot qgroup query failed")
 			snapFailed++
