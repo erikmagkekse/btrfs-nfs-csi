@@ -1,0 +1,64 @@
+---
+# --- Hcloud resources (localhost) ---
+
+- name: Create server
+  hetzner.hcloud.server:
+    name: "{{ server_name }}"
+    server_type: "{{ server_type }}"
+    image: "{{ server_image }}"
+    location: "{{ server_location | default(omit, true) }}"
+    ssh_keys:
+      - "{{ ssh_key_name }}"
+    state: present
+  register: hcloud_server
+
+- name: Create volume
+  hetzner.hcloud.volume:
+    name: "{{ volume_name }}"
+    size: "{{ volume_size }}"
+    server: "{{ server_name }}"
+    state: present
+  register: hcloud_volume
+
+- name: Add server to in-memory inventory
+  ansible.builtin.add_host:
+    name: agent
+    ansible_host: "{{ hcloud_server.hcloud_server.ipv4_address }}"
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_ssh_private_key_file: "{{ ssh_key_path }}"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+  changed_when: false
+
+- name: Wait for SSH
+  ansible.builtin.wait_for:
+    host: "{{ hcloud_server.hcloud_server.ipv4_address }}"
+    port: 22
+    timeout: 120
+
+# --- Provision remote server via quickstart script ---
+
+- name: Run quickstart-agent.sh
+  delegate_to: agent
+  ansible.builtin.script:
+    cmd: "{{ playbook_dir }}/../../../scripts/quickstart-agent.sh --yes"
+  environment:
+    AGENT_BLOCK_DISK: /dev/disk/by-id/scsi-0HC_Volume_{{ hcloud_volume.hcloud_volume.id }}
+    AGENT_BASE_PATH: "{{ agent_base_path }}"
+    VERSION: "{{ agent_version }}"
+  changed_when: true
+
+- name: Read agent config
+  delegate_to: agent
+  ansible.builtin.slurp:
+    src: /etc/btrfs-nfs-csi/agent.env
+  register: agent_env
+
+- name: Extract tenant credentials
+  vars:
+    env_lines: "{{ (agent_env.content | b64decode).splitlines() }}"
+    tenant_pair: "{{ env_lines | select('match', '^AGENT_TENANTS=') | first | regex_replace('^AGENT_TENANTS=', '') }}"
+  ansible.builtin.set_fact:
+    agent_ip: "{{ hcloud_server.hcloud_server.ipv4_address }}"
+    tenant_name: "{{ tenant_pair.split(':')[0] }}"
+    tenant_token: "{{ tenant_pair.split(':')[1] }}"

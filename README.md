@@ -117,6 +117,7 @@ See [docs/installation.md](docs/installation.md) for full setup details, snapsho
 | Document | Description |
 |---|---|
 | [Installation](docs/installation.md) | Agent setup (btrfs, NFS, Quadlet, systemd, binary), driver setup, container build |
+| [Setup Examples](docs/setup-examples/) | Ansible playbooks for dev/playground setups (not for production) |
 | [Configuration](docs/configuration.md) | Environment variables, StorageClass parameters, PVC annotations, secrets, TLS |
 | [Architecture](docs/architecture.md) | Volume lifecycle, ID formats, directory structure, CSI capabilities, sidecars, RBAC, HA |
 | [Operations](docs/operations.md) | Snapshots, clones, expansion, compression, NoCOW, quota, fsGroup, NFS exports |

@@ -1,0 +1,122 @@
+---
+# --- Hcloud resources (localhost) ---
+
+- name: Create k8s server
+  hetzner.hcloud.server:
+    name: "{{ k8s_server_name }}"
+    server_type: "{{ k8s_server_type }}"
+    image: "{{ k8s_server_image }}"
+    location: "{{ k8s_server_location | default(omit, true) }}"
+    ssh_keys:
+      - "{{ ssh_key_name }}"
+    state: present
+  register: hcloud_k8s_server
+
+- name: Add k8s server to in-memory inventory
+  ansible.builtin.add_host:
+    name: k8s
+    ansible_host: "{{ hcloud_k8s_server.hcloud_server.ipv4_address }}"
+    ansible_connection: ssh
+    ansible_user: root
+    ansible_ssh_private_key_file: "{{ ssh_key_path }}"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+  changed_when: false
+
+- name: Wait for SSH
+  ansible.builtin.wait_for:
+    host: "{{ hcloud_k8s_server.hcloud_server.ipv4_address }}"
+    port: 22
+    timeout: 120
+
+# --- Install RKE2 ---
+
+- name: Install RKE2
+  delegate_to: k8s
+  ansible.builtin.shell:
+    cmd: curl -sfL https://get.rke2.io | INSTALL_RKE2_CHANNEL={{ rke2_channel }} sh -
+    creates: /usr/local/bin/rke2
+
+- name: Enable and start rke2-server
+  delegate_to: k8s
+  ansible.builtin.systemd:
+    name: rke2-server
+    enabled: true
+    state: started
+
+- name: Wait for kubeconfig
+  delegate_to: k8s
+  ansible.builtin.wait_for:
+    path: /etc/rancher/rke2/rke2.yaml
+    timeout: 120
+
+- name: Wait for node to be ready
+  delegate_to: k8s
+  ansible.builtin.command:
+    cmd: >-
+      /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
+      wait --for=condition=Ready nodes --all --timeout=300s
+  changed_when: false
+
+# --- Deploy CSI driver ---
+
+- name: Create remote tmp directory
+  delegate_to: k8s
+  ansible.builtin.file:
+    path: /tmp/btrfs-nfs-csi-tmp
+    state: directory
+    mode: "0755"
+
+- name: Copy setup.yaml
+  delegate_to: k8s
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../../deploy/driver/setup.yaml"
+    dest: /tmp/btrfs-nfs-csi-tmp/csi-setup.yaml
+    mode: "0644"
+
+- name: Apply CSI driver
+  delegate_to: k8s
+  ansible.builtin.command:
+    cmd: /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml apply -f /tmp/btrfs-nfs-csi-tmp/csi-setup.yaml
+  changed_when: true
+
+# RKE2 deploys the snapshot controller + CRDs async, wait until ready
+- name: Wait for VolumeSnapshot CRD
+  delegate_to: k8s
+  ansible.builtin.command:
+    cmd: >-
+      /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
+      get crd volumesnapshotclasses.snapshot.storage.k8s.io
+  register: snap_crd
+  retries: 20
+  delay: 10
+  until: snap_crd.rc == 0
+  changed_when: false
+
+# --- Deploy StorageClass with real values ---
+
+- name: Render and copy storageclass
+  delegate_to: k8s
+  ansible.builtin.template:
+    src: storageclass.yaml.j2
+    dest: /tmp/btrfs-nfs-csi-tmp/csi-storageclass.yaml
+    mode: "0644"
+
+- name: Apply StorageClass
+  delegate_to: k8s
+  ansible.builtin.command:
+    cmd: /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml apply -f /tmp/btrfs-nfs-csi-tmp/csi-storageclass.yaml
+  changed_when: true
+
+# --- Fetch kubeconfig ---
+
+- name: Read kubeconfig
+  delegate_to: k8s
+  ansible.builtin.slurp:
+    src: /etc/rancher/rke2/rke2.yaml
+  register: rke2_kubeconfig
+
+- name: Save kubeconfig locally
+  ansible.builtin.copy:
+    content: "{{ rke2_kubeconfig.content | b64decode | regex_replace('127.0.0.1', hcloud_k8s_server.hcloud_server.ipv4_address) }}"
+    dest: "{{ kubeconfig_local_path }}"
+    mode: "0600"
