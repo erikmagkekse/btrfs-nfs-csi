@@ -1,0 +1,7 @@
+---
+k8s_server_name: "{{ prefix }}-k8s"
+k8s_server_type: cx23
+k8s_server_image: debian-13
+# k8s_server_location: fsn1
+rke2_channel: stable
+kubeconfig_local_path: /tmp/btrfs-nfs-csi-tmp/rke2-kubeconfig

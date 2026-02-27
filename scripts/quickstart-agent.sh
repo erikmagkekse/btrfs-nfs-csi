@@ -155,11 +155,11 @@ else
 fi
 
 # 2. block device (fresh install only)
-if [[ -n "${AGENT_BLOCK_DISK}" ]]; then
+if [[ -n "${AGENT_BLOCK_DISK}" ]] && ! ${UPGRADE}; then
     [[ -b "${AGENT_BLOCK_DISK}" ]] || fatal "${AGENT_BLOCK_DISK} is not a block device."
 
-    if findmnt -n -S "${AGENT_BLOCK_DISK}" &>/dev/null; then
-        existing_mount=$(findmnt -n -S -o TARGET "${AGENT_BLOCK_DISK}")
+    if findmnt -n --source "${AGENT_BLOCK_DISK}" &>/dev/null; then
+        existing_mount=$(findmnt -n -o TARGET --source "${AGENT_BLOCK_DISK}")
         fatal "${AGENT_BLOCK_DISK} is already mounted at ${existing_mount}. Unmount it first or remove AGENT_BLOCK_DISK."
     fi
 
@@ -183,7 +183,7 @@ fi
 # 3. verify btrfs
 mountpoint -q "${AGENT_BASE_PATH}" 2>/dev/null || fatal "${AGENT_BASE_PATH} is not a mount point. Mount a btrfs filesystem there first."
 
-fstype=$(findmnt -n -o FSTYPE "${AGENT_BASE_PATH}")
+fstype=$(findmnt -n -o FSTYPE --target "${AGENT_BASE_PATH}")
 [[ "${fstype}" == "btrfs" ]] || fatal "${AGENT_BASE_PATH} is ${fstype}, not btrfs."
 
 if ! btrfs qgroup show "${AGENT_BASE_PATH}" &>/dev/null; then

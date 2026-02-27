@@ -1,0 +1,15 @@
+---
+- name: Delete server
+  hetzner.hcloud.server:
+    name: "{{ server_name }}"
+    state: absent
+
+- name: Delete volume
+  hetzner.hcloud.volume:
+    name: "{{ volume_name }}"
+    state: absent
+
+- name: Delete SSH key from Hetzner Cloud
+  hetzner.hcloud.ssh_key:
+    name: "{{ ssh_key_name }}"
+    state: absent

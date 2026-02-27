@@ -1,0 +1,26 @@
+---
+- name: Deploy btrfs-nfs-csi storage node on Hetzner Cloud
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - role: ssh
+      ssh_key_path: "{{ cli_ssh_key_path | default('/tmp/btrfs-nfs-csi-tmp/hcloud_ed25519') }}"
+    - role: agent
+      when: state | default('present') == 'present'
+    - role: k8s
+      when: state | default('present') == 'present'
+    - role: info
+      when: state | default('present') == 'present'
+  tasks:
+    - name: Cleanup k8s
+      when: state | default('present') == 'absent'
+      ansible.builtin.include_role:
+        name: k8s
+        tasks_from: cleanup
+
+    - name: Cleanup agent
+      when: state | default('present') == 'absent'
+      ansible.builtin.include_role:
+        name: agent
+        tasks_from: cleanup
