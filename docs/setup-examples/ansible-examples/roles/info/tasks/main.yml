@@ -32,9 +32,7 @@
         Tenant:        {{ tenant_name }}
         Token:         {{ tenant_token }}
       Dashboard:       http://{{ agent_ip }}:8080/v1/dashboard
-        Login:         Select "Token", enter token below
-        Username:      (any)
-        Password:      (token)
+        Auth:          any username, token as password
       K8s Server:      {{ hcloud_k8s_server.hcloud_server.ipv4_address }}
       Kubeconfig:      {{ kubeconfig_local_path }}
 
