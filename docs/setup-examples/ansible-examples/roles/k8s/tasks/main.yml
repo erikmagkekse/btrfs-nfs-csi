@@ -85,7 +85,11 @@
   ansible.builtin.command:
     cmd: >-
       /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
-      wait --for=condition=Established crd volumesnapshotclasses.snapshot.storage.k8s.io --timeout=300s
+      get crd volumesnapshotclasses.snapshot.storage.k8s.io
+  register: snap_crd
+  retries: 20
+  delay: 10
+  until: snap_crd.rc == 0
   changed_when: false
 
 # --- Deploy StorageClass with real values ---
