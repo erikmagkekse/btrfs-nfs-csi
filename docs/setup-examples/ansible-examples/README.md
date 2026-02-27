@@ -1,12 +1,12 @@
 # Ansible Examples
 
-> **⚠️ Dev / playground only** - these playbooks are meant for quick experimentation and testing. Do not use them for production deployments.
+> **⚠️ Dev / playground only** - these playbooks are meant for quick experimentation and testing. Do not use them for production deployments. These spin up some resources quick and dirty, like not using the k8s module for Ansible.
 
 Ansible playbooks for deploying btrfs-nfs-csi on Hetzner Cloud with a single command.
 Creates an agent server (btrfs storage + NFS) and a K8s server (RKE2) with the CSI driver pre-installed.
 
 Uses [Hetzner Cloud](https://www.hetzner.com/cloud/) because it's cheap and servers can be
-created and destroyed easily, ideal for testing and i dont care environments.
+created and destroyed easily, ideal for testing and I don't care environments.
 
 ## Prerequisites
 
