@@ -46,6 +46,7 @@
     AGENT_BLOCK_DISK: /dev/disk/by-id/scsi-0HC_Volume_{{ hcloud_volume.hcloud_volume.id }}
     AGENT_BASE_PATH: "{{ agent_base_path }}"
     VERSION: "{{ agent_version }}"
+    IMAGE: "{{ agent_image | default(omit, true) }}"
   changed_when: true
 
 - name: Read agent config
