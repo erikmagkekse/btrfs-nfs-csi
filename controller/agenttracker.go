@@ -7,17 +7,26 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/k8s"
+	"github.com/erikmagkekse/btrfs-nfs-csi/model"
 
 	"github.com/rs/zerolog/log"
 )
+
+// Just a prive thinggy here
+type agentInfo struct {
+	scName   string
+	agentURL string
+	token    string
+}
 
 type AgentTracker struct {
 	version string
 	commit  string
 	mu      sync.RWMutex
 	agents  map[string]*agentAPI.Client
-	scNames map[string]string // agentURL → SC name
-	scToURL map[string]string // SC name → agentURL
+	scNames map[string]string // agentURL -> SC name
+	scToURL map[string]string // SC name -> agentURL
 }
 
 func NewAgentTracker(version, commit string) *AgentTracker {
@@ -54,6 +63,18 @@ func (t *AgentTracker) Track(url string, client *agentAPI.Client) {
 	t.agents[url] = client
 }
 
+func (t *AgentTracker) Agents() map[string]*agentAPI.Client {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	result := make(map[string]*agentAPI.Client, len(t.scToURL))
+	for sc, url := range t.scToURL {
+		if c, ok := t.agents[url]; ok {
+			result[sc] = c
+		}
+	}
+	return result
+}
+
 func (t *AgentTracker) Run(ctx context.Context) {
 	t.discoverFromStorageClasses(ctx)
 	t.checkAll(ctx)
@@ -72,11 +93,54 @@ func (t *AgentTracker) Run(ctx context.Context) {
 	}
 }
 
+// discoverAgents returns agent info for all StorageClasses owned by our driver.
+func discoverAgents(ctx context.Context) ([]agentInfo, error) {
+	scList, err := k8s.ListStorageClasses(ctx, model.DriverName)
+	if err != nil {
+		ctrlK8sOpsTotal.WithLabelValues("error").Inc()
+		return nil, err
+	}
+	ctrlK8sOpsTotal.WithLabelValues("success").Inc()
+
+	var result []agentInfo
+	for _, sc := range scList {
+		url := sc.Parameters[paramAgentURL]
+		if url == "" {
+			continue
+		}
+
+		token := resolveAgentToken(ctx, sc.Parameters)
+
+		result = append(result, agentInfo{
+			scName:   sc.Metadata.Name,
+			agentURL: url,
+			token:    token,
+		})
+	}
+	return result, nil
+}
+
+// resolveAgentToken reads the agentToken from the K8s Secret referenced by SC parameters.
+func resolveAgentToken(ctx context.Context, params map[string]string) string {
+	name := params["csi.storage.k8s.io/provisioner-secret-name"]
+	ns := params["csi.storage.k8s.io/provisioner-secret-namespace"]
+	if name == "" || ns == "" {
+		return ""
+	}
+
+	token, err := k8s.GetSecretValue(ctx, ns, name, secretAgentToken)
+	if err != nil {
+		log.Warn().Err(err).Str("secret", ns+"/"+name).Msg("failed to read agent secret")
+		return ""
+	}
+	return token
+}
+
 func (t *AgentTracker) discoverFromStorageClasses(ctx context.Context) {
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	urlToSC, err := k8sDiscoverAgentURLs(checkCtx)
+	scList, err := discoverAgents(checkCtx)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to list StorageClasses")
 		return
@@ -85,23 +149,26 @@ func (t *AgentTracker) discoverFromStorageClasses(ctx context.Context) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.scNames = urlToSC
-	scToURL := make(map[string]string, len(urlToSC))
-	for url, sc := range urlToSC {
-		scToURL[sc] = url
+	scNames := make(map[string]string, len(scList))
+	scToURL := make(map[string]string, len(scList))
+	known := make(map[string]bool, len(scList))
+	for _, a := range scList {
+		scNames[a.agentURL] = a.scName
+		scToURL[a.scName] = a.agentURL
+		known[a.agentURL] = true
+
+		if _, exists := t.agents[a.agentURL]; !exists {
+			t.agents[a.agentURL] = agentAPI.NewClient(a.agentURL, a.token)
+			log.Info().Str("agent", a.agentURL).Str("sc", a.scName).Msg("discovered agent from StorageClass")
+		}
 	}
+	t.scNames = scNames
 	t.scToURL = scToURL
 
 	for url := range t.agents {
-		if _, ok := urlToSC[url]; !ok {
+		if !known[url] {
 			delete(t.agents, url)
 			log.Info().Str("agent", url).Msg("agent removed - StorageClass deleted")
-		}
-	}
-	for url := range urlToSC {
-		if _, exists := t.agents[url]; !exists {
-			t.agents[url] = agentAPI.NewClient(url, "")
-			log.Info().Str("agent", url).Msg("discovered agent from StorageClass")
 		}
 	}
 }

@@ -48,7 +48,7 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - HA via DRBD + Pacemaker (active/passive failover)
 
 **Roadmap:**
-NFS-Ganesha support, `LIST_VOLUMES` / `LIST_SNAPSHOTS`, `VOLUME_CONDITION` health reporting, Helm chart
+NFS-Ganesha support, `VOLUME_CONDITION` health reporting, Helm chart
 
 ## Quick Start
 
