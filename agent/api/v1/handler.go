@@ -40,7 +40,7 @@ func (h *Handler) CreateVolume(c *echo.Context) error {
 		return StorageError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, volumeResponseFrom(meta))
+	return c.JSON(http.StatusCreated, volumeDetailResponseFrom(meta))
 }
 
 func (h *Handler) ListVolumes(c *echo.Context) error {
@@ -107,7 +107,7 @@ func (h *Handler) UpdateVolume(c *echo.Context) error {
 		return StorageError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, volumeResponseFrom(meta))
+	return c.JSON(http.StatusOK, volumeDetailResponseFrom(meta))
 }
 
 func (h *Handler) DeleteVolume(c *echo.Context) error {
@@ -206,7 +206,7 @@ func (h *Handler) CreateSnapshot(c *echo.Context) error {
 		return StorageError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, snapshotResponseFrom(meta))
+	return c.JSON(http.StatusCreated, snapshotDetailResponseFrom(meta))
 }
 
 func (h *Handler) ListSnapshots(c *echo.Context) error {
