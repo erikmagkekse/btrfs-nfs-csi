@@ -76,6 +76,7 @@ spec:
   containers:
     - name: fio
       image: ${FIO_IMAGE}
+      command: ["fio"]
       args: ["--name=mixed", "--directory=/data", "--rw=randrw", "--rwmixread=70", "--bs=4k", "--size=256m", "--rate=${READ_RATE},${WRITE_RATE}", "--runtime=120", "--time_based", "--group_reporting", "--output-format=terse", "--terse-version=3"]
       volumeMounts:
         - name: data
