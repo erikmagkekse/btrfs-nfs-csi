@@ -3,7 +3,7 @@ Description=btrfs-nfs-csi agent
 After=network-online.target nfs-server.service
 
 [Container]
-Image=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.6
+Image=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.7
 Exec=agent
 EnvironmentFile=/etc/btrfs-nfs-csi/agent.env
 # host network + pid + nfs state required for exportfs to manage the host NFS server

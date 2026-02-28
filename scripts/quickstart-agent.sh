@@ -15,7 +15,7 @@
 #   AGENT_BASE_PATH       btrfs mount point            (default: /export/data)
 #   AGENT_TENANTS         tenant:token pairs            (default: default:<random>)
 #   AGENT_LISTEN_ADDR     listen address                (default: :8080)
-#   VERSION               image tag                     (default: 0.9.6)
+#   VERSION               image tag                     (default: 0.9.7)
 #   IMAGE                 full container image reference (default: ghcr.io/erikmagkekse/btrfs-nfs-csi:<VERSION>)
 #   AGENT_BLOCK_DISK      block device to auto-format as btrfs and mount (e.g. /dev/sdb, install-only, uses mkfs.btrfs -f!)
 #   SKIP_PACKAGE_INSTALL  set to 1 to skip apt/dnf/pacman
@@ -35,7 +35,7 @@ done
 # defaults
 AGENT_BASE_PATH="${AGENT_BASE_PATH:-/export/data}"
 AGENT_LISTEN_ADDR="${AGENT_LISTEN_ADDR:-:8080}"
-VERSION="${VERSION:-0.9.6}"
+VERSION="${VERSION:-0.9.7}"
 IMAGE="${IMAGE:-ghcr.io/erikmagkekse/btrfs-nfs-csi:${VERSION}}"
 AGENT_BLOCK_DISK="${AGENT_BLOCK_DISK:-}"
 SKIP_PACKAGE_INSTALL="${SKIP_PACKAGE_INSTALL:-}"
