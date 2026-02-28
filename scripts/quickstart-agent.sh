@@ -16,6 +16,7 @@
 #   AGENT_TENANTS         tenant:token pairs            (default: default:<random>)
 #   AGENT_LISTEN_ADDR     listen address                (default: :8080)
 #   VERSION               image tag                     (default: 0.9.6)
+#   IMAGE                 full container image reference (default: ghcr.io/erikmagkekse/btrfs-nfs-csi:<VERSION>)
 #   AGENT_BLOCK_DISK      block device to auto-format as btrfs and mount (e.g. /dev/sdb, install-only, uses mkfs.btrfs -f!)
 #   SKIP_PACKAGE_INSTALL  set to 1 to skip apt/dnf/pacman
 
@@ -35,11 +36,11 @@ done
 AGENT_BASE_PATH="${AGENT_BASE_PATH:-/export/data}"
 AGENT_LISTEN_ADDR="${AGENT_LISTEN_ADDR:-:8080}"
 VERSION="${VERSION:-0.9.6}"
+IMAGE="${IMAGE:-ghcr.io/erikmagkekse/btrfs-nfs-csi:${VERSION}}"
 AGENT_BLOCK_DISK="${AGENT_BLOCK_DISK:-}"
 SKIP_PACKAGE_INSTALL="${SKIP_PACKAGE_INSTALL:-}"
 
 REPO_RAW="https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main"
-IMAGE="ghcr.io/erikmagkekse/btrfs-nfs-csi:${VERSION}"
 CONFIG_DIR="/etc/btrfs-nfs-csi"
 QUADLET_DIR="/etc/containers/systemd"
 QUADLET_FILE="${QUADLET_DIR}/btrfs-nfs-csi-agent.container"
@@ -155,11 +156,11 @@ else
 fi
 
 # 2. block device (fresh install only)
-if [[ -n "${AGENT_BLOCK_DISK}" ]]; then
+if [[ -n "${AGENT_BLOCK_DISK}" ]] && ! ${UPGRADE}; then
     [[ -b "${AGENT_BLOCK_DISK}" ]] || fatal "${AGENT_BLOCK_DISK} is not a block device."
 
-    if findmnt -n -S "${AGENT_BLOCK_DISK}" &>/dev/null; then
-        existing_mount=$(findmnt -n -S -o TARGET "${AGENT_BLOCK_DISK}")
+    if findmnt -n --source "${AGENT_BLOCK_DISK}" &>/dev/null; then
+        existing_mount=$(findmnt -n -o TARGET --source "${AGENT_BLOCK_DISK}")
         fatal "${AGENT_BLOCK_DISK} is already mounted at ${existing_mount}. Unmount it first or remove AGENT_BLOCK_DISK."
     fi
 
@@ -183,7 +184,7 @@ fi
 # 3. verify btrfs
 mountpoint -q "${AGENT_BASE_PATH}" 2>/dev/null || fatal "${AGENT_BASE_PATH} is not a mount point. Mount a btrfs filesystem there first."
 
-fstype=$(findmnt -n -o FSTYPE "${AGENT_BASE_PATH}")
+fstype=$(findmnt -n -o FSTYPE --target "${AGENT_BASE_PATH}")
 [[ "${fstype}" == "btrfs" ]] || fatal "${AGENT_BASE_PATH} is ${fstype}, not btrfs."
 
 if ! btrfs qgroup show "${AGENT_BASE_PATH}" &>/dev/null; then

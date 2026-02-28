@@ -1,0 +1,3 @@
+---
+ssh_key_path: /tmp/btrfs-nfs-csi-tmp/hcloud_ed25519
+ssh_key_name: btrfs-nfs-csi

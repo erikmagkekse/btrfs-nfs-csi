@@ -1,0 +1,23 @@
+---
+- name: Create local tmp directory
+  ansible.builtin.file:
+    path: /tmp/btrfs-nfs-csi-tmp
+    state: directory
+    mode: "0700"
+
+- name: Check if SSH key already exists
+  ansible.builtin.stat:
+    path: "{{ ssh_key_path }}"
+  register: ssh_key_file
+
+# Better than community.cryptto.openssh_keypair
+- name: Generate temporary SSH key pair
+  ansible.builtin.command:
+    cmd: ssh-keygen -t ed25519 -C "btrfs-nfs-csi hcloud temp key" -f "{{ ssh_key_path }}" -N ""
+  when: not ssh_key_file.stat.exists
+
+- name: Create SSH key on Hetzner Cloud
+  hetzner.hcloud.ssh_key:
+    name: "{{ ssh_key_name }}"
+    public_key: "{{ lookup('file', ssh_key_path + '.pub') }}"
+    state: present

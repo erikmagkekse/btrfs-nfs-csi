@@ -1,0 +1,8 @@
+---
+k8s_server_name: "{{ prefix }}-k8s"
+k8s_server_type: cx23
+k8s_server_image: debian-13
+# k8s_server_location: fsn1
+rke2_channel: stable
+# driver_image: "ghcr.io/erikmagkekse/btrfs-nfs-csi:{{ agent_version }}"
+kubeconfig_local_path: /tmp/btrfs-nfs-csi-tmp/rke2-kubeconfig

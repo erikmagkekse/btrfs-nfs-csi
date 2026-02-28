@@ -1,0 +1,60 @@
+---
+- name: Verify CSI driver pods
+  delegate_to: k8s
+  ansible.builtin.shell:
+    cmd: /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml get pods -n btrfs-nfs-csi -o wide --no-headers
+  register: csi_pods
+  changed_when: false
+
+- name: Verify StorageClass
+  delegate_to: k8s
+  ansible.builtin.shell:
+    cmd: /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml get sc btrfs-nfs -o wide --no-headers
+  register: csi_sc
+  changed_when: false
+
+- name: Verify VolumeSnapshotClass
+  delegate_to: k8s
+  ansible.builtin.shell:
+    cmd: /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml get volumesnapshotclass btrfs-nfs -o wide --no-headers
+  register: csi_vsc
+  changed_when: false
+  failed_when: false
+
+- name: Build summary
+  ansible.builtin.set_fact:
+    summary: |-
+      ============================================
+        btrfs-nfs-csi deployment complete
+      ============================================
+
+      Agent:           http://{{ agent_ip }}:8080
+        Tenant:        {{ tenant_name }}
+        Token:         {{ tenant_token }}
+      Dashboard:       http://{{ agent_ip }}:8080/v1/dashboard
+        Auth:          any username, token as password
+      K8s Server:      {{ hcloud_k8s_server.hcloud_server.ipv4_address }}
+      Kubeconfig:      {{ kubeconfig_local_path }}
+
+      CSI Pods:
+      {{ csi_pods.stdout | indent(2, true) }}
+
+      StorageClass:    
+        {{ csi_sc.stdout }}
+      SnapshotClass:   
+        {{ csi_vsc.stdout | default('not found') }}
+
+      Quick start:
+        export KUBECONFIG={{ kubeconfig_local_path }}
+        kubectl get nodes
+        kubectl apply -f test-pvc.yaml
+
+      Cleanup:
+        ansible-playbook simple.yaml -e state=absent
+      ============================================
+      
+
+- name: Print summary
+  ansible.builtin.pause:
+    seconds: 0
+    prompt: "{{ summary }}"
