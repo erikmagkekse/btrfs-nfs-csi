@@ -89,13 +89,13 @@ To test a local build, build and push your image to a registry the servers can r
 
 ```bash
 # Build and push your dev image
-podman build -t ghcr.io/youruser/btrfs-nfs-csi:dev .
-podman push ghcr.io/youruser/btrfs-nfs-csi:dev
+podman build -t ghcr.io/youruser/btrfs-nfs-csi:edge .
+podman push ghcr.io/youruser/btrfs-nfs-csi:edge
 
 # Deploy with custom image for both agent and driver
 ansible-playbook simple.yaml \
-  -e agent_image=ghcr.io/youruser/btrfs-nfs-csi:dev \
-  -e driver_image=ghcr.io/youruser/btrfs-nfs-csi:dev
+  -e agent_image=ghcr.io/youruser/btrfs-nfs-csi:edge \
+  -e driver_image=ghcr.io/youruser/btrfs-nfs-csi:edge
 ```
 
 `agent_image` overrides the container image on the agent host (via quickstart script).
