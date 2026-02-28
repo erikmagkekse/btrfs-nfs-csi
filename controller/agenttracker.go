@@ -122,8 +122,8 @@ func discoverAgents(ctx context.Context) ([]agentInfo, error) {
 
 // resolveAgentToken reads the agentToken from the K8s Secret referenced by SC parameters.
 func resolveAgentToken(ctx context.Context, params map[string]string) string {
-	name := params["csi.storage.k8s.io/provisioner-secret-name"]
-	ns := params["csi.storage.k8s.io/provisioner-secret-namespace"]
+	name := params[model.SecretNameKey]
+	ns := params[model.SecretNamespaceKey]
 	if name == "" || ns == "" {
 		return ""
 	}

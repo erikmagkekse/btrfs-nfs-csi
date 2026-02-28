@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent"
+	"github.com/erikmagkekse/btrfs-nfs-csi/controller"
 	"github.com/erikmagkekse/btrfs-nfs-csi/driver"
 	"github.com/erikmagkekse/btrfs-nfs-csi/model"
 
@@ -99,7 +100,7 @@ func runController() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := driver.StartController(ctx, cfg.Endpoint, cfg.MetricsAddr, version, commit); err != nil {
+	if err := controller.Start(ctx, cfg.Endpoint, cfg.MetricsAddr, version, commit); err != nil {
 		log.Fatal().Err(err).Msg("controller failed")
 	}
 }
@@ -121,7 +122,7 @@ func runDriver() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := driver.StartNode(ctx, cfg.Endpoint, cfg.NodeID, nodeIP, cfg.MetricsAddr, version); err != nil {
+	if err := driver.Start(ctx, cfg.Endpoint, cfg.NodeID, nodeIP, cfg.MetricsAddr, version); err != nil {
 		log.Fatal().Err(err).Msg("node failed")
 	}
 }

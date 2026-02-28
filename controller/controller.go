@@ -3,18 +3,30 @@ package controller
 import (
 	"context"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
+
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+func Start(ctx context.Context, endpoint, metricsAddr, version, commit string) error {
+	startMetricsServer(metricsAddr)
+
+	agents := NewAgentTracker(version, commit)
+	go agents.Run(ctx)
+
+	srv, err := csiserver.New(endpoint, version, metricsInterceptor)
+	if err != nil {
+		return err
+	}
+	csi.RegisterControllerServer(srv.GRPC(), &Server{agents: agents})
+	return srv.Run(ctx, "controller")
+}
+
 type Server struct {
 	csi.UnimplementedControllerServer
 	agents *AgentTracker
-}
-
-func NewServer(agents *AgentTracker) *Server {
-	return &Server{agents: agents}
 }
 
 func (s *Server) ValidateVolumeCapabilities(_ context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {

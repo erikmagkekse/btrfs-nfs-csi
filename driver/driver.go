@@ -2,80 +2,62 @@ package driver
 
 import (
 	"context"
-	"net"
-	"net/url"
-	"os"
+	"sync"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/controller"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
+	"github.com/erikmagkekse/btrfs-nfs-csi/model"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc"
 )
 
-func listen(endpoint string) (net.Listener, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, err
-	}
-
-	if u.Scheme == "unix" {
-		addr := u.Path
-		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
-			return nil, err
-		}
-		return net.Listen("unix", addr)
-	}
-	return net.Listen("tcp", u.Host)
-}
-
-func serve(ctx context.Context, srv *grpc.Server, listener net.Listener, component string) error {
-	log.Info().Str("component", component).Msg("CSI listening")
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- srv.Serve(listener)
-	}()
-
-	select {
-	case <-ctx.Done():
-		log.Info().Str("component", component).Msg("shutting down")
-		srv.GracefulStop()
-		return nil
-	case err := <-errCh:
-		return err
-	}
-}
-
-func StartController(ctx context.Context, endpoint, metricsAddr, version, commit string) error {
-	listener, err := listen(endpoint)
-	if err != nil {
-		return err
-	}
-
+func Start(ctx context.Context, endpoint, nodeID, nodeIP, metricsAddr, version string) error {
 	startMetricsServer(metricsAddr)
 
-	agents := controller.NewAgentTracker(version, commit)
-	go agents.Run(ctx)
-
-	srv := grpc.NewServer(grpc.UnaryInterceptor(metricsInterceptor))
-	csi.RegisterIdentityServer(srv, &IdentityServer{version: version})
-	csi.RegisterControllerServer(srv, controller.NewServer(agents))
-
-	return serve(ctx, srv, listener, "controller")
-}
-
-func StartNode(ctx context.Context, endpoint, nodeID, nodeIP, metricsAddr, version string) error {
-	listener, err := listen(endpoint)
+	srv, err := csiserver.New(endpoint, version, metricsInterceptor)
 	if err != nil {
 		return err
 	}
+	csi.RegisterNodeServer(srv.GRPC(), &NodeServer{nodeID: nodeID, nodeIP: nodeIP})
+	return srv.Run(ctx, "driver")
+}
 
-	startMetricsServer(metricsAddr)
+type NodeServer struct {
+	csi.UnimplementedNodeServer
+	nodeID string
+	nodeIP string
+	locks  sync.Map
+}
 
-	srv := grpc.NewServer(grpc.UnaryInterceptor(metricsInterceptor))
-	csi.RegisterIdentityServer(srv, &IdentityServer{version: version})
-	csi.RegisterNodeServer(srv, &NodeServer{nodeID: nodeID, nodeIP: nodeIP})
+func (s *NodeServer) volumeLock(id string) func() {
+	val, _ := s.locks.LoadOrStore(id, &sync.Mutex{})
+	mu := val.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
 
-	return serve(ctx, srv, listener, "node")
+func (s *NodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+	return &csi.NodeGetCapabilitiesResponse{
+		Capabilities: []*csi.NodeServiceCapability{
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+					},
+				},
+			},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+					},
+				},
+			},
+		},
+	}, nil
+}
+
+func (s *NodeServer) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	return &csi.NodeGetInfoResponse{
+		NodeId: s.nodeID + model.NodeIDSep + s.nodeIP,
+	}, nil
 }

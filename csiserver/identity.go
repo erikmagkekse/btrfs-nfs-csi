@@ -1,4 +1,4 @@
-package driver
+package csiserver
 
 import (
 	"context"
@@ -11,13 +11,13 @@ import (
 
 type IdentityServer struct {
 	csi.UnimplementedIdentityServer
-	version string
+	Version string
 }
 
 func (s *IdentityServer) GetPluginInfo(_ context.Context, _ *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
 		Name:          model.DriverName,
-		VendorVersion: s.version,
+		VendorVersion: s.Version,
 	}, nil
 }
 
