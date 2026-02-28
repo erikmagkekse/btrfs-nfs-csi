@@ -94,8 +94,8 @@ podman push ghcr.io/youruser/btrfs-nfs-csi:edge
 
 # Deploy with custom image for both agent and driver
 ansible-playbook simple.yaml \
-  -e agent_image=ghcr.io/youruser/btrfs-nfs-csi:edge \
-  -e driver_image=ghcr.io/youruser/btrfs-nfs-csi:edge
+  -e agent_image=ghcr.io/erikmagkekse/btrfs-nfs-csi:edge \
+  -e driver_image=ghcr.io/erikmagkekse/btrfs-nfs-csi:edge
 ```
 
 `agent_image` overrides the container image on the agent host (via quickstart script).
