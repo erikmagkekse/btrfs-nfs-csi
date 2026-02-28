@@ -93,8 +93,12 @@ func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, e
 		fields := strings.Fields(line)
 		if len(fields) >= 3 && fields[0] == qgroupID {
 			var info QgroupInfo
-			_, _ = fmt.Sscanf(fields[1], "%d", &info.Referenced)
-			_, _ = fmt.Sscanf(fields[2], "%d", &info.Exclusive)
+			if _, err := fmt.Sscanf(fields[1], "%d", &info.Referenced); err != nil {
+				return QgroupInfo{}, fmt.Errorf("parse referenced bytes %q: %w", fields[1], err)
+			}
+			if _, err := fmt.Sscanf(fields[2], "%d", &info.Exclusive); err != nil {
+				return QgroupInfo{}, fmt.Errorf("parse exclusive bytes %q: %w", fields[2], err)
+			}
 			return info, nil
 		}
 	}

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/controller"
 	"github.com/erikmagkekse/btrfs-nfs-csi/driver"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/rs/zerolog"
@@ -67,7 +67,7 @@ Commands:
 func runAgent() {
 	log.Info().Str("version", version).Str("commit", commit).Msg("starting btrfs-nfs-csi agent")
 
-	cfg, err := env.ParseAs[model.AgentConfig]()
+	cfg, err := env.ParseAs[config.AgentConfig]()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse agent config")
 	}
@@ -92,7 +92,7 @@ func runAgent() {
 func runController() {
 	log.Info().Str("version", version).Str("commit", commit).Msg("starting btrfs-nfs-csi controller")
 
-	cfg, err := env.ParseAs[model.ControllerConfig]()
+	cfg, err := env.ParseAs[config.ControllerConfig]()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse controller config")
 	}
@@ -108,7 +108,7 @@ func runController() {
 func runDriver() {
 	log.Info().Str("version", version).Str("commit", commit).Msg("starting btrfs-nfs-csi driver")
 
-	cfg, err := env.ParseAs[model.NodeConfig]()
+	cfg, err := env.ParseAs[config.NodeConfig]()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse node config")
 	}

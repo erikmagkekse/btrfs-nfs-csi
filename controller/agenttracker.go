@@ -7,8 +7,8 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/k8s"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
 
 	"github.com/rs/zerolog/log"
 )
@@ -95,7 +95,7 @@ func (t *AgentTracker) Run(ctx context.Context) {
 
 // discoverAgents returns agent info for all StorageClasses owned by our driver.
 func discoverAgents(ctx context.Context) ([]agentInfo, error) {
-	scList, err := k8s.ListStorageClasses(ctx, model.DriverName)
+	scList, err := k8s.ListStorageClasses(ctx, config.DriverName)
 	if err != nil {
 		ctrlK8sOpsTotal.WithLabelValues("error").Inc()
 		return nil, err
@@ -122,8 +122,8 @@ func discoverAgents(ctx context.Context) ([]agentInfo, error) {
 
 // resolveAgentToken reads the agentToken from the K8s Secret referenced by SC parameters.
 func resolveAgentToken(ctx context.Context, params map[string]string) string {
-	name := params[model.SecretNameKey]
-	ns := params[model.SecretNamespaceKey]
+	name := params[config.SecretNameKey]
+	ns := params[config.SecretNamespaceKey]
 	if name == "" || ns == "" {
 		return ""
 	}
