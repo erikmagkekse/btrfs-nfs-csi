@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 )

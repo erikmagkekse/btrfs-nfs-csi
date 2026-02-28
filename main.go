@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/controller"
 	"github.com/erikmagkekse/btrfs-nfs-csi/driver"
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/rs/zerolog"

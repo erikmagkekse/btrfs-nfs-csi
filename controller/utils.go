@@ -37,7 +37,6 @@ func paginate[T any](entries []T, startingToken string, maxEntries int32) ([]T, 
 	return entries, nextToken, nil
 }
 
-
 const (
 	paramAgentURL    = "agentURL"
 	secretAgentToken = "agentToken"
