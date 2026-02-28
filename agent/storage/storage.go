@@ -254,6 +254,23 @@ func (s *Storage) ListVolumes(tenant string) ([]VolumeMetadata, error) {
 	return vols, nil
 }
 
+func (s *Storage) GetVolume(tenant, name string) (*VolumeMetadata, error) {
+	bp, err := s.tenantPath(tenant)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+
+	metaPath := filepath.Join(bp, name, MetadataFile)
+	var meta VolumeMetadata
+	if err := ReadMetadata(metaPath, &meta); err != nil {
+		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
+	}
+	return &meta, nil
+}
+
 func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req VolumeUpdateRequest) (*VolumeMetadata, error) {
 	bp, err := s.tenantPath(tenant)
 	if err != nil {
@@ -636,6 +653,23 @@ func (s *Storage) ListSnapshots(tenant, volume string) ([]SnapshotMetadata, erro
 	}
 	log.Debug().Str("tenant", tenant).Int("count", len(snaps)).Msg("snapshots listed")
 	return snaps, nil
+}
+
+func (s *Storage) GetSnapshot(tenant, name string) (*SnapshotMetadata, error) {
+	bp, err := s.tenantPath(tenant)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+
+	metaPath := filepath.Join(bp, SnapshotsDir, name, MetadataFile)
+	var meta SnapshotMetadata
+	if err := ReadMetadata(metaPath, &meta); err != nil {
+		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("snapshot %q not found", name)}
+	}
+	return &meta, nil
 }
 
 func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error {

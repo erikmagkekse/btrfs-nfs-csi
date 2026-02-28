@@ -70,9 +70,11 @@ func (a *Agent) Start(ctx context.Context) {
 
 	api.POST("/volumes", h.CreateVolume)
 	api.GET("/volumes", h.ListVolumes)
+	api.GET("/volumes/:name", h.GetVolume)
 	api.PATCH("/volumes/:name", h.UpdateVolume)
 	api.DELETE("/volumes/:name", h.DeleteVolume)
 
+	api.GET("/volumes/:name/snapshots", h.ListVolumeSnapshots)
 	api.POST("/volumes/:name/export", h.ExportVolume)
 	api.DELETE("/volumes/:name/export", h.UnexportVolume)
 	api.GET("/exports", h.ListExports)
@@ -81,6 +83,7 @@ func (a *Agent) Start(ctx context.Context) {
 	api.GET("/stats", h.Stats)
 	api.POST("/snapshots", h.CreateSnapshot)
 	api.GET("/snapshots", h.ListSnapshots)
+	api.GET("/snapshots/:name", h.GetSnapshot)
 	api.DELETE("/snapshots/:name", h.DeleteSnapshot)
 
 	api.POST("/clones", h.CreateClone)
