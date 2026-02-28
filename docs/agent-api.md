@@ -24,10 +24,6 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
 | `ALREADY_EXISTS` | 409 | Conflict (returns existing record) |
 | `INTERNAL_ERROR` | 500 | Server error |
 
-## Pagination
-
-I don't see why I should add this as a feature. List endpoints return all results without pagination. The CSI controller handles gRPC message size limits (4 MB default) via its own pagination (`starting_token`/`max_entries`) independently of the agent API. A single agent is not expected to host more than ~5k volumes, so returning everything keeps the agent and controller code simple.
-
 ## Volumes
 
 ### POST /v1/volumes
@@ -75,43 +71,26 @@ curl -X POST http://10.0.0.5:8080/v1/volumes \
 
 ### GET /v1/volumes
 
-Slim list response. Use GET /v1/volumes/:name for full details.
-
 ```json
 {
   "volumes": [
     {
       "name": "vol-1",
+      "path": "/srv/csi/default/vol-1",
       "size_bytes": 1073741824,
+      "nocow": false,
+      "compression": "zstd",
+      "quota_bytes": 1073741824,
       "used_bytes": 16384,
+      "uid": 1000,
+      "gid": 1000,
+      "mode": "0750",
       "clients": 1,
-      "created_at": "2025-01-15T10:30:00Z"
+      "created_at": "2025-01-15T10:30:00Z",
+      "updated_at": "2025-01-15T10:30:00Z",
+      "last_attach_at": "2025-01-15T11:00:00Z"
     }
-  ],
-  "total": 1
-}
-```
-
-### GET /v1/volumes/:name
-
-Detail response with full client list (list endpoint returns client count only). 404 if not found.
-
-```json
-{
-  "name": "vol-1",
-  "path": "/srv/csi/default/vol-1",
-  "size_bytes": 1073741824,
-  "nocow": false,
-  "compression": "zstd",
-  "quota_bytes": 1073741824,
-  "used_bytes": 16384,
-  "uid": 1000,
-  "gid": 1000,
-  "mode": "0750",
-  "clients": ["10.1.0.50"],
-  "created_at": "2025-01-15T10:30:00Z",
-  "updated_at": "2025-01-15T10:30:00Z",
-  "last_attach_at": "2025-01-15T11:00:00Z"
+  ]
 }
 ```
 
@@ -194,9 +173,7 @@ All fields optional. `size_bytes` must be larger than current.
 }
 ```
 
-### GET /v1/snapshots
-
-Slim list response. Use GET /v1/snapshots/:name for full details.
+### GET /v1/snapshots?volume=vol-1
 
 ```json
 {
@@ -204,35 +181,17 @@ Slim list response. Use GET /v1/snapshots/:name for full details.
     {
       "name": "snap-1",
       "volume": "vol-1",
+      "path": "/srv/csi/default/snapshots/snap-1",
       "size_bytes": 1073741824,
-      "created_at": "2025-01-15T12:00:00Z"
+      "used_bytes": 16384,
+      "exclusive_bytes": 0,
+      "readonly": true,
+      "created_at": "2025-01-15T12:00:00Z",
+      "updated_at": "2025-01-15T12:00:00Z"
     }
-  ],
-  "total": 1
+  ]
 }
 ```
-
-### GET /v1/snapshots/:name
-
-Detail response. 404 if not found.
-
-```json
-{
-  "name": "snap-1",
-  "volume": "vol-1",
-  "path": "/srv/csi/default/snapshots/snap-1",
-  "size_bytes": 1073741824,
-  "used_bytes": 16384,
-  "exclusive_bytes": 0,
-  "readonly": true,
-  "created_at": "2025-01-15T12:00:00Z",
-  "updated_at": "2025-01-15T12:00:00Z"
-}
-```
-
-### GET /v1/volumes/:name/snapshots
-
-Lists snapshots for a specific volume. Same response format as GET /v1/snapshots.
 
 ### DELETE /v1/snapshots/:name
 

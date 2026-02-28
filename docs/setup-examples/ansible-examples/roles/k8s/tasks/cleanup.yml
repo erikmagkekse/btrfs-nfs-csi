@@ -1,0 +1,5 @@
+---
+- name: Delete k8s server
+  hetzner.hcloud.server:
+    name: "{{ k8s_server_name }}"
+    state: absent

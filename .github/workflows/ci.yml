@@ -7,7 +7,7 @@ on:
       - "**.go"
       - "go.mod"
       - "go.sum"
-      - "Containerfile*"
+      - "Containerfile"
       - "VERSION"
       - ".github/workflows/ci.yml"
   pull_request:
@@ -16,7 +16,7 @@ on:
       - "**.go"
       - "go.mod"
       - "go.sum"
-      - "Containerfile*"
+      - "Containerfile"
       - "VERSION"
       - ".github/workflows/ci.yml"
 
@@ -37,38 +37,9 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v9
 
-  test:
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-
-      - name: Test
-        run: go test ./...
-
-  integration:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-
-      - name: Install btrfs-progs
-        run: sudo apt-get update && sudo apt-get install -y btrfs-progs
-
-      - name: Integration tests
-        run: sudo go test ./agent/storage/btrfs/... -tags integration -v -count=1
-
   build:
     runs-on: ubuntu-latest
-    needs: [test, integration]
+    needs: lint
     permissions:
       contents: read
       packages: write

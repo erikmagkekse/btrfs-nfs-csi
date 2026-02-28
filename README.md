@@ -48,7 +48,7 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - HA via DRBD + Pacemaker (active/passive failover)
 
 **Roadmap:**
-NFS-Ganesha support, `VOLUME_CONDITION` health reporting, Helm chart
+NFS-Ganesha support, `LIST_VOLUMES` / `LIST_SNAPSHOTS`, `VOLUME_CONDITION` health reporting, Helm chart
 
 ## Quick Start
 
@@ -62,12 +62,7 @@ For a detailed setup description, see [docs/installation.md](docs/installation.m
 #
 # Environment variables (defaults shown - adjust as needed):
 # export AGENT_BASE_PATH=/export/data  # must be a btrfs filesystem
-# export AGENT_TENANTS=default:$(openssl rand -hex 16)
-# export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH
-# export VERSION=0.9.6
-# export SKIP_PACKAGE_INSTALL=1
-
 curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
 
 # Save the tenant token printed at the end!
@@ -117,6 +112,7 @@ See [docs/installation.md](docs/installation.md) for full setup details, snapsho
 | Document | Description |
 |---|---|
 | [Installation](docs/installation.md) | Agent setup (btrfs, NFS, Quadlet, systemd, binary), driver setup, container build |
+| [Setup Examples](docs/setup-examples/) | Ansible playbooks for dev/playground setups (not for production) |
 | [Configuration](docs/configuration.md) | Environment variables, StorageClass parameters, PVC annotations, secrets, TLS |
 | [Architecture](docs/architecture.md) | Volume lifecycle, ID formats, directory structure, CSI capabilities, sidecars, RBAC, HA |
 | [Operations](docs/operations.md) | Snapshots, clones, expansion, compression, NoCOW, quota, fsGroup, NFS exports |
