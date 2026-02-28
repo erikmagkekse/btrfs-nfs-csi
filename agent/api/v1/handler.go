@@ -35,7 +35,7 @@ func (h *Handler) CreateVolume(c *echo.Context) error {
 	meta, err := h.Store.CreateVolume(c.Request().Context(), tenant, req)
 	if err != nil {
 		if meta != nil {
-			return c.JSON(http.StatusConflict, volumeResponseFrom(meta))
+			return c.JSON(http.StatusConflict, volumeDetailResponseFrom(meta))
 		}
 		return StorageError(c, err)
 	}

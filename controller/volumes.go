@@ -115,6 +115,9 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		if err != nil {
 			if agentAPI.IsConflict(err) {
 				agentOpsTotal.WithLabelValues("create_clone", "conflict", sc).Inc()
+				if cloneResp == nil {
+					return nil, status.Errorf(codes.Internal, "clone conflict but no metadata returned: %v", err)
+				}
 			} else {
 				agentOpsTotal.WithLabelValues("create_clone", "error", sc).Inc()
 				return nil, status.Errorf(codes.Internal, "create clone: %v", err)
@@ -157,6 +160,12 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	if err != nil {
 		if agentAPI.IsConflict(err) {
 			agentOpsTotal.WithLabelValues("create_volume", "conflict", sc).Inc()
+			if volResp == nil {
+				volResp, err = client.GetVolume(ctx, req.Name)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "volume conflict but failed to retrieve: %v", err)
+				}
+			}
 		} else {
 			agentOpsTotal.WithLabelValues("create_volume", "error", sc).Inc()
 			return nil, status.Errorf(codes.Internal, "create volume: %v", err)

@@ -29,7 +29,7 @@ func NewClient(url, token string) *Client {
 func (c *Client) CreateVolume(ctx context.Context, req VolumeCreateRequest) (*VolumeDetailResponse, error) {
 	var resp VolumeDetailResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/volumes", req, &resp); err != nil {
-		if IsConflict(err) && resp.Path != "" {
+		if IsConflict(err) {
 			return &resp, err
 		}
 		return nil, err
@@ -64,7 +64,7 @@ func (c *Client) DeleteSnapshot(ctx context.Context, name string) error {
 func (c *Client) CreateClone(ctx context.Context, req CloneCreateRequest) (*CloneResponse, error) {
 	var resp CloneResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/clones", req, &resp); err != nil {
-		if IsConflict(err) && resp.Path != "" {
+		if IsConflict(err) {
 			return &resp, err
 		}
 		return nil, err
