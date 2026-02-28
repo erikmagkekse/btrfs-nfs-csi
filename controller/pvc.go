@@ -12,14 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	paramNoCOW       = "nocow"
-	paramCompression = "compression"
-	paramUID         = "uid"
-	paramGID         = "gid"
-	paramMode        = "mode"
-)
-
 type volumeParams struct {
 	NoCOW       string
 	Compression string
@@ -30,11 +22,11 @@ type volumeParams struct {
 
 func resolveVolumeParams(ctx context.Context, params map[string]string) volumeParams {
 	vp := volumeParams{
-		NoCOW:       params[paramNoCOW],
-		Compression: params[paramCompression],
-		UID:         params[paramUID],
-		GID:         params[paramGID],
-		Mode:        params[paramMode],
+		NoCOW:       params[model.ParamNoCOW],
+		Compression: params[model.ParamCompression],
+		UID:         params[model.ParamUID],
+		GID:         params[model.ParamGID],
+		Mode:        params[model.ParamMode],
 	}
 
 	pvcName := params[model.PvcNameKey]
@@ -57,19 +49,19 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 	ctrlK8sOpsTotal.WithLabelValues("success").Inc()
 
 	annos := obj.Metadata.Annotations
-	if v, ok := annos[model.AnnoNoCOW]; ok {
+	if v, ok := annos[model.AnnoPrefix+model.ParamNoCOW]; ok {
 		vp.NoCOW = v
 	}
-	if v, ok := annos[model.AnnoCompression]; ok {
+	if v, ok := annos[model.AnnoPrefix+model.ParamCompression]; ok {
 		vp.Compression = v
 	}
-	if v, ok := annos[model.AnnoUID]; ok {
+	if v, ok := annos[model.AnnoPrefix+model.ParamUID]; ok {
 		vp.UID = v
 	}
-	if v, ok := annos[model.AnnoGID]; ok {
+	if v, ok := annos[model.AnnoPrefix+model.ParamGID]; ok {
 		vp.GID = v
 	}
-	if v, ok := annos[model.AnnoMode]; ok {
+	if v, ok := annos[model.AnnoPrefix+model.ParamMode]; ok {
 		vp.Mode = v
 	}
 
