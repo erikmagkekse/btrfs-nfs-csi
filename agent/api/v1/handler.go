@@ -189,6 +189,7 @@ func snapshotResponseFrom(meta *storage.SnapshotMetadata) SnapshotResponse {
 		Name:      meta.Name,
 		Volume:    meta.Volume,
 		SizeBytes: meta.SizeBytes,
+		UsedBytes: meta.UsedBytes,
 		CreatedAt: meta.CreatedAt,
 	}
 }

@@ -86,8 +86,8 @@ tr.selected td { font-weight: 600; }
 </div>
 <div id="tab-snapshots" class="tab-content">
 <table>
-<thead><tr><th>Name</th><th>Volume</th><th>Size</th><th>Created</th><th></th></tr></thead>
-<tbody id="snapshots"><tr><td class="empty" colspan="5">loading...</td></tr></tbody>
+<thead><tr><th>Name</th><th>Volume</th><th>Usage</th><th></th><th>Created</th><th></th></tr></thead>
+<tbody id="snapshots"><tr><td class="empty" colspan="6">loading...</td></tr></tbody>
 </table>
 </div>
 <div id="tab-exports" class="tab-content">
@@ -203,7 +203,10 @@ async function showVolume(name) {
       '</dl></div>';
     document.getElementById('detail-panel').classList.add('active');
   } catch(err) {
-    alert('Failed to load volume: ' + err.message);
+    document.getElementById('detail-content').innerHTML =
+      '<h2>Volume: ' + name + ' &mdash; deleted</h2>' +
+      '<div class="detail"><p class="empty">Volume has been deleted.</p></div>';
+    selectedType = ''; selectedName = '';
   }
 }
 
@@ -226,7 +229,10 @@ async function showSnapshot(name) {
       '</dl></div>';
     document.getElementById('detail-panel').classList.add('active');
   } catch(err) {
-    alert('Failed to load snapshot: ' + err.message);
+    document.getElementById('detail-content').innerHTML =
+      '<h2>Snapshot: ' + name + ' &mdash; deleted</h2>' +
+      '<div class="detail"><p class="empty">Snapshot has been deleted.</p></div>';
+    selectedType = ''; selectedName = '';
   }
 }
 
@@ -274,17 +280,20 @@ async function refresh() {
     document.getElementById('tab-btn-snapshots').textContent = 'Snapshots (' + s.snapshots.length + ')';
     const sb = document.getElementById('snapshots');
     if (!s.snapshots.length) {
-      sb.innerHTML = '<tr><td class="empty" colspan="5">no snapshots</td></tr>';
+      sb.innerHTML = '<tr><td class="empty" colspan="6">no snapshots</td></tr>';
     } else {
-      sb.innerHTML = s.snapshots.map(snap =>
-        '<tr data-type="snapshot" data-name="' + snap.name + '">' +
+      sb.innerHTML = s.snapshots.map(snap => {
+        const pct = snap.size_bytes ? (snap.used_bytes / snap.size_bytes * 100) : 0;
+        const color = pct > 90 ? '#f85149' : pct > 75 ? '#d29922' : '#238636';
+        return '<tr data-type="snapshot" data-name="' + snap.name + '">' +
         '<td class="mono"><span class="link" onclick="showSnapshot(\'' + snap.name + '\')">' + snap.name + '</span></td>' +
-        '<td class="mono"><span class="link" onclick="showVolume(\'' + snap.volume + '\')">' + snap.volume + '</span></td>' +
-        '<td class="bytes">' + fmt(snap.size_bytes) + '</td>' +
+        '<td class="mono">' + snap.volume + '</td>' +
+        '<td class="bytes">' + fmt(snap.used_bytes) + ' / ' + fmt(snap.size_bytes) + '</td>' +
+        '<td><div class="quota-bar"><div class="quota-fill" style="width:' + Math.min(pct,100).toFixed(1) + '%;background:' + color + '"></div></div></td>' +
         '<td>' + fmtDate(snap.created_at) + '</td>' +
         '<td><button class="btn-del" onclick="del(\'snapshot\',\'' + snap.name + '\')">delete</button></td>' +
-        '</tr>'
-      ).join('');
+        '</tr>';
+      }).join('');
     }
 
     const e = await api('/v1/exports');

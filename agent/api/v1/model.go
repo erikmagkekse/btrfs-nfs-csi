@@ -61,6 +61,7 @@ type SnapshotResponse struct {
 	Name      string    `json:"name"`
 	Volume    string    `json:"volume"`
 	SizeBytes uint64    `json:"size_bytes"`
+	UsedBytes uint64    `json:"used_bytes"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
