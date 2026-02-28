@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
@@ -9,6 +10,31 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// paginate applies index-based pagination to a slice. Order is non-deterministic
+// (map iteration) which may cause duplicates or skips across paginated requests.
+// Acceptable for now since a single agent is not expected to host more than ~5k
+// volumes and the project is targeting homelab or small prod environments.
+func paginate[T any](entries []T, startingToken string, maxEntries int32) ([]T, string, error) {
+	startIndex := 0
+	if startingToken != "" {
+		idx, err := strconv.Atoi(startingToken)
+		if err != nil {
+			return nil, "", status.Errorf(codes.Aborted, "invalid starting_token: %v", err)
+		}
+		startIndex = idx
+	}
+	if startIndex > len(entries) {
+		startIndex = len(entries)
+	}
+	entries = entries[startIndex:]
+	var nextToken string
+	if maxEntries > 0 && int(maxEntries) < len(entries) {
+		nextToken = strconv.Itoa(startIndex + int(maxEntries))
+		entries = entries[:maxEntries]
+	}
+	return entries, nextToken, nil
+}
 
 const volumeIDSep = "|"
 

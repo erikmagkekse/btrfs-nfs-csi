@@ -14,6 +14,42 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func (s *Server) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+	agents := s.agents.Agents()
+
+	var entries []*csi.ListVolumesResponse_Entry
+	for sc, client := range agents {
+		start := time.Now()
+		volList, err := client.ListVolumes(ctx)
+		agentDuration.WithLabelValues("list_volumes", sc).Observe(time.Since(start).Seconds())
+		if err != nil {
+			agentOpsTotal.WithLabelValues("list_volumes", "error", sc).Inc()
+			log.Warn().Err(err).Str("sc", sc).Msg("failed to list volumes from agent")
+			continue
+		}
+		agentOpsTotal.WithLabelValues("list_volumes", "success", sc).Inc()
+
+		for _, vol := range volList.Volumes {
+			entries = append(entries, &csi.ListVolumesResponse_Entry{
+				Volume: &csi.Volume{
+					VolumeId:      makeVolumeID(sc, vol.Name),
+					CapacityBytes: int64(vol.SizeBytes),
+				},
+			})
+		}
+	}
+
+	paged, nextToken, err := paginate(entries, req.StartingToken, req.MaxEntries)
+	if err != nil {
+		return nil, err
+	}
+
+	return &csi.ListVolumesResponse{
+		Entries:   paged,
+		NextToken: nextToken,
+	}, nil
+}
+
 func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume name required")

@@ -13,6 +13,86 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+func (s *Server) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
+	agents := s.agents.Agents()
+
+	type agentQuery struct {
+		sc     string
+		client *agentAPI.Client
+		volume string
+	}
+	var queries []agentQuery
+
+	if req.SnapshotId != "" {
+		sc, _, err := parseVolumeID(req.SnapshotId)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
+		}
+		if c, ok := agents[sc]; ok {
+			queries = append(queries, agentQuery{sc: sc, client: c})
+		}
+	} else if req.SourceVolumeId != "" {
+		sc, volName, err := parseVolumeID(req.SourceVolumeId)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
+		}
+		if c, ok := agents[sc]; ok {
+			queries = append(queries, agentQuery{sc: sc, client: c, volume: volName})
+		}
+	} else {
+		for sc, client := range agents {
+			queries = append(queries, agentQuery{sc: sc, client: client})
+		}
+	}
+
+	var entries []*csi.ListSnapshotsResponse_Entry
+	for _, q := range queries {
+		start := time.Now()
+		var snapList *agentAPI.SnapshotListResponse
+		var err error
+		if q.volume != "" {
+			snapList, err = q.client.ListVolumeSnapshots(ctx, q.volume)
+		} else {
+			snapList, err = q.client.ListSnapshots(ctx)
+		}
+		agentDuration.WithLabelValues("list_snapshots", q.sc).Observe(time.Since(start).Seconds())
+		if err != nil {
+			agentOpsTotal.WithLabelValues("list_snapshots", "error", q.sc).Inc()
+			log.Warn().Err(err).Str("sc", q.sc).Msg("failed to list snapshots from agent")
+			continue
+		}
+		agentOpsTotal.WithLabelValues("list_snapshots", "success", q.sc).Inc()
+
+		for _, snap := range snapList.Snapshots {
+			snapID := makeVolumeID(q.sc, snap.Name)
+
+			if req.SnapshotId != "" && snapID != req.SnapshotId {
+				continue
+			}
+
+			entries = append(entries, &csi.ListSnapshotsResponse_Entry{
+				Snapshot: &csi.Snapshot{
+					SnapshotId:     snapID,
+					SourceVolumeId: makeVolumeID(q.sc, snap.Volume),
+					SizeBytes:      int64(snap.SizeBytes),
+					ReadyToUse:     true,
+					CreationTime:   timestamppb.New(snap.CreatedAt),
+				},
+			})
+		}
+	}
+
+	paged, nextToken, err := paginate(entries, req.StartingToken, req.MaxEntries)
+	if err != nil {
+		return nil, err
+	}
+
+	return &csi.ListSnapshotsResponse{
+		Entries:   paged,
+		NextToken: nextToken,
+	}, nil
+}
+
 func (s *Server) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "snapshot name required")
