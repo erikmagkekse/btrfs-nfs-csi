@@ -1,12 +1,16 @@
 package v1
 
 import (
+	_ "embed"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v5"
 )
+
+//go:embed dashboard.html
+var dashboardHTML string
 
 func ServeDashboard(refreshSeconds int) echo.HandlerFunc {
 	refresh := strconv.Itoa(refreshSeconds)
