@@ -1,6 +1,6 @@
 # Metrics
 
-14 metrics across 3 components.
+16 metrics across 3 components.
 
 ## Agent (6) - port 8080
 
@@ -15,10 +15,12 @@
 
 **Buckets (http_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]`
 
-## Controller (4) - port 9090
+## Controller (6) - port 9090
 
 | Metric | Type | Labels |
 |---|---|---|
+| `btrfs_nfs_csi_controller_grpc_requests_total` | Counter | `method`, `code` |
+| `btrfs_nfs_csi_controller_grpc_request_duration_seconds` | Histogram | `method` |
 | `btrfs_nfs_csi_controller_agent_ops_total` | Counter | `operation`, `status`, `storage_class` |
 | `btrfs_nfs_csi_controller_agent_duration_seconds` | Histogram | `operation`, `storage_class` |
 | `btrfs_nfs_csi_controller_agent_health_total` | Counter | `result`, `storage_class` |

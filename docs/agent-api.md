@@ -55,7 +55,7 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
   "uid": 1000,
   "gid": 1000,
   "mode": "0750",
-  "clients": 0,
+  "clients": [],
   "created_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T10:30:00Z",
   "last_attach_at": "2025-01-15T11:00:00Z"
@@ -71,26 +71,41 @@ curl -X POST http://10.0.0.5:8080/v1/volumes \
 
 ### GET /v1/volumes
 
+Returns a summary list. Use `GET /v1/volumes/:name` for full details.
+
 ```json
 {
   "volumes": [
     {
       "name": "vol-1",
-      "path": "/srv/csi/default/vol-1",
       "size_bytes": 1073741824,
-      "nocow": false,
-      "compression": "zstd",
-      "quota_bytes": 1073741824,
       "used_bytes": 16384,
-      "uid": 1000,
-      "gid": 1000,
-      "mode": "0750",
       "clients": 1,
-      "created_at": "2025-01-15T10:30:00Z",
-      "updated_at": "2025-01-15T10:30:00Z",
-      "last_attach_at": "2025-01-15T11:00:00Z"
+      "created_at": "2025-01-15T10:30:00Z"
     }
-  ]
+  ],
+  "total": 1
+}
+```
+
+### GET /v1/volumes/:name
+
+```json
+{
+  "name": "vol-1",
+  "path": "/srv/csi/default/vol-1",
+  "size_bytes": 1073741824,
+  "nocow": false,
+  "compression": "zstd",
+  "quota_bytes": 1073741824,
+  "used_bytes": 16384,
+  "uid": 1000,
+  "gid": 1000,
+  "mode": "0750",
+  "clients": ["10.1.0.50"],
+  "created_at": "2025-01-15T10:30:00Z",
+  "updated_at": "2025-01-15T10:30:00Z",
+  "last_attach_at": "2025-01-15T11:00:00Z"
 }
 ```
 
@@ -173,7 +188,9 @@ All fields optional. `size_bytes` must be larger than current.
 }
 ```
 
-### GET /v1/snapshots?volume=vol-1
+### GET /v1/snapshots
+
+Returns a summary list of all snapshots. Use `GET /v1/snapshots/:name` for full details.
 
 ```json
 {
@@ -181,15 +198,32 @@ All fields optional. `size_bytes` must be larger than current.
     {
       "name": "snap-1",
       "volume": "vol-1",
-      "path": "/srv/csi/default/snapshots/snap-1",
       "size_bytes": 1073741824,
       "used_bytes": 16384,
-      "exclusive_bytes": 0,
-      "readonly": true,
-      "created_at": "2025-01-15T12:00:00Z",
-      "updated_at": "2025-01-15T12:00:00Z"
+      "created_at": "2025-01-15T12:00:00Z"
     }
-  ]
+  ],
+  "total": 1
+}
+```
+
+### GET /v1/volumes/:name/snapshots
+
+Returns a summary list of snapshots for a specific volume. Same response format as `GET /v1/snapshots`.
+
+### GET /v1/snapshots/:name
+
+```json
+{
+  "name": "snap-1",
+  "volume": "vol-1",
+  "path": "/srv/csi/default/snapshots/snap-1",
+  "size_bytes": 1073741824,
+  "used_bytes": 16384,
+  "exclusive_bytes": 0,
+  "readonly": true,
+  "created_at": "2025-01-15T12:00:00Z",
+  "updated_at": "2025-01-15T12:00:00Z"
 }
 ```
 
