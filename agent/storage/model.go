@@ -5,19 +5,19 @@ import "time"
 // Persisted metadata types
 
 type VolumeMetadata struct {
-	Name         string    `json:"name"`
-	Path         string    `json:"path"`
-	SizeBytes    uint64    `json:"size_bytes"`
-	NoCOW        bool      `json:"nocow"`
-	Compression  string    `json:"compression"`
-	QuotaBytes   uint64    `json:"quota_bytes"`
-	UsedBytes    uint64    `json:"used_bytes"`
-	UID          int       `json:"uid"`
-	GID          int       `json:"gid"`
-	Mode         string    `json:"mode"`
-	Clients      []string  `json:"clients,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Name         string     `json:"name"`
+	Path         string     `json:"path"`
+	SizeBytes    uint64     `json:"size_bytes"`
+	NoCOW        bool       `json:"nocow"`
+	Compression  string     `json:"compression"`
+	QuotaBytes   uint64     `json:"quota_bytes"`
+	UsedBytes    uint64     `json:"used_bytes"`
+	UID          int        `json:"uid"`
+	GID          int        `json:"gid"`
+	Mode         string     `json:"mode"`
+	Clients      []string   `json:"clients,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 	LastAttachAt *time.Time `json:"last_attach_at,omitempty"`
 }
 

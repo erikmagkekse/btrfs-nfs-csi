@@ -1,23 +1,38 @@
-package model
+package config
 
 import "time"
 
 const DriverName = "btrfs-nfs-csi"
 
+// K8s settings
 const (
-	AnnoPrefix      = DriverName + "/"
-	AnnoNoCOW       = AnnoPrefix + "nocow"
-	AnnoCompression = AnnoPrefix + "compression"
-	AnnoUID         = AnnoPrefix + "uid"
-	AnnoGID         = AnnoPrefix + "gid"
-	AnnoMode        = AnnoPrefix + "mode"
+	AnnoPrefix = DriverName + "/"
 
 	PvcNameKey      = "csi.storage.k8s.io/pvc/name"
 	PvcNamespaceKey = "csi.storage.k8s.io/pvc/namespace"
 
+	SecretNameKey      = "csi.storage.k8s.io/provisioner-secret-name"
+	SecretNamespaceKey = "csi.storage.k8s.io/provisioner-secret-namespace"
+
+	ParamNoCOW       = "nocow"
+	ParamCompression = "compression"
+	ParamUID         = "uid"
+	ParamGID         = "gid"
+	ParamMode        = "mode"
+
 	ParamNFSServer       = "nfsServer"
 	ParamNFSMountOptions = "nfsMountOptions"
 	ParamNFSSharePath    = "nfsSharePath"
+
+	VolumeIDSep = "|"
+	NodeIDSep   = "|"
+)
+
+// Storage engine settings
+const (
+	DataDir      = "data"
+	MetadataFile = "metadata.json"
+	SnapshotsDir = "snapshots"
 )
 
 type AgentConfig struct {
@@ -30,6 +45,7 @@ type AgentConfig struct {
 	UsageInterval        time.Duration `env:"AGENT_FEATURE_QUOTA_UPDATE_INTERVAL" envDefault:"1m"`
 	NFSExporter          string        `env:"AGENT_NFS_EXPORTER" envDefault:"kernel"`
 	ExportfsBin          string        `env:"AGENT_EXPORTFS_BIN" envDefault:"exportfs"`
+	BtrfsBin             string        `env:"AGENT_BTRFS_BIN" envDefault:"btrfs"`
 	NFSReconcileInterval time.Duration `env:"AGENT_NFS_RECONCILE_INTERVAL" envDefault:"10m"`
 	DashboardRefresh     int           `env:"AGENT_DASHBOARD_REFRESH_SECONDS" envDefault:"5"`
 	DefaultDirMode       string        `env:"AGENT_DEFAULT_DIR_MODE" envDefault:"0700"`

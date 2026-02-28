@@ -12,27 +12,23 @@ import (
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"github.com/rs/zerolog/log"
-)
-
-const (
-	MetadataFile = "metadata.json"
-	DataDir      = "data"
-	SnapshotsDir = "snapshots"
 )
 
 // Storage encapsulates all btrfs volume, snapshot, and clone operations.
 type Storage struct {
 	basePath        string
 	quotaEnabled    bool
+	btrfs           *btrfs.Manager
 	exporter        nfs.Exporter
 	tenants         []string
 	defaultDirMode  os.FileMode
 	defaultDataMode string
 }
 
-func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode string) *Storage {
+func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode, btrfsBin string) *Storage {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -51,7 +47,8 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	if !btrfs.IsBtrfs(basePath) {
 		log.Fatal().Str("path", basePath).Msg("base path is not on a btrfs filesystem")
 	}
-	if !btrfs.IsAvailable(ctx) {
+	mgr := btrfs.NewManager(btrfsBin)
+	if !mgr.IsAvailable(ctx) {
 		log.Fatal().Msg("btrfs tools not found - is btrfs-progs installed?")
 	}
 	if exporter == nil {
@@ -59,33 +56,33 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	}
 
 	if quotaEnabled {
-		if err := btrfs.QuotaCheck(ctx, basePath); err != nil {
+		if err := mgr.QuotaCheck(ctx, basePath); err != nil {
 			log.Fatal().Str("path", basePath).Msg("AGENT_FEATURE_QUOTA_ENABLED=true but btrfs quota is not enabled (run: btrfs quota enable " + basePath + ")")
 		}
 	}
 
 	for _, name := range tenants {
 		if err := validateName(name); err != nil {
-			panic("storage: invalid tenant name: " + name)
+			log.Fatal().Str("tenant", name).Msg("invalid tenant name")
 		}
 		td := filepath.Join(basePath, name)
 		if err := os.MkdirAll(td, os.FileMode(parsedDirMode)); err != nil {
-			panic("storage: failed to create tenant directory: " + err.Error())
+			log.Fatal().Err(err).Str("path", td).Msg("failed to create tenant directory")
 		}
-		if err := os.MkdirAll(filepath.Join(td, SnapshotsDir), os.FileMode(parsedDirMode)); err != nil {
-			panic("storage: failed to create tenant snapshots directory: " + err.Error())
+		if err := os.MkdirAll(filepath.Join(td, config.SnapshotsDir), os.FileMode(parsedDirMode)); err != nil {
+			log.Fatal().Err(err).Str("path", td).Msg("failed to create tenant snapshots directory")
 		}
 	}
 	log.Info().Int("count", len(tenants)).Msg("tenants configured")
 
-	return &Storage{basePath: basePath, quotaEnabled: quotaEnabled, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
+	return &Storage{basePath: basePath, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
 }
 
 func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInterval time.Duration) {
 	for _, tenant := range s.tenants {
 		bp := filepath.Join(s.basePath, tenant)
 		if s.quotaEnabled {
-			StartUsageUpdater(ctx, bp, usageInterval, tenant)
+			StartUsageUpdater(ctx, s.btrfs, bp, usageInterval, tenant)
 		}
 		if reconcileInterval > 0 {
 			s.StartNFSReconciler(ctx, bp, reconcileInterval, tenant)
@@ -126,7 +123,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	if req.NoCOW && req.Compression != "" && req.Compression != "none" {
 		return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
 	}
-	if !isValidCompression(req.Compression) {
+	if !btrfs.IsValidCompression(req.Compression) {
 		return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
 	}
 	if req.QuotaBytes == 0 {
@@ -142,11 +139,11 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 
 	// operations
 	volDir := filepath.Join(bp, req.Name)
-	dataDir := filepath.Join(volDir, DataDir)
+	dataDir := filepath.Join(volDir, config.DataDir)
 
 	if _, err := os.Stat(volDir); err == nil {
 		var existing VolumeMetadata
-		if err := ReadMetadata(filepath.Join(volDir, MetadataFile), &existing); err != nil {
+		if err := ReadMetadata(filepath.Join(volDir, config.MetadataFile), &existing); err != nil {
 			return nil, fmt.Errorf("volume %q exists but metadata is corrupt: %w", req.Name, err)
 		}
 		return &existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("volume %q already exists", req.Name)}
@@ -158,18 +155,22 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	cleanup := func() {
-		_ = btrfs.SubvolumeDelete(ctx, dataDir)
-		_ = os.RemoveAll(volDir)
+		if err := s.btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
+			log.Warn().Err(err).Str("path", dataDir).Msg("cleanup: failed to delete subvolume")
+		}
+		if err := os.RemoveAll(volDir); err != nil {
+			log.Warn().Err(err).Str("path", volDir).Msg("cleanup: failed to remove directory")
+		}
 	}
 
-	if err := btrfs.SubvolumeCreate(ctx, dataDir); err != nil {
+	if err := s.btrfs.SubvolumeCreate(ctx, dataDir); err != nil {
 		_ = os.RemoveAll(volDir)
 		log.Error().Err(err).Str("path", dataDir).Msg("failed to create subvolume")
 		return nil, fmt.Errorf("btrfs subvolume create failed: %w", err)
 	}
 
 	if req.NoCOW {
-		if err := btrfs.SetNoCOW(ctx, dataDir); err != nil {
+		if err := s.btrfs.SetNoCOW(ctx, dataDir); err != nil {
 			log.Error().Err(err).Str("path", dataDir).Msg("failed to set nocow")
 			cleanup()
 			return nil, fmt.Errorf("chattr +C failed: %w", err)
@@ -177,7 +178,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	if req.Compression != "" && req.Compression != "none" {
-		if err := btrfs.SetCompression(ctx, dataDir, req.Compression); err != nil {
+		if err := s.btrfs.SetCompression(ctx, dataDir, req.Compression); err != nil {
 			log.Error().Err(err).Str("path", dataDir).Str("algo", req.Compression).Msg("failed to set compression")
 			cleanup()
 			return nil, fmt.Errorf("set compression failed: %w", err)
@@ -185,7 +186,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	if s.quotaEnabled {
-		if err := btrfs.QgroupLimit(ctx, dataDir, req.QuotaBytes); err != nil {
+		if err := s.btrfs.QgroupLimit(ctx, dataDir, req.QuotaBytes); err != nil {
 			log.Error().Err(err).Str("path", dataDir).Uint64("bytes", req.QuotaBytes).Msg("failed to set qgroup limit")
 			cleanup()
 			return nil, fmt.Errorf("qgroup limit failed: %w", err)
@@ -214,7 +215,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		UpdatedAt:   now,
 	}
 
-	if err := writeMetadataAtomic(filepath.Join(volDir, MetadataFile), meta); err != nil {
+	if err := writeMetadataAtomic(filepath.Join(volDir, config.MetadataFile), meta); err != nil {
 		log.Error().Err(err).Msg("failed to write metadata")
 		cleanup()
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
@@ -238,10 +239,10 @@ func (s *Storage) ListVolumes(tenant string) ([]VolumeMetadata, error) {
 
 	var vols []VolumeMetadata
 	for _, e := range entries {
-		if !e.IsDir() || e.Name() == SnapshotsDir {
+		if !e.IsDir() || e.Name() == config.SnapshotsDir {
 			continue
 		}
-		metaPath := filepath.Join(bp, e.Name(), MetadataFile)
+		metaPath := filepath.Join(bp, e.Name(), config.MetadataFile)
 		var meta VolumeMetadata
 		if err := ReadMetadata(metaPath, &meta); err != nil {
 			continue
@@ -250,6 +251,23 @@ func (s *Storage) ListVolumes(tenant string) ([]VolumeMetadata, error) {
 	}
 	log.Debug().Str("tenant", tenant).Int("count", len(vols)).Msg("volumes listed")
 	return vols, nil
+}
+
+func (s *Storage) GetVolume(tenant, name string) (*VolumeMetadata, error) {
+	bp, err := s.tenantPath(tenant)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+
+	metaPath := filepath.Join(bp, name, config.MetadataFile)
+	var meta VolumeMetadata
+	if err := ReadMetadata(metaPath, &meta); err != nil {
+		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
+	}
+	return &meta, nil
 }
 
 func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req VolumeUpdateRequest) (*VolumeMetadata, error) {
@@ -262,8 +280,8 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	}
 
 	volDir := filepath.Join(bp, name)
-	metaPath := filepath.Join(volDir, MetadataFile)
-	dataDir := filepath.Join(volDir, DataDir)
+	metaPath := filepath.Join(volDir, config.MetadataFile)
+	dataDir := filepath.Join(volDir, config.DataDir)
 
 	var cur VolumeMetadata
 	if err := ReadMetadata(metaPath, &cur); err != nil {
@@ -275,7 +293,7 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("new size %d must be larger than current size %d", *req.SizeBytes, cur.SizeBytes)}
 	}
 	if req.Compression != nil {
-		if !isValidCompression(*req.Compression) {
+		if !btrfs.IsValidCompression(*req.Compression) {
 			return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
 		}
 		if cur.NoCOW && *req.Compression != "" && *req.Compression != "none" {
@@ -293,14 +311,14 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 
 	// operations
 	if req.SizeBytes != nil && s.quotaEnabled {
-		if err := btrfs.QgroupLimit(ctx, dataDir, *req.SizeBytes); err != nil {
+		if err := s.btrfs.QgroupLimit(ctx, dataDir, *req.SizeBytes); err != nil {
 			log.Error().Err(err).Msg("failed to update qgroup limit")
 			return nil, fmt.Errorf("qgroup limit failed: %w", err)
 		}
 	}
 
 	if req.NoCOW != nil && *req.NoCOW && !cur.NoCOW {
-		if err := btrfs.SetNoCOW(ctx, dataDir); err != nil {
+		if err := s.btrfs.SetNoCOW(ctx, dataDir); err != nil {
 			log.Error().Err(err).Msg("failed to set nocow")
 			return nil, fmt.Errorf("chattr +C failed: %w", err)
 		}
@@ -310,7 +328,7 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	}
 
 	if req.Compression != nil && *req.Compression != "" && *req.Compression != "none" {
-		if err := btrfs.SetCompression(ctx, dataDir, *req.Compression); err != nil {
+		if err := s.btrfs.SetCompression(ctx, dataDir, *req.Compression); err != nil {
 			log.Error().Err(err).Msg("failed to set compression")
 			return nil, fmt.Errorf("set compression failed: %w", err)
 		}
@@ -388,8 +406,8 @@ func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 		log.Warn().Err(err).Str("path", volDir).Msg("failed to unexport via NFS")
 	}
 
-	dataDir := filepath.Join(volDir, DataDir)
-	if err := btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
+	dataDir := filepath.Join(volDir, config.DataDir)
+	if err := s.btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
 		log.Error().Err(err).Msg("failed to delete subvolume")
 		return fmt.Errorf("btrfs subvolume delete failed: %w", err)
 	}
@@ -418,7 +436,7 @@ func (s *Storage) ExportVolume(ctx context.Context, tenant, name, client string)
 	}
 
 	// metadata first - if export fails, reconciler will re-export
-	metaPath := filepath.Join(volDir, MetadataFile)
+	metaPath := filepath.Join(volDir, config.MetadataFile)
 	if err := UpdateMetadata(metaPath, func(meta *VolumeMetadata) {
 		found := false
 		for _, c := range meta.Clients {
@@ -462,7 +480,7 @@ func (s *Storage) UnexportVolume(ctx context.Context, tenant, name, client strin
 	}
 
 	// metadata first - if unexport fails, reconciler will clean up
-	metaPath := filepath.Join(volDir, MetadataFile)
+	metaPath := filepath.Join(volDir, config.MetadataFile)
 	if err := UpdateMetadata(metaPath, func(meta *VolumeMetadata) {
 		filtered := meta.Clients[:0]
 		for _, c := range meta.Clients {
@@ -552,16 +570,16 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 		return nil, err
 	}
 	volDir := filepath.Join(bp, req.Volume)
-	srcData := filepath.Join(volDir, DataDir)
+	srcData := filepath.Join(volDir, config.DataDir)
 	if _, err := os.Stat(srcData); os.IsNotExist(err) {
 		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source volume %q not found", req.Volume)}
 	}
 	var volMeta VolumeMetadata
-	if err := ReadMetadata(filepath.Join(volDir, MetadataFile), &volMeta); err != nil {
+	if err := ReadMetadata(filepath.Join(volDir, config.MetadataFile), &volMeta); err != nil {
 		return nil, fmt.Errorf("read volume metadata: %w", err)
 	}
 
-	snapDir := filepath.Join(bp, SnapshotsDir, req.Name)
+	snapDir := filepath.Join(bp, config.SnapshotsDir, req.Name)
 	if _, err := os.Stat(snapDir); err == nil {
 		return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("snapshot %q already exists", req.Name)}
 	}
@@ -572,8 +590,8 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 		return nil, fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
 
-	dstData := filepath.Join(snapDir, DataDir)
-	if err := btrfs.SubvolumeSnapshot(ctx, srcData, dstData, true); err != nil {
+	dstData := filepath.Join(snapDir, config.DataDir)
+	if err := s.btrfs.SubvolumeSnapshot(ctx, srcData, dstData, true); err != nil {
 		_ = os.RemoveAll(snapDir)
 		log.Error().Err(err).Msg("failed to create snapshot")
 		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
@@ -583,16 +601,18 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	meta := SnapshotMetadata{
 		Name:      req.Name,
 		Volume:    req.Volume,
-		Path:      filepath.Join(filepath.Dir(volMeta.Path), SnapshotsDir, req.Name),
+		Path:      filepath.Join(filepath.Dir(volMeta.Path), config.SnapshotsDir, req.Name),
 		SizeBytes: volMeta.SizeBytes,
 		ReadOnly:  true,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
 
-	if err := writeMetadataAtomic(filepath.Join(snapDir, MetadataFile), meta); err != nil {
+	if err := writeMetadataAtomic(filepath.Join(snapDir, config.MetadataFile), meta); err != nil {
 		log.Error().Err(err).Msg("failed to write snapshot metadata")
-		_ = btrfs.SubvolumeDelete(ctx, dstData)
+		if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
+			log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
+		}
 		_ = os.RemoveAll(snapDir)
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
@@ -607,7 +627,7 @@ func (s *Storage) ListSnapshots(tenant, volume string) ([]SnapshotMetadata, erro
 		return nil, err
 	}
 
-	snapBaseDir := filepath.Join(bp, SnapshotsDir)
+	snapBaseDir := filepath.Join(bp, config.SnapshotsDir)
 	entries, err := os.ReadDir(snapBaseDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -622,7 +642,7 @@ func (s *Storage) ListSnapshots(tenant, volume string) ([]SnapshotMetadata, erro
 		if !e.IsDir() {
 			continue
 		}
-		metaPath := filepath.Join(snapBaseDir, e.Name(), MetadataFile)
+		metaPath := filepath.Join(snapBaseDir, e.Name(), config.MetadataFile)
 		var meta SnapshotMetadata
 		if err := ReadMetadata(metaPath, &meta); err != nil {
 			continue
@@ -636,6 +656,23 @@ func (s *Storage) ListSnapshots(tenant, volume string) ([]SnapshotMetadata, erro
 	return snaps, nil
 }
 
+func (s *Storage) GetSnapshot(tenant, name string) (*SnapshotMetadata, error) {
+	bp, err := s.tenantPath(tenant)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateName(name); err != nil {
+		return nil, err
+	}
+
+	metaPath := filepath.Join(bp, config.SnapshotsDir, name, config.MetadataFile)
+	var meta SnapshotMetadata
+	if err := ReadMetadata(metaPath, &meta); err != nil {
+		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("snapshot %q not found", name)}
+	}
+	return &meta, nil
+}
+
 func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error {
 	bp, err := s.tenantPath(tenant)
 	if err != nil {
@@ -645,13 +682,13 @@ func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error
 		return err
 	}
 
-	snapDir := filepath.Join(bp, SnapshotsDir, name)
+	snapDir := filepath.Join(bp, config.SnapshotsDir, name)
 	if _, err := os.Stat(snapDir); os.IsNotExist(err) {
 		return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("snapshot %q not found", name)}
 	}
 
-	dataDir := filepath.Join(snapDir, DataDir)
-	if err := btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
+	dataDir := filepath.Join(snapDir, config.DataDir)
+	if err := s.btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
 		log.Error().Err(err).Msg("failed to delete snapshot subvolume")
 		return fmt.Errorf("btrfs subvolume delete failed: %w", err)
 	}
@@ -680,15 +717,15 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	if err := validateName(req.Snapshot); err != nil {
 		return nil, err
 	}
-	snapDir := filepath.Join(bp, SnapshotsDir, req.Snapshot)
-	srcData := filepath.Join(snapDir, DataDir)
+	snapDir := filepath.Join(bp, config.SnapshotsDir, req.Snapshot)
+	srcData := filepath.Join(snapDir, config.DataDir)
 	if _, err := os.Stat(srcData); os.IsNotExist(err) {
 		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source snapshot %q not found", req.Snapshot)}
 	}
 	cloneDir := filepath.Join(bp, req.Name)
 	if _, err := os.Stat(cloneDir); err == nil {
 		var existing CloneMetadata
-		if err := ReadMetadata(filepath.Join(cloneDir, MetadataFile), &existing); err != nil {
+		if err := ReadMetadata(filepath.Join(cloneDir, config.MetadataFile), &existing); err != nil {
 			return nil, fmt.Errorf("clone %q exists but metadata is corrupt: %w", req.Name, err)
 		}
 		return &existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("clone %q already exists", req.Name)}
@@ -700,8 +737,8 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		return nil, fmt.Errorf("failed to create clone directory: %w", err)
 	}
 
-	dstData := filepath.Join(cloneDir, DataDir)
-	if err := btrfs.SubvolumeSnapshot(ctx, srcData, dstData, false); err != nil {
+	dstData := filepath.Join(cloneDir, config.DataDir)
+	if err := s.btrfs.SubvolumeSnapshot(ctx, srcData, dstData, false); err != nil {
 		_ = os.RemoveAll(cloneDir)
 		log.Error().Err(err).Msg("failed to create clone")
 		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
@@ -715,9 +752,11 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		CreatedAt:      now,
 	}
 
-	if err := writeMetadataAtomic(filepath.Join(cloneDir, MetadataFile), meta); err != nil {
+	if err := writeMetadataAtomic(filepath.Join(cloneDir, config.MetadataFile), meta); err != nil {
 		log.Error().Err(err).Msg("failed to write clone metadata")
-		_ = btrfs.SubvolumeDelete(ctx, dstData)
+		if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
+			log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
+		}
 		_ = os.RemoveAll(cloneDir)
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}

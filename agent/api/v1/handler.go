@@ -16,20 +16,11 @@ type Handler struct {
 
 func volumeResponseFrom(meta *storage.VolumeMetadata) VolumeResponse {
 	return VolumeResponse{
-		Name:         meta.Name,
-		Path:         meta.Path,
-		SizeBytes:    meta.SizeBytes,
-		NoCOW:        meta.NoCOW,
-		Compression:  meta.Compression,
-		QuotaBytes:   meta.QuotaBytes,
-		UsedBytes:    meta.UsedBytes,
-		UID:          meta.UID,
-		GID:          meta.GID,
-		Mode:         meta.Mode,
-		Clients:      len(meta.Clients),
-		CreatedAt:    meta.CreatedAt,
-		UpdatedAt:    meta.UpdatedAt,
-		LastAttachAt: meta.LastAttachAt,
+		Name:      meta.Name,
+		SizeBytes: meta.SizeBytes,
+		UsedBytes: meta.UsedBytes,
+		Clients:   len(meta.Clients),
+		CreatedAt: meta.CreatedAt,
 	}
 }
 
@@ -44,12 +35,12 @@ func (h *Handler) CreateVolume(c *echo.Context) error {
 	meta, err := h.Store.CreateVolume(c.Request().Context(), tenant, req)
 	if err != nil {
 		if meta != nil {
-			return c.JSON(http.StatusConflict, volumeResponseFrom(meta))
+			return c.JSON(http.StatusConflict, volumeDetailResponseFrom(meta))
 		}
 		return StorageError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, volumeResponseFrom(meta))
+	return c.JSON(http.StatusCreated, volumeDetailResponseFrom(meta))
 }
 
 func (h *Handler) ListVolumes(c *echo.Context) error {
@@ -65,7 +56,41 @@ func (h *Handler) ListVolumes(c *echo.Context) error {
 		resp[i] = volumeResponseFrom(&vols[i])
 	}
 
-	return c.JSON(http.StatusOK, VolumeListResponse{Volumes: resp})
+	return c.JSON(http.StatusOK, VolumeListResponse{Volumes: resp, Total: len(resp)})
+}
+
+func volumeDetailResponseFrom(meta *storage.VolumeMetadata) VolumeDetailResponse {
+	clients := meta.Clients
+	if clients == nil {
+		clients = []string{}
+	}
+	return VolumeDetailResponse{
+		Name:         meta.Name,
+		Path:         meta.Path,
+		SizeBytes:    meta.SizeBytes,
+		NoCOW:        meta.NoCOW,
+		Compression:  meta.Compression,
+		QuotaBytes:   meta.QuotaBytes,
+		UsedBytes:    meta.UsedBytes,
+		UID:          meta.UID,
+		GID:          meta.GID,
+		Mode:         meta.Mode,
+		Clients:      clients,
+		CreatedAt:    meta.CreatedAt,
+		UpdatedAt:    meta.UpdatedAt,
+		LastAttachAt: meta.LastAttachAt,
+	}
+}
+
+func (h *Handler) GetVolume(c *echo.Context) error {
+	tenant := c.Get("tenant").(string)
+
+	meta, err := h.Store.GetVolume(tenant, c.Param("name"))
+	if err != nil {
+		return StorageError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, volumeDetailResponseFrom(meta))
 }
 
 func (h *Handler) UpdateVolume(c *echo.Context) error {
@@ -82,7 +107,7 @@ func (h *Handler) UpdateVolume(c *echo.Context) error {
 		return StorageError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, volumeResponseFrom(meta))
+	return c.JSON(http.StatusOK, volumeDetailResponseFrom(meta))
 }
 
 func (h *Handler) DeleteVolume(c *echo.Context) error {
@@ -161,15 +186,11 @@ func (h *Handler) Stats(c *echo.Context) error {
 
 func snapshotResponseFrom(meta *storage.SnapshotMetadata) SnapshotResponse {
 	return SnapshotResponse{
-		Name:           meta.Name,
-		Volume:         meta.Volume,
-		Path:           meta.Path,
-		SizeBytes:      meta.SizeBytes,
-		UsedBytes:      meta.UsedBytes,
-		ExclusiveBytes: meta.ExclusiveBytes,
-		ReadOnly:       meta.ReadOnly,
-		CreatedAt:      meta.CreatedAt,
-		UpdatedAt:      meta.UpdatedAt,
+		Name:      meta.Name,
+		Volume:    meta.Volume,
+		SizeBytes: meta.SizeBytes,
+		UsedBytes: meta.UsedBytes,
+		CreatedAt: meta.CreatedAt,
 	}
 }
 
@@ -186,14 +207,13 @@ func (h *Handler) CreateSnapshot(c *echo.Context) error {
 		return StorageError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, snapshotResponseFrom(meta))
+	return c.JSON(http.StatusCreated, snapshotDetailResponseFrom(meta))
 }
 
 func (h *Handler) ListSnapshots(c *echo.Context) error {
 	tenant := c.Get("tenant").(string)
-	volume := c.QueryParam("volume")
 
-	snaps, err := h.Store.ListSnapshots(tenant, volume)
+	snaps, err := h.Store.ListSnapshots(tenant, "")
 	if err != nil {
 		return StorageError(c, err)
 	}
@@ -203,7 +223,48 @@ func (h *Handler) ListSnapshots(c *echo.Context) error {
 		resp[i] = snapshotResponseFrom(&snaps[i])
 	}
 
-	return c.JSON(http.StatusOK, SnapshotListResponse{Snapshots: resp})
+	return c.JSON(http.StatusOK, SnapshotListResponse{Snapshots: resp, Total: len(resp)})
+}
+
+func (h *Handler) ListVolumeSnapshots(c *echo.Context) error {
+	tenant := c.Get("tenant").(string)
+
+	snaps, err := h.Store.ListSnapshots(tenant, c.Param("name"))
+	if err != nil {
+		return StorageError(c, err)
+	}
+
+	resp := make([]SnapshotResponse, len(snaps))
+	for i := range snaps {
+		resp[i] = snapshotResponseFrom(&snaps[i])
+	}
+
+	return c.JSON(http.StatusOK, SnapshotListResponse{Snapshots: resp, Total: len(resp)})
+}
+
+func snapshotDetailResponseFrom(meta *storage.SnapshotMetadata) SnapshotDetailResponse {
+	return SnapshotDetailResponse{
+		Name:           meta.Name,
+		Volume:         meta.Volume,
+		Path:           meta.Path,
+		SizeBytes:      meta.SizeBytes,
+		UsedBytes:      meta.UsedBytes,
+		ExclusiveBytes: meta.ExclusiveBytes,
+		ReadOnly:       meta.ReadOnly,
+		CreatedAt:      meta.CreatedAt,
+		UpdatedAt:      meta.UpdatedAt,
+	}
+}
+
+func (h *Handler) GetSnapshot(c *echo.Context) error {
+	tenant := c.Get("tenant").(string)
+
+	meta, err := h.Store.GetSnapshot(tenant, c.Param("name"))
+	if err != nil {
+		return StorageError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, snapshotDetailResponseFrom(meta))
 }
 
 func (h *Handler) DeleteSnapshot(c *echo.Context) error {

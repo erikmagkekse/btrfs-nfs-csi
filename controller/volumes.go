@@ -6,7 +6,7 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -14,13 +14,49 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func (s *Server) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+	agents := s.agents.Agents()
+
+	var entries []*csi.ListVolumesResponse_Entry
+	for sc, client := range agents {
+		start := time.Now()
+		volList, err := client.ListVolumes(ctx)
+		agentDuration.WithLabelValues("list_volumes", sc).Observe(time.Since(start).Seconds())
+		if err != nil {
+			agentOpsTotal.WithLabelValues("list_volumes", "error", sc).Inc()
+			log.Warn().Err(err).Str("sc", sc).Msg("failed to list volumes from agent")
+			continue
+		}
+		agentOpsTotal.WithLabelValues("list_volumes", "success", sc).Inc()
+
+		for _, vol := range volList.Volumes {
+			entries = append(entries, &csi.ListVolumesResponse_Entry{
+				Volume: &csi.Volume{
+					VolumeId:      makeVolumeID(sc, vol.Name),
+					CapacityBytes: int64(vol.SizeBytes),
+				},
+			})
+		}
+	}
+
+	paged, nextToken, err := paginate(entries, req.StartingToken, req.MaxEntries)
+	if err != nil {
+		return nil, err
+	}
+
+	return &csi.ListVolumesResponse{
+		Entries:   paged,
+		NextToken: nextToken,
+	}, nil
+}
+
 func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume name required")
 	}
 
 	params := req.Parameters
-	nfsServer := params[model.ParamNFSServer]
+	nfsServer := params[config.ParamNFSServer]
 	agentURL := params[paramAgentURL]
 	if nfsServer == "" || agentURL == "" {
 		return nil, status.Error(codes.InvalidArgument, "nfsServer and agentURL parameters required")
@@ -44,17 +80,17 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	volCtx := map[string]string{
-		model.ParamNFSServer: nfsServer,
-		paramAgentURL:        agentURL,
+		config.ParamNFSServer: nfsServer,
+		paramAgentURL:         agentURL,
 	}
-	if opts := params[model.ParamNFSMountOptions]; opts != "" {
-		volCtx[model.ParamNFSMountOptions] = opts
+	if opts := params[config.ParamNFSMountOptions]; opts != "" {
+		volCtx[config.ParamNFSMountOptions] = opts
 	}
-	if n := params[model.PvcNameKey]; n != "" {
-		volCtx[model.PvcNameKey] = n
+	if n := params[config.PvcNameKey]; n != "" {
+		volCtx[config.PvcNameKey] = n
 	}
-	if ns := params[model.PvcNamespaceKey]; ns != "" {
-		volCtx[model.PvcNamespaceKey] = ns
+	if ns := params[config.PvcNamespaceKey]; ns != "" {
+		volCtx[config.PvcNamespaceKey] = ns
 	}
 
 	vp := resolveVolumeParams(ctx, params)
@@ -79,6 +115,9 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		if err != nil {
 			if agentAPI.IsConflict(err) {
 				agentOpsTotal.WithLabelValues("create_clone", "conflict", sc).Inc()
+				if cloneResp == nil {
+					return nil, status.Errorf(codes.Internal, "clone conflict but no metadata returned: %v", err)
+				}
 			} else {
 				agentOpsTotal.WithLabelValues("create_clone", "error", sc).Inc()
 				return nil, status.Errorf(codes.Internal, "create clone: %v", err)
@@ -86,7 +125,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		} else {
 			agentOpsTotal.WithLabelValues("create_clone", "success", sc).Inc()
 		}
-		volCtx[model.ParamNFSSharePath] = cloneResp.Path
+		volCtx[config.ParamNFSSharePath] = cloneResp.Path
 
 		log.Info().Str("volume", req.Name).Str("snapshot", snapName).Msg("volume cloned from snapshot")
 
@@ -121,6 +160,12 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	if err != nil {
 		if agentAPI.IsConflict(err) {
 			agentOpsTotal.WithLabelValues("create_volume", "conflict", sc).Inc()
+			if volResp == nil {
+				volResp, err = client.GetVolume(ctx, req.Name)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "volume conflict but failed to retrieve: %v", err)
+				}
+			}
 		} else {
 			agentOpsTotal.WithLabelValues("create_volume", "error", sc).Inc()
 			return nil, status.Errorf(codes.Internal, "create volume: %v", err)
@@ -128,7 +173,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	} else {
 		agentOpsTotal.WithLabelValues("create_volume", "success", sc).Inc()
 	}
-	volCtx[model.ParamNFSSharePath] = volResp.Path
+	volCtx[config.ParamNFSSharePath] = volResp.Path
 
 	log.Info().Str("volume", req.Name).Uint64("size", sizeBytes).Msg("volume created")
 

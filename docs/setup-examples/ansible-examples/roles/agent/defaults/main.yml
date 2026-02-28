@@ -8,5 +8,5 @@ volume_name: "{{ prefix }}-data"
 volume_size: 20
 agent_base_path: /export/data
 agent_listen_addr: ":8080"
-agent_version: "0.9.6"
+agent_version: "0.9.7"
 # agent_image: "ghcr.io/erikmagkekse/btrfs-nfs-csi:{{ agent_version }}"

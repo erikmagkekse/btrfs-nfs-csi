@@ -2,14 +2,12 @@ package driver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"sync"
 	"time"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -24,20 +22,6 @@ import (
 // - Device-based mount point detection (like mount-utils IsLikelyNotMountPoint)
 // See: https://github.com/kubernetes-csi/csi-driver-nfs
 
-type NodeServer struct {
-	csi.UnimplementedNodeServer
-	nodeID string
-	nodeIP string
-	locks  sync.Map
-}
-
-func (s *NodeServer) volumeLock(id string) func() {
-	val, _ := s.locks.LoadOrStore(id, &sync.Mutex{})
-	mu := val.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
-}
-
 func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	if req.VolumeId == "" || req.StagingTargetPath == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID and staging target path required")
@@ -47,8 +31,8 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	defer unlock()
 
 	vc := req.VolumeContext
-	nfsServer := vc[model.ParamNFSServer]
-	nfsSharePath := vc[model.ParamNFSSharePath]
+	nfsServer := vc[config.ParamNFSServer]
+	nfsSharePath := vc[config.ParamNFSSharePath]
 	if nfsServer == "" || nfsSharePath == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing nfsServer or nfsSharePath in volume context")
 	}
@@ -68,7 +52,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	args := []string{"-t", "nfs"}
 	mountOpts := "rw"
-	if opts := vc[model.ParamNFSMountOptions]; opts != "" {
+	if opts := vc[config.ParamNFSMountOptions]; opts != "" {
 		mountOpts = mountOpts + "," + opts
 	}
 	args = append(args, "-o", mountOpts)
@@ -125,7 +109,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	mountCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	dataDir := req.StagingTargetPath + "/data"
+	dataDir := req.StagingTargetPath + "/" + config.DataDir
 	start := time.Now()
 	out, err := exec.CommandContext(mountCtx, "mount", "--bind", dataDir, req.TargetPath).CombinedOutput()
 	mountDuration.WithLabelValues("bind_mount").Observe(time.Since(start).Seconds())
@@ -163,72 +147,4 @@ func (s *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
-}
-
-func (s *NodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	return &csi.NodeGetCapabilitiesResponse{
-		Capabilities: []*csi.NodeServiceCapability{
-			{
-				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{
-						Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
-					},
-				},
-			},
-			{
-				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{
-						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
-					},
-				},
-			},
-		},
-	}, nil
-}
-
-func (s *NodeServer) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	return &csi.NodeGetInfoResponse{
-		NodeId: s.nodeID + "|" + s.nodeIP,
-	}, nil
-}
-
-type volumeStats struct {
-	QuotaBytes uint64 `json:"quota_bytes"`
-	UsedBytes  uint64 `json:"used_bytes"`
-}
-
-// NodeGetVolumeStats returns quota-aware usage from metadata.json written by the agent's UsageUpdater.
-// Freshness depends on AGENT_FEATURE_QUOTA_UPDATE_INTERVAL (default 1m), which matches kubelet's polling interval.
-func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	if req.VolumePath == "" {
-		return nil, status.Error(codes.InvalidArgument, "volume path required")
-	}
-
-	// Try reading agent-written metadata from the staging path
-	if req.StagingTargetPath != "" {
-		metaPath := req.StagingTargetPath + "/metadata.json"
-		if data, err := os.ReadFile(metaPath); err == nil {
-			var vs volumeStats
-			if err := json.Unmarshal(data, &vs); err == nil && vs.QuotaBytes > 0 {
-				used := int64(vs.UsedBytes)
-				total := int64(vs.QuotaBytes)
-				avail := total - used
-				if avail < 0 {
-					avail = 0
-				}
-				return &csi.NodeGetVolumeStatsResponse{
-					Usage: []*csi.VolumeUsage{{
-						Available: avail,
-						Total:     total,
-						Used:      used,
-						Unit:      csi.VolumeUsage_BYTES,
-					}},
-				}, nil
-			}
-		}
-	}
-
-	// No statfs fallback - returns NFS-level data which doesn't reflect per-volume quota.
-	// Better to return an error so kubelet retries than to report misleading capacity.
-	return nil, status.Error(codes.Unavailable, "metadata.json not available, agent may be down")
 }

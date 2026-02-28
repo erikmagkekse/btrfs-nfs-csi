@@ -6,18 +6,10 @@ import (
 	"strconv"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/k8s"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
 
 	"github.com/rs/zerolog/log"
-)
-
-const (
-	paramNoCOW       = "nocow"
-	paramCompression = "compression"
-	paramUID         = "uid"
-	paramGID         = "gid"
-	paramMode        = "mode"
 )
 
 type volumeParams struct {
@@ -30,15 +22,15 @@ type volumeParams struct {
 
 func resolveVolumeParams(ctx context.Context, params map[string]string) volumeParams {
 	vp := volumeParams{
-		NoCOW:       params[paramNoCOW],
-		Compression: params[paramCompression],
-		UID:         params[paramUID],
-		GID:         params[paramGID],
-		Mode:        params[paramMode],
+		NoCOW:       params[config.ParamNoCOW],
+		Compression: params[config.ParamCompression],
+		UID:         params[config.ParamUID],
+		GID:         params[config.ParamGID],
+		Mode:        params[config.ParamMode],
 	}
 
-	pvcName := params[model.PvcNameKey]
-	pvcNamespace := params[model.PvcNamespaceKey]
+	pvcName := params[config.PvcNameKey]
+	pvcNamespace := params[config.PvcNamespaceKey]
 	if pvcName == "" || pvcNamespace == "" {
 		return vp
 	}
@@ -57,19 +49,19 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 	ctrlK8sOpsTotal.WithLabelValues("success").Inc()
 
 	annos := obj.Metadata.Annotations
-	if v, ok := annos[model.AnnoNoCOW]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamNoCOW]; ok {
 		vp.NoCOW = v
 	}
-	if v, ok := annos[model.AnnoCompression]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamCompression]; ok {
 		vp.Compression = v
 	}
-	if v, ok := annos[model.AnnoUID]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamUID]; ok {
 		vp.UID = v
 	}
-	if v, ok := annos[model.AnnoGID]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamGID]; ok {
 		vp.GID = v
 	}
-	if v, ok := annos[model.AnnoMode]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamMode]; ok {
 		vp.Mode = v
 	}
 

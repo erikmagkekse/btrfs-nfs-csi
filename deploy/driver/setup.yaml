@@ -147,7 +147,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: csi-driver
-          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.6
+          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.7
           imagePullPolicy: Always
           args: ["controller"]
           env:
@@ -285,7 +285,7 @@ spec:
       #hostNetwork: true
       containers:
         - name: csi-driver
-          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.6
+          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.7
           imagePullPolicy: Always
           args: ["driver"]
           securityContext:

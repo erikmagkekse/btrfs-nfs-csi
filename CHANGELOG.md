@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.9.7
+
+### Features
+- CSI ListVolumes and ListSnapshots RPCs (#24)
+- Configurable btrfs binary path via `AGENT_BTRFS_BIN` (#30)
+- Improved dashboard snapshot table and detail panel (#31)
+
+### Improvements
+- Improved agent API and dashboard UX (#23)
+- Synced docs, scripts, and CI (#33)
+
+### Refactoring
+- NFS kernel exporter refactored with unit tests (#19)
+- Btrfs refactored to Manager pattern with unit + integration tests (#20)
+- Driver/controller split, separate CSI identity server, consolidated constants (#29)
+- Agent refactor: renamed model to config, improved panic handling and warnings (#32)
+
+### Bug Fixes
+- Fix nil pointer panic on volume/clone conflict (#26)
+- Fix handler response type mismatches for Create/Update endpoints (#27)
+
+
 ## v0.9.6
 
 Some hotfixes and a requested configuration option.

@@ -26,10 +26,10 @@ func NewClient(url, token string) *Client {
 	}
 }
 
-func (c *Client) CreateVolume(ctx context.Context, req VolumeCreateRequest) (*VolumeResponse, error) {
-	var resp VolumeResponse
+func (c *Client) CreateVolume(ctx context.Context, req VolumeCreateRequest) (*VolumeDetailResponse, error) {
+	var resp VolumeDetailResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/volumes", req, &resp); err != nil {
-		if IsConflict(err) && resp.Path != "" {
+		if IsConflict(err) {
 			return &resp, err
 		}
 		return nil, err
@@ -41,16 +41,16 @@ func (c *Client) DeleteVolume(ctx context.Context, name string) error {
 	return c.do(ctx, http.MethodDelete, "/v1/volumes/"+name, nil, nil)
 }
 
-func (c *Client) UpdateVolume(ctx context.Context, name string, req VolumeUpdateRequest) (*VolumeResponse, error) {
-	var resp VolumeResponse
+func (c *Client) UpdateVolume(ctx context.Context, name string, req VolumeUpdateRequest) (*VolumeDetailResponse, error) {
+	var resp VolumeDetailResponse
 	if err := c.do(ctx, http.MethodPatch, "/v1/volumes/"+name, req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) CreateSnapshot(ctx context.Context, req SnapshotCreateRequest) (*SnapshotResponse, error) {
-	var resp SnapshotResponse
+func (c *Client) CreateSnapshot(ctx context.Context, req SnapshotCreateRequest) (*SnapshotDetailResponse, error) {
+	var resp SnapshotDetailResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/snapshots", req, &resp); err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (c *Client) DeleteSnapshot(ctx context.Context, name string) error {
 func (c *Client) CreateClone(ctx context.Context, req CloneCreateRequest) (*CloneResponse, error) {
 	var resp CloneResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/clones", req, &resp); err != nil {
-		if IsConflict(err) && resp.Path != "" {
+		if IsConflict(err) {
 			return &resp, err
 		}
 		return nil, err
@@ -78,6 +78,46 @@ func (c *Client) ExportVolume(ctx context.Context, name string, cl string) error
 
 func (c *Client) UnexportVolume(ctx context.Context, name string, cl string) error {
 	return c.do(ctx, http.MethodDelete, "/v1/volumes/"+name+"/export", ExportRequest{Client: cl}, nil)
+}
+
+func (c *Client) ListVolumes(ctx context.Context) (*VolumeListResponse, error) {
+	var resp VolumeListResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) GetVolume(ctx context.Context, name string) (*VolumeDetailResponse, error) {
+	var resp VolumeDetailResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes/"+name, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) ListSnapshots(ctx context.Context) (*SnapshotListResponse, error) {
+	var resp SnapshotListResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/snapshots", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) ListVolumeSnapshots(ctx context.Context, volume string) (*SnapshotListResponse, error) {
+	var resp SnapshotListResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes/"+volume+"/snapshots", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) GetSnapshot(ctx context.Context, name string) (*SnapshotDetailResponse, error) {
+	var resp SnapshotDetailResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/snapshots/"+name, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 func (c *Client) Healthz(ctx context.Context) (*HealthResponse, error) {
