@@ -62,7 +62,6 @@ For a detailed setup description, see [docs/installation.md](docs/installation.m
 #
 # Environment variables (defaults shown - adjust as needed):
 # export AGENT_BASE_PATH=/export/data  # must be a btrfs filesystem
-# export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH
 curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
 
 # Save the tenant token printed at the end!

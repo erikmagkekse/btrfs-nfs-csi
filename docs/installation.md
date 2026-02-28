@@ -20,7 +20,7 @@ The fastest way to get the agent running. Requires a mounted btrfs filesystem wi
 # export AGENT_BASE_PATH=/export/data  # must be a btrfs filesystem
 # export AGENT_TENANTS=default:$(openssl rand -hex 16)
 # export AGENT_LISTEN_ADDR=:8080
-# export AGENT_BLOCK_DISK=/dev/sdb  # auto-format as btrfs + mount to AGENT_BASE_PATH
+# export AGENT_BLOCK_DISK=/dev/sdX  # optional, auto-format as btrfs + mount to AGENT_BASE_PATH 
 # export VERSION=0.9.7
 # export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.7  # override full image ref
 # export SKIP_PACKAGE_INSTALL=1
