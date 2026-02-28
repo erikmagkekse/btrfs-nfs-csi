@@ -12,43 +12,42 @@ import (
 
 // TODO: Maybe better scraping?
 // TODO: Add functionality for squota
-// TODO: Add as AGENT ENV
-const btrfsBin = "btrfs"
 
 type SubvolumeInfo struct {
 	Path string
 }
 
 type Manager struct {
+	bin string
 	cmd utils.Runner
 }
 
-func NewManager() *Manager {
-	return &Manager{cmd: &utils.ShellRunner{}}
+func NewManager(bin string) *Manager {
+	return &Manager{bin: bin, cmd: &utils.ShellRunner{}}
 }
 
 func (m *Manager) SubvolumeCreate(ctx context.Context, path string) error {
-	return m.run(ctx, btrfsBin, "subvolume", "create", path)
+	return m.run(ctx, "subvolume", "create", path)
 }
 
 func (m *Manager) SubvolumeDelete(ctx context.Context, path string) error {
-	return m.run(ctx, btrfsBin, "subvolume", "delete", path)
+	return m.run(ctx, "subvolume", "delete", path)
 }
 
 func (m *Manager) SubvolumeSnapshot(ctx context.Context, src, dst string, readonly bool) error {
 	if readonly {
-		return m.run(ctx, btrfsBin, "subvolume", "snapshot", "-r", src, dst)
+		return m.run(ctx, "subvolume", "snapshot", "-r", src, dst)
 	}
-	return m.run(ctx, btrfsBin, "subvolume", "snapshot", src, dst)
+	return m.run(ctx, "subvolume", "snapshot", src, dst)
 }
 
 // QuotaCheck verifies that btrfs quota is enabled on the filesystem.
 func (m *Manager) QuotaCheck(ctx context.Context, path string) error {
-	return m.run(ctx, btrfsBin, "qgroup", "show", path)
+	return m.run(ctx, "qgroup", "show", path)
 }
 
 func (m *Manager) QgroupLimit(ctx context.Context, path string, bytes uint64) error {
-	return m.run(ctx, btrfsBin, "qgroup", "limit", fmt.Sprintf("%d", bytes), path)
+	return m.run(ctx, "qgroup", "limit", fmt.Sprintf("%d", bytes), path)
 }
 
 type QgroupInfo struct {
@@ -68,7 +67,7 @@ func (m *Manager) QgroupUsage(ctx context.Context, path string) (uint64, error) 
 // QgroupUsageEx returns both referenced and exclusive bytes for the subvolume's qgroup.
 func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, error) {
 	// get subvolume ID to find the correct qgroup
-	showOut, err := m.cmd.Run(ctx, btrfsBin, "subvolume", "show", path)
+	showOut, err := m.cmd.Run(ctx, m.bin, "subvolume", "show", path)
 	if err != nil {
 		return QgroupInfo{}, err
 	}
@@ -86,7 +85,7 @@ func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, e
 
 	qgroupID := "0/" + subvolID
 
-	out, err := m.cmd.Run(ctx, btrfsBin, "qgroup", "show", "-re", "--raw", path)
+	out, err := m.cmd.Run(ctx, m.bin, "qgroup", "show", "-re", "--raw", path)
 	if err != nil {
 		return QgroupInfo{}, err
 	}
@@ -103,7 +102,8 @@ func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, e
 }
 
 func (m *Manager) SetNoCOW(ctx context.Context, path string) error {
-	return m.run(ctx, "chattr", "+C", path)
+	_, err := m.cmd.Run(ctx, "chattr", "+C", path)
+	return err
 }
 
 var validCompressionAlgo = map[string]bool{
@@ -133,7 +133,7 @@ func (m *Manager) SetCompression(ctx context.Context, path string, algo string) 
 	if !IsValidCompression(algo) {
 		return fmt.Errorf("invalid compression algorithm: %s", algo)
 	}
-	return m.run(ctx, btrfsBin, "property", "set", path, "compression", algo)
+	return m.run(ctx, "property", "set", path, "compression", algo)
 }
 
 // IsBtrfs checks whether the given path resides on a btrfs filesystem
@@ -148,12 +148,12 @@ func IsBtrfs(path string) bool {
 }
 
 func (m *Manager) IsAvailable(ctx context.Context) bool {
-	err := m.run(ctx, btrfsBin, "--version")
+	err := m.run(ctx, "--version")
 	return err == nil
 }
 
-func (m *Manager) run(ctx context.Context, bin string, args ...string) error {
-	_, err := m.cmd.Run(ctx, bin, args...)
+func (m *Manager) run(ctx context.Context, args ...string) error {
+	_, err := m.cmd.Run(ctx, m.bin, args...)
 	return err
 }
 
@@ -161,12 +161,12 @@ func (m *Manager) run(ctx context.Context, bin string, args ...string) error {
 // that compares metadata.json entries against actual btrfs subvolumes.
 // Should be fine since we anyways just list subvols for this specific path.
 func (m *Manager) SubvolumeExists(ctx context.Context, path string) bool {
-	err := m.run(ctx, btrfsBin, "subvolume", "show", path)
+	err := m.run(ctx, "subvolume", "show", path)
 	return err == nil
 }
 
 func (m *Manager) SubvolumeList(ctx context.Context, path string) ([]SubvolumeInfo, error) {
-	out, err := m.cmd.Run(ctx, btrfsBin, "subvolume", "list", "-o", path)
+	out, err := m.cmd.Run(ctx, m.bin, "subvolume", "list", "-o", path)
 	if err != nil {
 		return nil, err
 	}

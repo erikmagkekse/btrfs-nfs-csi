@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 }
 
 func newTestManager(r utils.Runner) *Manager {
-	return &Manager{cmd: r}
+	return &Manager{bin: "btrfs", cmd: r}
 }
 
 func TestQgroupUsageEx(t *testing.T) {
