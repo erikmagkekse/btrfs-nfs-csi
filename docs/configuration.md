@@ -13,6 +13,7 @@
 | `AGENT_FEATURE_QUOTA_UPDATE_INTERVAL` | `1m` | Usage update interval |
 | `AGENT_NFS_EXPORTER` | `kernel` | NFS exporter type |
 | `AGENT_EXPORTFS_BIN` | `exportfs` | exportfs binary path |
+| `AGENT_BTRFS_BIN` | `btrfs` | btrfs binary path |
 | `AGENT_NFS_RECONCILE_INTERVAL` | `10m` | Export reconciliation (`0` = off) |
 | `AGENT_DASHBOARD_REFRESH_SECONDS` | `5` | Dashboard refresh |
 | `AGENT_DEFAULT_DIR_MODE` | `0700` | Default mode for volume/snapshot/clone directories |
@@ -53,7 +54,7 @@ Each StorageClass binds one agent + one tenant. The SC name is used in volume ID
 | `nocow` | no | `"true"` / `"false"` |
 | `compression` | no | `zstd`, `lzo`, `zlib`, `none` (with level: `zstd:3`) |
 | `uid` / `gid` | no | Volume owner |
-| `mode` | no | Octal permissions (default `"0750"`) |
+| `mode` | no | Octal permissions (default `"2770"`) |
 
 ## PVC Annotations
 
