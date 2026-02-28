@@ -71,6 +71,7 @@ ansible-playbook simple.yaml -e agent_version=0.9.7 -e k8s_server_type=cx32
 | `server_image` | `debian-13` |
 | `volume_size` | `20` (GB) |
 | `agent_version` | `0.9.6` |
+| `agent_image` | (unset, set by quickstart install script) |
 | `agent_base_path` | `/export/data` |
 
 ### K8s defaults
@@ -80,6 +81,26 @@ ansible-playbook simple.yaml -e agent_version=0.9.7 -e k8s_server_type=cx32
 | `k8s_server_type` | `cx23` |
 | `k8s_server_image` | `debian-13` |
 | `rke2_channel` | `stable` |
+| `driver_image` | (unset, uses image from `setup.yaml`) |
+
+### Dev setup
+
+To test a local build, build and push your image to a registry the servers can reach, then pass it via `-e`:
+
+```bash
+# Build and push your dev image
+podman build -t ghcr.io/youruser/btrfs-nfs-csi:dev .
+podman push ghcr.io/youruser/btrfs-nfs-csi:dev
+
+# Deploy with custom image for both agent and driver
+ansible-playbook simple.yaml \
+  -e agent_image=ghcr.io/youruser/btrfs-nfs-csi:dev \
+  -e driver_image=ghcr.io/youruser/btrfs-nfs-csi:dev
+```
+
+`agent_image` overrides the container image on the agent host (via quickstart script).
+`driver_image` overrides the CSI controller + node driver image in the Kubernetes deployment.
+Both are optional and independent - you can override just one if needed.
 
 ### Shared defaults
 

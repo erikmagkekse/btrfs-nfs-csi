@@ -73,6 +73,14 @@
     dest: /tmp/btrfs-nfs-csi-tmp/csi-setup.yaml
     mode: "0644"
 
+- name: Override CSI driver image
+  delegate_to: k8s
+  ansible.builtin.replace:
+    path: /tmp/btrfs-nfs-csi-tmp/csi-setup.yaml
+    regexp: 'image: ghcr\.io/erikmagkekse/btrfs-nfs-csi:.*'
+    replace: "image: {{ driver_image }}"
+  when: driver_image is defined
+
 - name: Apply CSI driver
   delegate_to: k8s
   ansible.builtin.command:
