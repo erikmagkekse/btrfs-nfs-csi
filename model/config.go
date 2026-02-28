@@ -48,6 +48,7 @@ type AgentConfig struct {
 	UsageInterval        time.Duration `env:"AGENT_FEATURE_QUOTA_UPDATE_INTERVAL" envDefault:"1m"`
 	NFSExporter          string        `env:"AGENT_NFS_EXPORTER" envDefault:"kernel"`
 	ExportfsBin          string        `env:"AGENT_EXPORTFS_BIN" envDefault:"exportfs"`
+	BtrfsBin             string        `env:"AGENT_BTRFS_BIN" envDefault:"btrfs"`
 	NFSReconcileInterval time.Duration `env:"AGENT_NFS_RECONCILE_INTERVAL" envDefault:"10m"`
 	DashboardRefresh     int           `env:"AGENT_DASHBOARD_REFRESH_SECONDS" envDefault:"5"`
 	DefaultDirMode       string        `env:"AGENT_DEFAULT_DIR_MODE" envDefault:"0700"`

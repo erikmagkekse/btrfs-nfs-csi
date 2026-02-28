@@ -33,7 +33,7 @@ type Storage struct {
 	defaultDataMode string
 }
 
-func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode string) *Storage {
+func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode, btrfsBin string) *Storage {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -52,7 +52,7 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	if !btrfs.IsBtrfs(basePath) {
 		log.Fatal().Str("path", basePath).Msg("base path is not on a btrfs filesystem")
 	}
-	mgr := btrfs.NewManager()
+	mgr := btrfs.NewManager(btrfsBin)
 	if !mgr.IsAvailable(ctx) {
 		log.Fatal().Msg("btrfs tools not found - is btrfs-progs installed?")
 	}

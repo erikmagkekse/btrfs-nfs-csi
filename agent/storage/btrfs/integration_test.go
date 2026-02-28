@@ -71,7 +71,7 @@ func setupLoopBtrfs(t *testing.T) string {
 
 func TestIntegrationSubvolumeCreateDelete(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 
 	subPath := filepath.Join(mnt, "testvol")
@@ -93,7 +93,7 @@ func TestIntegrationSubvolumeCreateDelete(t *testing.T) {
 
 func TestIntegrationSnapshot(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 
 	src := filepath.Join(mnt, "srcvol")
@@ -121,7 +121,7 @@ func TestIntegrationSnapshot(t *testing.T) {
 
 func TestIntegrationQgroupLimit(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 
 	subPath := filepath.Join(mnt, "quotavol")
@@ -157,7 +157,7 @@ func TestIntegrationQgroupLimit(t *testing.T) {
 
 func TestIntegrationQgroupUsageEx(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 
 	subPath := filepath.Join(mnt, "usagevol")
@@ -191,7 +191,7 @@ func TestIntegrationQgroupUsageEx(t *testing.T) {
 
 func TestIntegrationSubvolumeList(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 
 	vol1 := filepath.Join(mnt, "listvol1")
@@ -224,7 +224,7 @@ func TestIntegrationSubvolumeList(t *testing.T) {
 
 func TestIntegrationSetCompression(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 	cmd := &utils.ShellRunner{}
 
@@ -249,7 +249,7 @@ func TestIntegrationSetCompression(t *testing.T) {
 // not sure how useful they are but who knows :D
 func TestIntegrationConcurrentCreate(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 
 	errs := make(chan error, 31)
@@ -276,7 +276,7 @@ func TestIntegrationConcurrentCreate(t *testing.T) {
 
 func TestIntegrationConcurrentDelete(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 
 	// create 31 subvolumes sequentially
@@ -312,7 +312,7 @@ func TestIntegrationConcurrentDelete(t *testing.T) {
 
 func TestIntegrationConcurrentSnapshot(t *testing.T) {
 	mnt := setupLoopBtrfs(t)
-	mgr := NewManager()
+	mgr := NewManager("btrfs")
 	ctx := context.Background()
 
 	src := filepath.Join(mnt, "srcvol")
