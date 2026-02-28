@@ -68,6 +68,40 @@ func unixMode(m os.FileMode) uint64 {
 	return mode
 }
 
+// --- File mode ---
+
+// fileMode converts a traditional Unix octal mode (e.g. 0o2750) to an os.FileMode.
+// Go's os.FileMode uses its own bit layout for setuid/setgid/sticky, so passing
+// a raw Unix octal value like os.FileMode(0o2770) silently drops the special bits.
+// See https://pkg.go.dev/os#FileMode and https://github.com/golang/go/issues/44575.
+func fileMode(unixMode uint64) os.FileMode {
+	m := os.FileMode(unixMode & 0o777)
+	if unixMode&0o4000 != 0 {
+		m |= os.ModeSetuid
+	}
+	if unixMode&0o2000 != 0 {
+		m |= os.ModeSetgid
+	}
+	if unixMode&0o1000 != 0 {
+		m |= os.ModeSticky
+	}
+	return m
+}
+
+func unixMode(m os.FileMode) uint64 {
+	mode := uint64(m.Perm())
+	if m&os.ModeSetuid != 0 {
+		mode |= 0o4000
+	}
+	if m&os.ModeSetgid != 0 {
+		mode |= 0o2000
+	}
+	if m&os.ModeSticky != 0 {
+		mode |= 0o1000
+	}
+	return mode
+}
+
 // --- Metadata IO ---
 
 // ghetto mutex pool - because sync.Map told us "i'll hold your locks forever babe"
