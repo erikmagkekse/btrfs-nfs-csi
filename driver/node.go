@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -31,8 +31,8 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	defer unlock()
 
 	vc := req.VolumeContext
-	nfsServer := vc[model.ParamNFSServer]
-	nfsSharePath := vc[model.ParamNFSSharePath]
+	nfsServer := vc[config.ParamNFSServer]
+	nfsSharePath := vc[config.ParamNFSSharePath]
 	if nfsServer == "" || nfsSharePath == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing nfsServer or nfsSharePath in volume context")
 	}
@@ -52,7 +52,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	args := []string{"-t", "nfs"}
 	mountOpts := "rw"
-	if opts := vc[model.ParamNFSMountOptions]; opts != "" {
+	if opts := vc[config.ParamNFSMountOptions]; opts != "" {
 		mountOpts = mountOpts + "," + opts
 	}
 	args = append(args, "-o", mountOpts)
@@ -109,7 +109,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	mountCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	dataDir := req.StagingTargetPath + "/" + model.DataDir
+	dataDir := req.StagingTargetPath + "/" + config.DataDir
 	start := time.Now()
 	out, err := exec.CommandContext(mountCtx, "mount", "--bind", dataDir, req.TargetPath).CombinedOutput()
 	mountDuration.WithLabelValues("bind_mount").Observe(time.Since(start).Seconds())

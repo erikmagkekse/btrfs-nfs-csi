@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -73,11 +74,11 @@ func (s *Storage) reconcileExports(ctx context.Context, basePath string, tenant 
 	}
 
 	for _, e := range entries {
-		if !e.IsDir() || e.Name() == SnapshotsDir {
+		if !e.IsDir() || e.Name() == config.SnapshotsDir {
 			continue
 		}
 		volDir := filepath.Join(basePath, e.Name())
-		metaPath := filepath.Join(volDir, MetadataFile)
+		metaPath := filepath.Join(volDir, config.MetadataFile)
 
 		var meta VolumeMetadata
 		if err := ReadMetadata(metaPath, &meta); err != nil {

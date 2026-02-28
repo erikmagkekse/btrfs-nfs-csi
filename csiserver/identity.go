@@ -3,7 +3,7 @@ package csiserver
 import (
 	"context"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -16,7 +16,7 @@ type IdentityServer struct {
 
 func (s *IdentityServer) GetPluginInfo(_ context.Context, _ *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	return &csi.GetPluginInfoResponse{
-		Name:          model.DriverName,
+		Name:          config.DriverName,
 		VendorVersion: s.Version,
 	}, nil
 }

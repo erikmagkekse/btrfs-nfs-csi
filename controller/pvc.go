@@ -7,7 +7,7 @@ import (
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/k8s"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"github.com/rs/zerolog/log"
 )
@@ -22,15 +22,15 @@ type volumeParams struct {
 
 func resolveVolumeParams(ctx context.Context, params map[string]string) volumeParams {
 	vp := volumeParams{
-		NoCOW:       params[model.ParamNoCOW],
-		Compression: params[model.ParamCompression],
-		UID:         params[model.ParamUID],
-		GID:         params[model.ParamGID],
-		Mode:        params[model.ParamMode],
+		NoCOW:       params[config.ParamNoCOW],
+		Compression: params[config.ParamCompression],
+		UID:         params[config.ParamUID],
+		GID:         params[config.ParamGID],
+		Mode:        params[config.ParamMode],
 	}
 
-	pvcName := params[model.PvcNameKey]
-	pvcNamespace := params[model.PvcNamespaceKey]
+	pvcName := params[config.PvcNameKey]
+	pvcNamespace := params[config.PvcNamespaceKey]
 	if pvcName == "" || pvcNamespace == "" {
 		return vp
 	}
@@ -49,19 +49,19 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 	ctrlK8sOpsTotal.WithLabelValues("success").Inc()
 
 	annos := obj.Metadata.Annotations
-	if v, ok := annos[model.AnnoPrefix+model.ParamNoCOW]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamNoCOW]; ok {
 		vp.NoCOW = v
 	}
-	if v, ok := annos[model.AnnoPrefix+model.ParamCompression]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamCompression]; ok {
 		vp.Compression = v
 	}
-	if v, ok := annos[model.AnnoPrefix+model.ParamUID]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamUID]; ok {
 		vp.UID = v
 	}
-	if v, ok := annos[model.AnnoPrefix+model.ParamGID]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamGID]; ok {
 		vp.GID = v
 	}
-	if v, ok := annos[model.AnnoPrefix+model.ParamMode]; ok {
+	if v, ok := annos[config.AnnoPrefix+config.ParamMode]; ok {
 		vp.Mode = v
 	}
 

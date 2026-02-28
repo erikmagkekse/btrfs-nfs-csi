@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -44,11 +44,11 @@ const (
 )
 
 func makeVolumeID(storageClass, name string) string {
-	return storageClass + model.VolumeIDSep + name
+	return storageClass + config.VolumeIDSep + name
 }
 
 func parseVolumeID(id string) (storageClass, name string, err error) {
-	parts := strings.SplitN(id, model.VolumeIDSep, 2)
+	parts := strings.SplitN(id, config.VolumeIDSep, 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", "", fmt.Errorf("invalid volume ID: %s", id)
 	}
@@ -56,9 +56,9 @@ func parseVolumeID(id string) (storageClass, name string, err error) {
 }
 
 func parseNodeIP(nodeID string) (string, error) {
-	parts := strings.SplitN(nodeID, model.NodeIDSep, 2)
+	parts := strings.SplitN(nodeID, config.NodeIDSep, 2)
 	if len(parts) != 2 || parts[1] == "" {
-		return "", fmt.Errorf("node ID %q missing IP (expected hostname%sip)", nodeID, model.NodeIDSep)
+		return "", fmt.Errorf("node ID %q missing IP (expected hostname%sip)", nodeID, config.NodeIDSep)
 	}
 	return parts[1], nil
 }

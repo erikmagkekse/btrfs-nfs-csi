@@ -9,21 +9,21 @@ import (
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
 
 type Agent struct {
-	cfg     *model.AgentConfig
+	cfg     *config.AgentConfig
 	version string
 	commit  string
 	echo    *echo.Echo
 	ready   bool
 }
 
-func NewAgent(cfg *model.AgentConfig, version, commit string) *Agent {
+func NewAgent(cfg *config.AgentConfig, version, commit string) *Agent {
 	return &Agent{cfg: cfg, version: version, commit: commit}
 }
 
@@ -62,7 +62,10 @@ func (a *Agent) Start(ctx context.Context) {
 	}
 
 	// storage layer + handler
-	store := storage.New(a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames, a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin)
+	store := storage.New(
+		a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames,
+		a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin,
+	)
 	h := &v1.Handler{Store: store}
 
 	// v1 API with auth

@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 )
@@ -58,6 +58,6 @@ func (s *NodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabi
 
 func (s *NodeServer) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	return &csi.NodeGetInfoResponse{
-		NodeId: s.nodeID + model.NodeIDSep + s.nodeIP,
+		NodeId: s.nodeID + config.NodeIDSep + s.nodeIP,
 	}, nil
 }

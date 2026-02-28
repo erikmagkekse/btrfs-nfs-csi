@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -26,7 +26,7 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 
 	// Try reading agent-written metadata from the staging path
 	if req.StagingTargetPath != "" {
-		metaPath := req.StagingTargetPath + "/" + model.MetadataFile
+		metaPath := req.StagingTargetPath + "/" + config.MetadataFile
 		if data, err := os.ReadFile(metaPath); err == nil {
 			var vs volumeStats
 			if err := json.Unmarshal(data, &vs); err == nil && vs.QuotaBytes > 0 {
@@ -50,5 +50,5 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 
 	// No statfs fallback - returns NFS-level data which doesn't reflect per-volume quota.
 	// Better to return an error so kubelet retries than to report misleading capacity.
-	return nil, status.Errorf(codes.Unavailable, "%s not available, agent may be down", model.MetadataFile)
+	return nil, status.Errorf(codes.Unavailable, "%s not available, agent may be down", config.MetadataFile)
 }

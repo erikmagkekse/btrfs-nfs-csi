@@ -6,7 +6,7 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/model"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -56,7 +56,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	params := req.Parameters
-	nfsServer := params[model.ParamNFSServer]
+	nfsServer := params[config.ParamNFSServer]
 	agentURL := params[paramAgentURL]
 	if nfsServer == "" || agentURL == "" {
 		return nil, status.Error(codes.InvalidArgument, "nfsServer and agentURL parameters required")
@@ -80,17 +80,17 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	volCtx := map[string]string{
-		model.ParamNFSServer: nfsServer,
+		config.ParamNFSServer: nfsServer,
 		paramAgentURL:        agentURL,
 	}
-	if opts := params[model.ParamNFSMountOptions]; opts != "" {
-		volCtx[model.ParamNFSMountOptions] = opts
+	if opts := params[config.ParamNFSMountOptions]; opts != "" {
+		volCtx[config.ParamNFSMountOptions] = opts
 	}
-	if n := params[model.PvcNameKey]; n != "" {
-		volCtx[model.PvcNameKey] = n
+	if n := params[config.PvcNameKey]; n != "" {
+		volCtx[config.PvcNameKey] = n
 	}
-	if ns := params[model.PvcNamespaceKey]; ns != "" {
-		volCtx[model.PvcNamespaceKey] = ns
+	if ns := params[config.PvcNamespaceKey]; ns != "" {
+		volCtx[config.PvcNamespaceKey] = ns
 	}
 
 	vp := resolveVolumeParams(ctx, params)
@@ -125,7 +125,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		} else {
 			agentOpsTotal.WithLabelValues("create_clone", "success", sc).Inc()
 		}
-		volCtx[model.ParamNFSSharePath] = cloneResp.Path
+		volCtx[config.ParamNFSSharePath] = cloneResp.Path
 
 		log.Info().Str("volume", req.Name).Str("snapshot", snapName).Msg("volume cloned from snapshot")
 
@@ -173,7 +173,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	} else {
 		agentOpsTotal.WithLabelValues("create_volume", "success", sc).Inc()
 	}
-	volCtx[model.ParamNFSSharePath] = volResp.Path
+	volCtx[config.ParamNFSSharePath] = volResp.Path
 
 	log.Info().Str("volume", req.Name).Uint64("size", sizeBytes).Msg("volume created")
 

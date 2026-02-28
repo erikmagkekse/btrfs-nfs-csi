@@ -1,6 +1,4 @@
-// In general this package should get renamed to config or so
-
-package model
+package config
 
 import "time"
 
@@ -32,7 +30,6 @@ const (
 
 // Storage engine settings
 const (
-	// TODO: migrate agent/storage/storage.go constants to use these
 	DataDir      = "data"
 	MetadataFile = "metadata.json"
 	SnapshotsDir = "snapshots"
