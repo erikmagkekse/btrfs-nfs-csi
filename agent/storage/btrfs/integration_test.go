@@ -11,335 +11,243 @@ import (
 	"testing"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
+	"github.com/stretchr/testify/suite"
 )
 
-// setupLoopBtrfs creates a loop-mounted btrfs filesystem with quotas enabled.
-// Requires root and btrfs-progs.
-func setupLoopBtrfs(t *testing.T) string {
-	t.Helper()
+type BtrfsIntegrationSuite struct {
+	suite.Suite
+	mnt     string
+	mgr     *Manager
+	cmd     *utils.ShellRunner
+	ctx     context.Context
+	loopDev string
+}
 
-	ctx := context.Background()
-	cmd := &utils.ShellRunner{}
+func TestBtrfsIntegration(t *testing.T) {
+	suite.Run(t, new(BtrfsIntegrationSuite))
+}
+
+func (s *BtrfsIntegrationSuite) SetupSuite() {
+	t := s.T()
+
+	s.ctx = context.Background()
+	s.cmd = &utils.ShellRunner{}
 
 	tmpDir := t.TempDir()
 	imgFile := filepath.Join(tmpDir, "btrfs.img")
-	mountDir := filepath.Join(tmpDir, "mnt")
+	s.mnt = filepath.Join(tmpDir, "mnt")
 
-	if err := os.MkdirAll(mountDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
+	err := os.MkdirAll(s.mnt, 0o755)
+	s.Require().NoError(err, "mkdir")
 
-	// sparse file
-	if _, err := cmd.Run(ctx, "fallocate", "-l", "256M", imgFile); err != nil {
-		t.Fatalf("fallocate: %v", err)
-	}
+	_, err = s.cmd.Run(s.ctx, "fallocate", "-l", "1G", imgFile)
+	s.Require().NoError(err, "fallocate")
 
-	// loop device
-	loopOut, err := cmd.Run(ctx, "losetup", "--find", "--show", imgFile)
+	loopOut, err := s.cmd.Run(s.ctx, "losetup", "--find", "--show", imgFile)
+	s.Require().NoError(err, "losetup")
+	s.loopDev = strings.TrimSpace(loopOut)
+
+	_, err = s.cmd.Run(s.ctx, "mkfs.btrfs", "-f", s.loopDev)
 	if err != nil {
-		t.Fatalf("losetup: %v", err)
-	}
-	loopDev := strings.TrimSpace(loopOut)
-
-	// mkfs.btrfs
-	if _, err := cmd.Run(ctx, "mkfs.btrfs", "-f", loopDev); err != nil {
-		// cleanup loop on failure
-		_, _ = cmd.Run(ctx, "losetup", "-d", loopDev)
-		t.Fatalf("mkfs.btrfs: %v", err)
+		_, _ = s.cmd.Run(s.ctx, "losetup", "-d", s.loopDev)
+		s.Require().NoError(err, "mkfs.btrfs")
 	}
 
-	// mount
-	if _, err := cmd.Run(ctx, "mount", loopDev, mountDir); err != nil {
-		_, _ = cmd.Run(ctx, "losetup", "-d", loopDev)
-		t.Fatalf("mount: %v", err)
+	_, err = s.cmd.Run(s.ctx, "mount", s.loopDev, s.mnt)
+	if err != nil {
+		_, _ = s.cmd.Run(s.ctx, "losetup", "-d", s.loopDev)
+		s.Require().NoError(err, "mount")
 	}
 
-	// enable quotas
-	if _, err := cmd.Run(ctx, "btrfs", "quota", "enable", mountDir); err != nil {
-		_, _ = cmd.Run(ctx, "umount", mountDir)
-		_, _ = cmd.Run(ctx, "losetup", "-d", loopDev)
-		t.Fatalf("quota enable: %v", err)
+	_, err = s.cmd.Run(s.ctx, "btrfs", "quota", "enable", s.mnt)
+	if err != nil {
+		_, _ = s.cmd.Run(s.ctx, "umount", s.mnt)
+		_, _ = s.cmd.Run(s.ctx, "losetup", "-d", s.loopDev)
+		s.Require().NoError(err, "quota enable")
 	}
 
-	t.Cleanup(func() {
-		_, _ = cmd.Run(ctx, "umount", mountDir)
-		_, _ = cmd.Run(ctx, "losetup", "-d", loopDev)
-	})
-
-	return mountDir
+	s.mgr = NewManager("btrfs")
 }
 
-func TestIntegrationSubvolumeCreateDelete(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
-
-	subPath := filepath.Join(mnt, "testvol")
-
-	if err := mgr.SubvolumeCreate(ctx, subPath); err != nil {
-		t.Fatalf("SubvolumeCreate: %v", err)
-	}
-	if !mgr.SubvolumeExists(ctx, subPath) {
-		t.Fatal("SubvolumeExists should return true after create")
-	}
-
-	if err := mgr.SubvolumeDelete(ctx, subPath); err != nil {
-		t.Fatalf("SubvolumeDelete: %v", err)
-	}
-	if mgr.SubvolumeExists(ctx, subPath) {
-		t.Fatal("SubvolumeExists should return false after delete")
-	}
+func (s *BtrfsIntegrationSuite) TearDownSuite() {
+	_, _ = s.cmd.Run(s.ctx, "umount", s.mnt)
+	_, _ = s.cmd.Run(s.ctx, "losetup", "-d", s.loopDev)
 }
 
-func TestIntegrationSnapshot(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
+func (s *BtrfsIntegrationSuite) TestSubvolumeCreateDelete() {
+	subPath := filepath.Join(s.mnt, "testvol")
 
-	src := filepath.Join(mnt, "srcvol")
-	rwSnap := filepath.Join(mnt, "rwsnap")
-	roSnap := filepath.Join(mnt, "rosnap")
+	err := s.mgr.SubvolumeCreate(s.ctx, subPath)
+	s.Require().NoError(err, "SubvolumeCreate")
+	s.Assert().True(s.mgr.SubvolumeExists(s.ctx, subPath), "should exist after create")
 
-	if err := mgr.SubvolumeCreate(ctx, src); err != nil {
-		t.Fatalf("SubvolumeCreate: %v", err)
-	}
-
-	if err := mgr.SubvolumeSnapshot(ctx, src, rwSnap, false); err != nil {
-		t.Fatalf("SubvolumeSnapshot(rw): %v", err)
-	}
-	if !mgr.SubvolumeExists(ctx, rwSnap) {
-		t.Fatal("rw snapshot should exist")
-	}
-
-	if err := mgr.SubvolumeSnapshot(ctx, src, roSnap, true); err != nil {
-		t.Fatalf("SubvolumeSnapshot(ro): %v", err)
-	}
-	if !mgr.SubvolumeExists(ctx, roSnap) {
-		t.Fatal("ro snapshot should exist")
-	}
+	err = s.mgr.SubvolumeDelete(s.ctx, subPath)
+	s.Require().NoError(err, "SubvolumeDelete")
+	s.Assert().False(s.mgr.SubvolumeExists(s.ctx, subPath), "should not exist after delete")
 }
 
-func TestIntegrationQgroupLimit(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
+func (s *BtrfsIntegrationSuite) TestSnapshot() {
+	src := filepath.Join(s.mnt, "srcvol-snap")
+	rwSnap := filepath.Join(s.mnt, "rwsnap")
+	roSnap := filepath.Join(s.mnt, "rosnap")
 
-	subPath := filepath.Join(mnt, "quotavol")
-	if err := mgr.SubvolumeCreate(ctx, subPath); err != nil {
-		t.Fatalf("SubvolumeCreate: %v", err)
-	}
+	err := s.mgr.SubvolumeCreate(s.ctx, src)
+	s.Require().NoError(err, "SubvolumeCreate")
 
-	// set 10MB limit
-	if err := mgr.QgroupLimit(ctx, subPath, 10*1024*1024); err != nil {
-		t.Fatalf("QgroupLimit: %v", err)
-	}
+	err = s.mgr.SubvolumeSnapshot(s.ctx, src, rwSnap, false)
+	s.Require().NoError(err, "SubvolumeSnapshot(rw)")
+	s.Assert().True(s.mgr.SubvolumeExists(s.ctx, rwSnap), "rw snapshot should exist")
 
-	// write some data
+	err = s.mgr.SubvolumeSnapshot(s.ctx, src, roSnap, true)
+	s.Require().NoError(err, "SubvolumeSnapshot(ro)")
+	s.Assert().True(s.mgr.SubvolumeExists(s.ctx, roSnap), "ro snapshot should exist")
+}
+
+func (s *BtrfsIntegrationSuite) TestQgroupLimit() {
+	subPath := filepath.Join(s.mnt, "quotavol")
+	err := s.mgr.SubvolumeCreate(s.ctx, subPath)
+	s.Require().NoError(err, "SubvolumeCreate")
+
+	err = s.mgr.QgroupLimit(s.ctx, subPath, 10*1024*1024)
+	s.Require().NoError(err, "QgroupLimit")
+
 	data := make([]byte, 64*1024)
-	if err := os.WriteFile(filepath.Join(subPath, "testfile"), data, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
+	err = os.WriteFile(filepath.Join(subPath, "testfile"), data, 0o644)
+	s.Require().NoError(err, "WriteFile")
 
-	// sync filesystem so qgroup accounting is up to date
-	cmd := &utils.ShellRunner{}
-	if _, err := cmd.Run(ctx, "sync"); err != nil {
-		t.Fatalf("sync: %v", err)
-	}
+	_, err = s.cmd.Run(s.ctx, "sync")
+	s.Require().NoError(err, "sync")
 
-	used, err := mgr.QgroupUsage(ctx, subPath)
-	if err != nil {
-		t.Fatalf("QgroupUsage: %v", err)
-	}
-	if used == 0 {
-		t.Error("QgroupUsage should be > 0 after writing data")
-	}
+	used, err := s.mgr.QgroupUsage(s.ctx, subPath)
+	s.Require().NoError(err, "QgroupUsage")
+	s.Assert().NotZero(used, "QgroupUsage should be > 0 after writing data")
 }
 
-func TestIntegrationQgroupUsageEx(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
+func (s *BtrfsIntegrationSuite) TestQgroupUsageEx() {
+	subPath := filepath.Join(s.mnt, "usagevol")
+	err := s.mgr.SubvolumeCreate(s.ctx, subPath)
+	s.Require().NoError(err, "SubvolumeCreate")
 
-	subPath := filepath.Join(mnt, "usagevol")
-	if err := mgr.SubvolumeCreate(ctx, subPath); err != nil {
-		t.Fatalf("SubvolumeCreate: %v", err)
-	}
-
-	// write data
 	data := make([]byte, 128*1024)
-	if err := os.WriteFile(filepath.Join(subPath, "testfile"), data, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
+	err = os.WriteFile(filepath.Join(subPath, "testfile"), data, 0o644)
+	s.Require().NoError(err, "WriteFile")
 
-	// sync filesystem so qgroup accounting is up to date
-	cmd := &utils.ShellRunner{}
-	if _, err := cmd.Run(ctx, "sync"); err != nil {
-		t.Fatalf("sync: %v", err)
-	}
+	_, err = s.cmd.Run(s.ctx, "sync")
+	s.Require().NoError(err, "sync")
 
-	info, err := mgr.QgroupUsageEx(ctx, subPath)
-	if err != nil {
-		t.Fatalf("QgroupUsageEx: %v", err)
-	}
-	if info.Referenced == 0 {
-		t.Error("Referenced should be > 0")
-	}
-	if info.Exclusive == 0 {
-		t.Error("Exclusive should be > 0")
-	}
+	info, err := s.mgr.QgroupUsageEx(s.ctx, subPath)
+	s.Require().NoError(err, "QgroupUsageEx")
+	s.Assert().NotZero(info.Referenced, "Referenced should be > 0")
+	s.Assert().NotZero(info.Exclusive, "Exclusive should be > 0")
 }
 
-func TestIntegrationSubvolumeList(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
+func (s *BtrfsIntegrationSuite) TestSubvolumeList() {
+	vol1 := filepath.Join(s.mnt, "listvol1")
+	vol2 := filepath.Join(s.mnt, "listvol2")
 
-	vol1 := filepath.Join(mnt, "listvol1")
-	vol2 := filepath.Join(mnt, "listvol2")
+	err := s.mgr.SubvolumeCreate(s.ctx, vol1)
+	s.Require().NoError(err, "SubvolumeCreate(vol1)")
+	err = s.mgr.SubvolumeCreate(s.ctx, vol2)
+	s.Require().NoError(err, "SubvolumeCreate(vol2)")
 
-	if err := mgr.SubvolumeCreate(ctx, vol1); err != nil {
-		t.Fatalf("SubvolumeCreate(vol1): %v", err)
-	}
-	if err := mgr.SubvolumeCreate(ctx, vol2); err != nil {
-		t.Fatalf("SubvolumeCreate(vol2): %v", err)
-	}
-
-	subs, err := mgr.SubvolumeList(ctx, mnt)
-	if err != nil {
-		t.Fatalf("SubvolumeList: %v", err)
-	}
-
-	if len(subs) != 2 {
-		t.Fatalf("expected 2 subvolumes, got %d", len(subs))
-	}
+	subs, err := s.mgr.SubvolumeList(s.ctx, s.mnt)
+	s.Require().NoError(err, "SubvolumeList")
 
 	paths := make(map[string]bool)
-	for _, s := range subs {
-		paths[s.Path] = true
+	for _, sub := range subs {
+		paths[sub.Path] = true
 	}
-	if !paths["listvol1"] && !paths["listvol2"] {
-		t.Errorf("unexpected paths: %v", subs)
-	}
+	s.Assert().True(paths["listvol1"], "listvol1 should be in list")
+	s.Assert().True(paths["listvol2"], "listvol2 should be in list")
 }
 
-func TestIntegrationSetCompression(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
-	cmd := &utils.ShellRunner{}
+func (s *BtrfsIntegrationSuite) TestSetCompression() {
+	subPath := filepath.Join(s.mnt, "compvol")
+	err := s.mgr.SubvolumeCreate(s.ctx, subPath)
+	s.Require().NoError(err, "SubvolumeCreate")
 
-	subPath := filepath.Join(mnt, "compvol")
-	if err := mgr.SubvolumeCreate(ctx, subPath); err != nil {
-		t.Fatalf("SubvolumeCreate: %v", err)
-	}
+	err = s.mgr.SetCompression(s.ctx, subPath, "zstd")
+	s.Require().NoError(err, "SetCompression")
 
-	if err := mgr.SetCompression(ctx, subPath, "zstd"); err != nil {
-		t.Fatalf("SetCompression: %v", err)
-	}
-
-	out, err := cmd.Run(ctx, "btrfs", "property", "get", subPath, "compression")
-	if err != nil {
-		t.Fatalf("property get: %v", err)
-	}
-	if !strings.Contains(out, "zstd") {
-		t.Errorf("expected compression=zstd, got: %s", strings.TrimSpace(out))
-	}
+	out, err := s.cmd.Run(s.ctx, "btrfs", "property", "get", subPath, "compression")
+	s.Require().NoError(err, "property get")
+	s.Assert().Contains(out, "zstd")
 }
 
-// not sure how useful they are but who knows :D
-func TestIntegrationConcurrentCreate(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
+func (s *BtrfsIntegrationSuite) TestConcurrentCreate() {
+	errs := make(chan error, 31)
+	for i := range 31 {
+		go func() {
+			name := fmt.Sprintf("cc-vol-%02d", i)
+			errs <- s.mgr.SubvolumeCreate(s.ctx, filepath.Join(s.mnt, name))
+		}()
+	}
+	for range 31 {
+		s.Assert().NoError(<-errs, "SubvolumeCreate")
+	}
+
+	subs, err := s.mgr.SubvolumeList(s.ctx, s.mnt)
+	s.Require().NoError(err, "SubvolumeList")
+
+	count := 0
+	for _, sub := range subs {
+		if strings.HasPrefix(sub.Path, "cc-vol-") {
+			count++
+		}
+	}
+	s.Assert().Equal(31, count, "expected 31 cc-vol-* subvolumes")
+}
+
+func (s *BtrfsIntegrationSuite) TestConcurrentDelete() {
+	for i := range 31 {
+		name := fmt.Sprintf("cd-vol-%02d", i)
+		err := s.mgr.SubvolumeCreate(s.ctx, filepath.Join(s.mnt, name))
+		s.Require().NoError(err, "SubvolumeCreate(%s)", name)
+	}
 
 	errs := make(chan error, 31)
 	for i := range 31 {
 		go func() {
-			name := fmt.Sprintf("vol-%02d", i)
-			errs <- mgr.SubvolumeCreate(ctx, filepath.Join(mnt, name))
+			name := fmt.Sprintf("cd-vol-%02d", i)
+			errs <- s.mgr.SubvolumeDelete(s.ctx, filepath.Join(s.mnt, name))
 		}()
 	}
 	for range 31 {
-		if err := <-errs; err != nil {
-			t.Errorf("SubvolumeCreate: %v", err)
-		}
+		s.Assert().NoError(<-errs, "SubvolumeDelete")
 	}
 
-	subs, err := mgr.SubvolumeList(ctx, mnt)
-	if err != nil {
-		t.Fatalf("SubvolumeList: %v", err)
-	}
-	if len(subs) != 31 {
-		t.Errorf("expected 31 subvolumes, got %d", len(subs))
+	subs, err := s.mgr.SubvolumeList(s.ctx, s.mnt)
+	s.Require().NoError(err, "SubvolumeList")
+
+	for _, sub := range subs {
+		s.Assert().False(strings.HasPrefix(sub.Path, "cd-vol-"), "cd-vol-* should be deleted, found %s", sub.Path)
 	}
 }
 
-func TestIntegrationConcurrentDelete(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
+func (s *BtrfsIntegrationSuite) TestConcurrentSnapshot() {
+	src := filepath.Join(s.mnt, "cs-srcvol")
+	err := s.mgr.SubvolumeCreate(s.ctx, src)
+	s.Require().NoError(err, "SubvolumeCreate")
 
-	// create 31 subvolumes sequentially
-	for i := range 31 {
-		name := fmt.Sprintf("vol-%02d", i)
-		if err := mgr.SubvolumeCreate(ctx, filepath.Join(mnt, name)); err != nil {
-			t.Fatalf("SubvolumeCreate(%s): %v", name, err)
-		}
-	}
-
-	// delete all concurrently
 	errs := make(chan error, 31)
 	for i := range 31 {
 		go func() {
-			name := fmt.Sprintf("vol-%02d", i)
-			errs <- mgr.SubvolumeDelete(ctx, filepath.Join(mnt, name))
+			name := fmt.Sprintf("cs-snap-%02d", i)
+			errs <- s.mgr.SubvolumeSnapshot(s.ctx, src, filepath.Join(s.mnt, name), true)
 		}()
 	}
 	for range 31 {
-		if err := <-errs; err != nil {
-			t.Errorf("SubvolumeDelete: %v", err)
+		s.Assert().NoError(<-errs, "SubvolumeSnapshot")
+	}
+
+	subs, err := s.mgr.SubvolumeList(s.ctx, s.mnt)
+	s.Require().NoError(err, "SubvolumeList")
+
+	snapCount := 0
+	for _, sub := range subs {
+		if strings.HasPrefix(sub.Path, "cs-snap-") {
+			snapCount++
 		}
 	}
-
-	subs, err := mgr.SubvolumeList(ctx, mnt)
-	if err != nil {
-		t.Fatalf("SubvolumeList: %v", err)
-	}
-	if len(subs) != 0 {
-		t.Errorf("expected 0 subvolumes, got %d", len(subs))
-	}
-}
-
-func TestIntegrationConcurrentSnapshot(t *testing.T) {
-	mnt := setupLoopBtrfs(t)
-	mgr := NewManager("btrfs")
-	ctx := context.Background()
-
-	src := filepath.Join(mnt, "srcvol")
-	if err := mgr.SubvolumeCreate(ctx, src); err != nil {
-		t.Fatalf("SubvolumeCreate: %v", err)
-	}
-
-	// 31 concurrent snapshots from same source
-	errs := make(chan error, 31)
-	for i := range 31 {
-		go func() {
-			name := fmt.Sprintf("snap-%02d", i)
-			errs <- mgr.SubvolumeSnapshot(ctx, src, filepath.Join(mnt, name), true)
-		}()
-	}
-	for range 31 {
-		if err := <-errs; err != nil {
-			t.Errorf("SubvolumeSnapshot: %v", err)
-		}
-	}
-
-	// +1 for srcvol itself
-	subs, err := mgr.SubvolumeList(ctx, mnt)
-	if err != nil {
-		t.Fatalf("SubvolumeList: %v", err)
-	}
-	if len(subs) != 32 {
-		t.Errorf("expected 32 subvolumes (1 src + 31 snaps), got %d", len(subs))
-	}
+	s.Assert().Equal(31, snapCount, "expected 31 cs-snap-* snapshots")
 }
