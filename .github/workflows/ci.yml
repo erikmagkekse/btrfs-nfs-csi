@@ -34,6 +34,10 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Format check
+        run: test -z "$(gofmt -l .)"
+
+      # This is also running go vet already
       - name: Lint
         uses: golangci/golangci-lint-action@v9
 
@@ -48,7 +52,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Test
-        run: go test ./...
+        run: go test -race ./...
 
   integration:
     runs-on: ubuntu-latest
@@ -60,11 +64,12 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install btrfs-progs
-        run: sudo apt-get update && sudo apt-get install -y btrfs-progs
+      # Hope this works
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y btrfs-progs nfs-kernel-server
 
       - name: Integration tests
-        run: sudo go test ./agent/storage/btrfs/... -tags integration -v -count=1
+        run: sudo go test -race ./... -tags integration -v -count=1
 
   build:
     runs-on: ubuntu-latest

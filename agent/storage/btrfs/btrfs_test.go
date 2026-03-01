@@ -10,6 +10,8 @@ import (
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
@@ -68,20 +70,10 @@ func TestQgroupUsageEx(t *testing.T) {
 		mgr := newTestManager(m)
 
 		info, err := mgr.QgroupUsageEx(context.Background(), "/mnt/data/vol1")
-		if err != nil {
-			t.Fatalf("QgroupUsageEx() error: %v", err)
-		}
-
-		if info.Referenced != 16384 {
-			t.Errorf("Referenced = %d, want 16384", info.Referenced)
-		}
-		if info.Exclusive != 8192 {
-			t.Errorf("Exclusive = %d, want 8192", info.Exclusive)
-		}
-
-		if len(m.Calls) != 2 {
-			t.Fatalf("expected 2 calls, got %d", len(m.Calls))
-		}
+		require.NoError(t, err)
+		assert.Equal(t, uint64(16384), info.Referenced)
+		assert.Equal(t, uint64(8192), info.Exclusive)
+		require.Len(t, m.Calls, 2)
 	})
 
 	t.Run("show error", func(t *testing.T) {
@@ -89,9 +81,7 @@ func TestQgroupUsageEx(t *testing.T) {
 		mgr := newTestManager(m)
 
 		_, err := mgr.QgroupUsageEx(context.Background(), "/mnt/data/vol1")
-		if err == nil {
-			t.Fatal("QgroupUsageEx() should return error when show fails")
-		}
+		require.Error(t, err)
 	})
 
 	t.Run("missing subvolume id", func(t *testing.T) {
@@ -99,12 +89,7 @@ func TestQgroupUsageEx(t *testing.T) {
 		mgr := newTestManager(m)
 
 		_, err := mgr.QgroupUsageEx(context.Background(), "/mnt/data/vol1")
-		if err == nil {
-			t.Fatal("QgroupUsageEx() should return error when subvolume ID missing")
-		}
-		if !strings.Contains(err.Error(), "subvolume ID not found") {
-			t.Errorf("unexpected error: %v", err)
-		}
+		assert.ErrorContains(t, err, "subvolume ID not found")
 	})
 
 	t.Run("qgroup show error", func(t *testing.T) {
@@ -119,9 +104,7 @@ func TestQgroupUsageEx(t *testing.T) {
 		mgr := newTestManager(m)
 
 		_, err := mgr.QgroupUsageEx(context.Background(), "/mnt/data/vol1")
-		if err == nil {
-			t.Fatal("QgroupUsageEx() should return error when qgroup show fails")
-		}
+		require.Error(t, err)
 	})
 
 	t.Run("qgroup not found", func(t *testing.T) {
@@ -137,12 +120,7 @@ func TestQgroupUsageEx(t *testing.T) {
 		mgr := newTestManager(m)
 
 		_, err := mgr.QgroupUsageEx(context.Background(), "/mnt/data/vol1")
-		if err == nil {
-			t.Fatal("QgroupUsageEx() should return error when qgroup not found")
-		}
-		if !strings.Contains(err.Error(), "qgroup 0/259 not found") {
-			t.Errorf("unexpected error: %v", err)
-		}
+		assert.ErrorContains(t, err, "qgroup 0/259 not found")
 	})
 }
 
@@ -161,12 +139,8 @@ func TestQgroupUsage(t *testing.T) {
 	mgr := newTestManager(m)
 
 	used, err := mgr.QgroupUsage(context.Background(), "/mnt/data/vol1")
-	if err != nil {
-		t.Fatalf("QgroupUsage() error: %v", err)
-	}
-	if used != 16384 {
-		t.Errorf("QgroupUsage() = %d, want 16384", used)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, uint64(16384), used)
 }
 
 func TestSubvolumeList(t *testing.T) {
@@ -185,19 +159,12 @@ func TestSubvolumeList(t *testing.T) {
 		mgr := newTestManager(m)
 
 		subs, err := mgr.SubvolumeList(context.Background(), "/mnt/data")
-		if err != nil {
-			t.Fatalf("SubvolumeList() error: %v", err)
-		}
-
-		if len(subs) != 3 {
-			t.Fatalf("expected 3 subvolumes, got %d", len(subs))
-		}
+		require.NoError(t, err)
+		require.Len(t, subs, 3)
 
 		want := []string{"vol1", "vol2", "nested/vol3"}
 		for i, s := range subs {
-			if s.Path != want[i] {
-				t.Errorf("subs[%d].Path = %q, want %q", i, s.Path, want[i])
-			}
+			assert.Equal(t, want[i], s.Path)
 		}
 	})
 
@@ -206,12 +173,8 @@ func TestSubvolumeList(t *testing.T) {
 		mgr := newTestManager(m)
 
 		subs, err := mgr.SubvolumeList(context.Background(), "/mnt/data")
-		if err != nil {
-			t.Fatalf("SubvolumeList() error: %v", err)
-		}
-		if len(subs) != 0 {
-			t.Errorf("expected 0 subvolumes, got %d", len(subs))
-		}
+		require.NoError(t, err)
+		assert.Empty(t, subs)
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -219,25 +182,19 @@ func TestSubvolumeList(t *testing.T) {
 		mgr := newTestManager(m)
 
 		_, err := mgr.SubvolumeList(context.Background(), "/mnt/data")
-		if err == nil {
-			t.Fatal("SubvolumeList() should return error")
-		}
+		require.Error(t, err)
 	})
 }
 
 func TestIsValidCompression(t *testing.T) {
 	valid := []string{"", "none", "zstd", "lzo", "zlib", "zstd:1", "zstd:15", "zlib:9"}
 	for _, s := range valid {
-		if !IsValidCompression(s) {
-			t.Errorf("IsValidCompression(%q) = false, want true", s)
-		}
+		assert.True(t, IsValidCompression(s), "IsValidCompression(%q) should be true", s)
 	}
 
 	invalid := []string{"doesnotexist", "zstd:0", "zstd:16", "zstd:420", "zstd:abc", "lz4", "gzip"}
 	for _, s := range invalid {
-		if IsValidCompression(s) {
-			t.Errorf("IsValidCompression(%q) = true, want false", s)
-		}
+		assert.False(t, IsValidCompression(s), "IsValidCompression(%q) should be false", s)
 	}
 }
 
@@ -246,23 +203,17 @@ func TestSetCompression(t *testing.T) {
 		m := &utils.MockRunner{Out: ""}
 		mgr := newTestManager(m)
 
-		if err := mgr.SetCompression(context.Background(), "/mnt/data/vol1", "zstd"); err != nil {
-			t.Fatalf("SetCompression() error: %v", err)
-		}
-		if len(m.Calls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(m.Calls))
-		}
+		err := mgr.SetCompression(context.Background(), "/mnt/data/vol1", "zstd")
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
 	})
 
 	t.Run("invalid rejected before exec", func(t *testing.T) {
 		m := &utils.MockRunner{Out: ""}
 		mgr := newTestManager(m)
 
-		if err := mgr.SetCompression(context.Background(), "/mnt/data/vol1", "zstd:420"); err == nil {
-			t.Fatal("SetCompression(zstd:420) should return an error")
-		}
-		if len(m.Calls) != 0 {
-			t.Error("should not call btrfs for invalid algorithm")
-		}
+		err := mgr.SetCompression(context.Background(), "/mnt/data/vol1", "zstd:420")
+		require.Error(t, err)
+		assert.Empty(t, m.Calls)
 	})
 }

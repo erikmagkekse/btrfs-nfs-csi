@@ -11,6 +11,8 @@ import (
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
@@ -27,38 +29,27 @@ func TestExport(t *testing.T) {
 		m := &utils.MockRunner{}
 		e := newTestExporter(m)
 
-		if err := e.Export(context.Background(), "/data/vol1", "10.0.0.1"); err != nil {
-			t.Fatalf("Export() error: %v", err)
-		}
-
-		if len(m.Calls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(m.Calls))
-		}
+		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
+		require.NoError(t, err, "Export()")
+		require.Len(t, m.Calls, 1)
 
 		args := strings.Join(m.Calls[0], " ")
-		if !strings.Contains(args, "-o") {
-			t.Error("expected -o flag in args")
-		}
-		if !strings.Contains(args, "10.0.0.1:/data/vol1") {
-			t.Errorf("expected client:path in args, got: %s", args)
-		}
+		assert.Contains(t, args, "-o")
+		assert.Contains(t, args, "10.0.0.1:/data/vol1")
 
 		fsid := crc32.ChecksumIEEE([]byte("/data/vol1")) & fsidMask
 		if fsid == 0 {
 			fsid = 1
 		}
-		if !strings.Contains(args, fmt.Sprintf("fsid=%d", fsid)) {
-			t.Errorf("expected fsid=%d in args, got: %s", fsid, args)
-		}
+		assert.Contains(t, args, fmt.Sprintf("fsid=%d", fsid))
 	})
 
 	t.Run("error", func(t *testing.T) {
 		m := &utils.MockRunner{Err: fmt.Errorf("permission denied")}
 		e := newTestExporter(m)
 
-		if err := e.Export(context.Background(), "/data/vol1", "10.0.0.1"); err == nil {
-			t.Fatal("Export() should return error")
-		}
+		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
+		require.Error(t, err)
 	})
 }
 
@@ -67,18 +58,13 @@ func TestUnexport(t *testing.T) {
 		m := &utils.MockRunner{}
 		e := newTestExporter(m)
 
-		if err := e.Unexport(context.Background(), "/data/vol1", "10.0.0.1"); err != nil {
-			t.Fatalf("Unexport() error: %v", err)
-		}
-
-		if len(m.Calls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(m.Calls))
-		}
+		err := e.Unexport(context.Background(), "/data/vol1", "10.0.0.1")
+		require.NoError(t, err, "Unexport()")
+		require.Len(t, m.Calls, 1)
 
 		args := strings.Join(m.Calls[0], " ")
-		if !strings.Contains(args, "-u") || !strings.Contains(args, "10.0.0.1:/data/vol1") {
-			t.Errorf("expected '-u 10.0.0.1:/data/vol1', got: %s", args)
-		}
+		assert.Contains(t, args, "-u")
+		assert.Contains(t, args, "10.0.0.1:/data/vol1")
 	})
 
 	t.Run("without client", func(t *testing.T) {
@@ -96,14 +82,10 @@ func TestUnexport(t *testing.T) {
 		}
 		e := newTestExporter(m)
 
-		if err := e.Unexport(context.Background(), "/data/vol1", ""); err != nil {
-			t.Fatalf("Unexport() error: %v", err)
-		}
-
+		err := e.Unexport(context.Background(), "/data/vol1", "")
+		require.NoError(t, err, "Unexport()")
 		// 1 ListExports call + 2 unexport calls
-		if len(m.Calls) != 3 {
-			t.Fatalf("expected 3 calls, got %d", len(m.Calls))
-		}
+		require.Len(t, m.Calls, 3)
 	})
 
 	t.Run("not found ignored", func(t *testing.T) {
@@ -113,9 +95,8 @@ func TestUnexport(t *testing.T) {
 		}
 		e := newTestExporter(m)
 
-		if err := e.Unexport(context.Background(), "/data/vol1", "10.0.0.1"); err != nil {
-			t.Errorf("Unexport() should ignore not-found, got: %v", err)
-		}
+		err := e.Unexport(context.Background(), "/data/vol1", "10.0.0.1")
+		assert.NoError(t, err, "Unexport() should ignore not-found")
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -125,9 +106,8 @@ func TestUnexport(t *testing.T) {
 		}
 		e := newTestExporter(m)
 
-		if err := e.Unexport(context.Background(), "/data/vol1", "10.0.0.1"); err == nil {
-			t.Fatal("Unexport() should return error when not a not-found error")
-		}
+		err := e.Unexport(context.Background(), "/data/vol1", "10.0.0.1")
+		require.Error(t, err)
 	})
 }
 
@@ -137,12 +117,8 @@ func TestListExports(t *testing.T) {
 		e := newTestExporter(m)
 
 		exports, err := e.ListExports(context.Background())
-		if err == nil {
-			t.Fatal("ListExports() should return error")
-		}
-		if exports != nil {
-			t.Errorf("ListExports() should return nil on error, got: %v", exports)
-		}
+		require.Error(t, err)
+		assert.Nil(t, exports)
 	})
 }
 
@@ -223,13 +199,9 @@ func TestParseExports(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseExports(tt.output)
-			if len(got) != len(tt.want) {
-				t.Fatalf("parseExports() returned %d exports, want %d", len(got), len(tt.want))
-			}
+			require.Len(t, got, len(tt.want))
 			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("export[%d] = %+v, want %+v", i, got[i], tt.want[i])
-				}
+				assert.Equal(t, tt.want[i], got[i], "export[%d]", i)
 			}
 		})
 	}
