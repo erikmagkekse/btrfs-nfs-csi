@@ -26,6 +26,10 @@ func NewManager(bin string) *Manager {
 	return &Manager{bin: bin, cmd: &utils.ShellRunner{}}
 }
 
+func NewManagerWithRunner(bin string, r utils.Runner) *Manager {
+	return &Manager{bin: bin, cmd: r}
+}
+
 func (m *Manager) SubvolumeCreate(ctx context.Context, path string) error {
 	return m.run(ctx, "subvolume", "create", path)
 }
