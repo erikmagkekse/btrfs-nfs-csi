@@ -1,13 +1,95 @@
 package storage
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// --- test utils for storage operations ---
+
+// testStorageWithRunner creates a Storage with a configurable MockRunner and MockExporter.
+// Sets defaultDataMode to "2770" (matching the default agent config).
+func testStorageWithRunner(t *testing.T, runner *utils.MockRunner, exporter *nfs.MockExporter) (*Storage, string) {
+	t.Helper()
+	base := t.TempDir()
+	tenant := "test"
+	tenantPath := filepath.Join(base, tenant)
+	require.NoError(t, os.MkdirAll(tenantPath, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tenantPath, config.SnapshotsDir), 0o755))
+
+	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
+	s := &Storage{
+		basePath:        base,
+		btrfs:           mgr,
+		exporter:        exporter,
+		tenants:         []string{tenant},
+		defaultDirMode:  0o755,
+		defaultDataMode: "2770",
+	}
+	return s, tenantPath
+}
+
+// newTestStorage creates a Storage with fresh MockRunner and MockExporter.
+// Returns all four components for assertions.
+func newTestStorage(t *testing.T) (*Storage, string, *utils.MockRunner, *nfs.MockExporter) {
+	t.Helper()
+	runner := &utils.MockRunner{}
+	exporter := &nfs.MockExporter{}
+	s, bp := testStorageWithRunner(t, runner, exporter)
+	return s, bp, runner, exporter
+}
+
+func writeSnapshotMetadata(t *testing.T, snapDir string, meta SnapshotMetadata) {
+	t.Helper()
+	data, err := json.MarshalIndent(meta, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(snapDir, config.MetadataFile), data, 0o644))
+}
+
+func requireStorageError(t *testing.T, err error, code string) {
+	t.Helper()
+	require.Error(t, err)
+	var se *StorageError
+	require.True(t, errors.As(err, &se), "expected *StorageError, got %T: %v", err, err)
+	assert.Equal(t, code, se.Code)
+}
+
+// containsCall returns true if calls contains a call matching args exactly.
+func containsCall(calls [][]string, args ...string) bool {
+	for _, c := range calls {
+		if slices.Equal(c, args) {
+			return true
+		}
+	}
+	return false
+}
+
+// readVolumeMeta reads VolumeMetadata from disk into a fresh struct (avoids omitempty pitfalls).
+func readVolumeMeta(t *testing.T, volDir string) VolumeMetadata {
+	t.Helper()
+	var meta VolumeMetadata
+	require.NoError(t, ReadMetadata(filepath.Join(volDir, config.MetadataFile), &meta))
+	return meta
+}
+
+func ptrUint64(v uint64) *uint64 { return &v }
+func ptrInt(v int) *int          { return &v }
+func ptrString(v string) *string { return &v }
+func ptrBool(v bool) *bool       { return &v }
+
+// --- unit tests ---
 
 // K8s allows actually 128 chars for PVC / Snapshot names, never have seen that
 func TestValidateName(t *testing.T) {
