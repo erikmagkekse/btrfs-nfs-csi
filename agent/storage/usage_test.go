@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// --- helpers ---
+// --- utils ---
 
 // qgroupRunFn returns a RunFn that responds to btrfs subvolume show + qgroup show.
 // The same referenced/exclusive values are returned for all volumes/snapshots.
