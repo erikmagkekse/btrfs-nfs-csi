@@ -1,0 +1,148 @@
+package btrfs
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+func parseDeviceErrors(out string) (DeviceErrors, error) {
+	var de DeviceErrors
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// format: [/dev/sda].write_io_errs    0
+		bracket := strings.Index(line, "].")
+		if bracket < 0 {
+			continue
+		}
+		if de.Device == "" {
+			de.Device = line[1:bracket]
+		}
+		rest := line[bracket+2:]
+		parts := strings.Fields(rest)
+		if len(parts) != 2 {
+			continue
+		}
+		val, err := strconv.ParseUint(parts[1], 10, 64)
+		if err != nil {
+			return DeviceErrors{}, fmt.Errorf("parse %q value %q: %w", parts[0], parts[1], err)
+		}
+		switch parts[0] {
+		case "write_io_errs":
+			de.WriteErrs = val
+		case "read_io_errs":
+			de.ReadErrs = val
+		case "flush_io_errs":
+			de.FlushErrs = val
+		case "corruption_errs":
+			de.CorruptionErrs = val
+		case "generation_errs":
+			de.GenerationErrs = val
+		}
+	}
+	if de.Device == "" {
+		return DeviceErrors{}, fmt.Errorf("no device found in btrfs device stats output")
+	}
+	return de, nil
+}
+
+func parseFilesystemUsage(out string) (FilesystemUsage, error) {
+	var fu FilesystemUsage
+	var inOverall bool
+
+	for _, line := range strings.Split(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "Overall:") {
+			inOverall = true
+			continue
+		}
+
+		if inOverall {
+			if trimmed == "" {
+				inOverall = false
+				continue
+			}
+			// "Data ratio:" is a float, not a uint - handle separately
+			if strings.HasPrefix(trimmed, "Data ratio:") {
+				if parts := strings.SplitN(trimmed, ":", 2); len(parts) == 2 {
+					if v, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64); err == nil {
+						fu.DataRatio = v
+					}
+				}
+				continue
+			}
+			key, val, ok := parseKVBytes(trimmed)
+			if !ok {
+				continue
+			}
+			switch key {
+			case "Device size":
+				fu.TotalBytes = val
+			case "Device unallocated":
+				fu.UnallocatedBytes = val
+			case "Used":
+				fu.UsedBytes = val
+			case "Free (estimated)":
+				fu.FreeBytes = val
+			}
+		}
+
+		// Parse Metadata profile line: Metadata,DUP: Size:1073741824, Used:536870912
+		if strings.HasPrefix(trimmed, "Metadata,") {
+			size, used := parseProfileSizeUsed(trimmed)
+			fu.MetadataTotalBytes = size
+			fu.MetadataUsedBytes = used
+		}
+	}
+	return fu, nil
+}
+
+// parseKVBytes parses "Key: 12345" lines, stripping any parenthetical suffix.
+// Uses the first ":" as the separator to handle keys like "Free (estimated)"
+// and values like "(min: 12345)".
+func parseKVBytes(line string) (key string, val uint64, ok bool) {
+	parts := strings.SplitN(line, ":", 2)
+	if len(parts) != 2 {
+		return "", 0, false
+	}
+	key = strings.TrimSpace(parts[0])
+	raw := strings.TrimSpace(parts[1])
+	// strip parenthetical like "(min: 12345)"
+	if p := strings.Index(raw, "("); p > 0 {
+		raw = strings.TrimSpace(raw[:p])
+	}
+	v, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return "", 0, false
+	}
+	return key, v, true
+}
+
+// parseProfileSizeUsed parses "Metadata,DUP: Size:1073741824, Used:536870912".
+func parseProfileSizeUsed(line string) (size, used uint64) {
+	if idx := strings.Index(line, "Size:"); idx >= 0 {
+		raw := line[idx+len("Size:"):]
+		if end := strings.IndexAny(raw, ", \t"); end > 0 {
+			raw = raw[:end]
+		}
+		v, err := strconv.ParseUint(strings.TrimSpace(raw), 10, 64)
+		if err == nil {
+			size = v
+		}
+	}
+	if idx := strings.Index(line, "Used:"); idx >= 0 {
+		raw := line[idx+len("Used:"):]
+		if end := strings.IndexAny(raw, ", \t"); end > 0 {
+			raw = raw[:end]
+		}
+		v, err := strconv.ParseUint(strings.TrimSpace(raw), 10, 64)
+		if err == nil {
+			used = v
+		}
+	}
+	return
+}

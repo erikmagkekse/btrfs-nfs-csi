@@ -10,12 +10,8 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 )
 
-// TODO: Maybe better scraping?
+// TODO: Maybe better scraping? JSON support got added in 6.1 btrfs-progs!
 // TODO: Add functionality for squota
-
-type SubvolumeInfo struct {
-	Path string
-}
 
 type Manager struct {
 	bin string
@@ -52,11 +48,6 @@ func (m *Manager) QuotaCheck(ctx context.Context, path string) error {
 
 func (m *Manager) QgroupLimit(ctx context.Context, path string, bytes uint64) error {
 	return m.run(ctx, "qgroup", "limit", fmt.Sprintf("%d", bytes), path)
-}
-
-type QgroupInfo struct {
-	Referenced uint64
-	Exclusive  uint64
 }
 
 // QgroupUsage returns the referenced bytes used by the subvolume's qgroup.
@@ -171,6 +162,25 @@ func (m *Manager) run(ctx context.Context, args ...string) error {
 func (m *Manager) SubvolumeExists(ctx context.Context, path string) bool {
 	err := m.run(ctx, "subvolume", "show", path)
 	return err == nil
+}
+
+// DeviceErrors runs `btrfs device stats <path>` and parses error counters.
+// Output format: [/dev/sda].write_io_errs    0
+func (m *Manager) DeviceErrors(ctx context.Context, path string) (DeviceErrors, error) {
+	out, err := m.cmd.Run(ctx, m.bin, "device", "stats", path)
+	if err != nil {
+		return DeviceErrors{}, err
+	}
+	return parseDeviceErrors(out)
+}
+
+// FilesystemUsage runs `btrfs filesystem usage -b <path>` and parses allocation info.
+func (m *Manager) FilesystemUsage(ctx context.Context, path string) (FilesystemUsage, error) {
+	out, err := m.cmd.Run(ctx, m.bin, "filesystem", "usage", "-b", path)
+	if err != nil {
+		return FilesystemUsage{}, err
+	}
+	return parseFilesystemUsage(out)
 }
 
 func (m *Manager) SubvolumeList(ctx context.Context, path string) ([]SubvolumeInfo, error) {

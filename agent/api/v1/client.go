@@ -120,6 +120,14 @@ func (c *Client) GetSnapshot(ctx context.Context, name string) (*SnapshotDetailR
 	return &resp, nil
 }
 
+func (c *Client) Stats(ctx context.Context) (*StatsResponse, error) {
+	var resp StatsResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/stats", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 func (c *Client) Healthz(ctx context.Context) (*HealthResponse, error) {
 	var resp HealthResponse
 	if err := c.do(ctx, http.MethodGet, "/healthz", nil, &resp); err != nil {

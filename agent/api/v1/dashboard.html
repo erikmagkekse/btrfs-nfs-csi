@@ -1,3 +1,4 @@
+<!-- Yes this minimalistic dashboard is vibecoded and can be improved by an external dashboard with more features in the future -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -7,7 +8,7 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
-h1 { font-size: 1.4em; margin-bottom: 16px; }
+h1 { font-size: 1.4em; margin: 0; white-space: nowrap; }
 h2 { font-size: 1.1em; margin: 20px 0 8px; color: #8b949e; }
 .status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .85em; font-weight: 600; }
 .status.ok { background: #1b4332; color: #52c41a; }
@@ -56,11 +57,52 @@ tr:hover td { background: #161b22; }
 tr.selected td { font-weight: 600; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+.header-row { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 8px; flex-wrap: wrap; }
+.header-left { flex: 1; min-width: 0; }
+.header-left .features { margin-top: 4px; }
+.io-graphs { display: flex; gap: 12px; flex-shrink: 0; }
+.io-graph-box { display: flex; align-items: flex-start; gap: 6px; }
+.io-graph-box canvas { border: 1px solid #30363d; border-radius: 6px; background: #161b22; display: block; flex-shrink: 0; }
+.io-graph-legend { font-size: .7em; color: #8b949e; display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+.io-graph-legend .read { color: #58a6ff; }
+.io-graph-legend .write { color: #f0883e; }
+.io-graph-legend .iops { color: #a5d6ff; }
+.io-graph-legend .latency { color: #d2a8ff; }
+.io-graph-legend .util { color: #f778ba; }
+.io-graph-val { font-family: ui-monospace, monospace; margin-left: 2px; display: inline-block; min-width: 6ch; text-align: right; }
+@media (max-width: 700px) {
+  .header-row { flex-direction: column; }
+  .io-graphs { width: 100%; }
+  .io-graph-box { flex-direction: column; }
+  .io-graph-box canvas { width: 100%; }
+  .io-graph-legend { flex-direction: row; gap: 6px; margin-top: 2px; }
+}
 </style>
 </head>
 <body>
+<div class="header-row">
+<div class="header-left">
 <h1>btrfs-nfs-csi agent<span class="tenant">{{TENANT}}</span> <span id="health"></span><span id="version" class="meta"></span><span id="uptime" class="meta"></span></h1>
 <div id="features" class="features"></div>
+</div>
+<div class="io-graphs">
+<div class="io-graph-box">
+<canvas id="io-canvas" width="160" height="48"></canvas>
+<div class="io-graph-legend">
+<span><span class="read">&#9644;</span> <span class="io-graph-val read" id="io-read-val">-</span></span>
+<span><span class="write">&#9644;</span> <span class="io-graph-val write" id="io-write-val">-</span></span>
+</div>
+</div>
+<div class="io-graph-box">
+<canvas id="perf-canvas" width="160" height="48"></canvas>
+<div class="io-graph-legend">
+<span><span class="iops">&#9644;</span> <span class="io-graph-val iops" id="perf-iops-val">-</span></span>
+<span><span class="latency">&#9644;</span> <span class="io-graph-val latency" id="perf-lat-val">-</span></span>
+<span><span class="util">&#9644;</span> <span class="io-graph-val util" id="perf-util-val">-</span></span>
+</div>
+</div>
+</div>
+</div>
 <div id="error"></div>
 
 <div class="fs-bar">
@@ -69,7 +111,7 @@ tr.selected td { font-weight: 600; }
 </div>
 <br>
 <div class="main-layout">
-<div id="detail-panel" class="detail-panel">
+<div id="detail-panel" class="detail-panel active">
 <div id="detail-content"></div>
 </div>
 <div class="list-panel">
@@ -136,8 +178,7 @@ async function del(type, name) {
   if (!confirm('Are you REALLY sure you want to delete ' + type + ' "' + name + '"? This cannot be undone.')) return;
   try {
     await api('/v1/' + type + 's/' + name, { method: 'DELETE' });
-    selectedType = ''; selectedName = '';
-    document.getElementById('detail-panel').classList.remove('active');
+    showDeviceStatsPanel();
     refresh();
   } catch(err) {
     alert('Delete failed: ' + err.message);
@@ -158,6 +199,50 @@ async function unexport(volName, client) {
 var activeTab = 'volumes';
 var selectedType = '';
 var selectedName = '';
+var cachedDeviceStats = null;
+
+function renderDeviceStats() {
+  if (!cachedDeviceStats) {
+    document.getElementById('detail-content').innerHTML =
+      '<h2>Device Stats</h2><div class="detail"><p class="empty">loading...</p></div>';
+    return;
+  }
+  var ds = cachedDeviceStats;
+  var e = ds.errors;
+  var fs = ds.filesystem;
+
+  var fsPct = fs.total_bytes ? (fs.used_bytes / fs.total_bytes * 100) : 0;
+  var metaPct = fs.metadata_total_bytes ? (fs.metadata_used_bytes / fs.metadata_total_bytes * 100) : 0;
+
+  document.getElementById('detail-content').innerHTML =
+    '<h2>Device: ' + ds.device + '</h2>' +
+    '<div class="detail"><h2 style="margin-top:0">Filesystem</h2><dl class="detail-grid">' +
+    row('Total', '<span class="bytes">' + fmt(fs.total_bytes) + '</span>') +
+    row('Used', '<span class="bytes">' + fmt(fs.used_bytes) + '</span> (' + fsPct.toFixed(1) + '%)') +
+    row('Free', '<span class="bytes">' + fmt(fs.free_bytes) + '</span>') +
+    row('Unallocated', '<span class="bytes">' + fmt(fs.unallocated_bytes) + '</span>') +
+    row('Metadata', '<span class="bytes">' + fmt(fs.metadata_used_bytes) + ' / ' + fmt(fs.metadata_total_bytes) + '</span> (' + metaPct.toFixed(1) + '%)') +
+    row('Data Ratio', fs.data_ratio.toFixed(1) + 'x') +
+    '</dl></div>' +
+    '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">Errors</h2><dl class="detail-grid">' +
+    errRow('Read', e.read_errs) +
+    errRow('Write', e.write_errs) +
+    errRow('Flush', e.flush_errs) +
+    errRow('Corruption', e.corruption_errs) +
+    errRow('Generation', e.generation_errs) +
+    '</dl></div>' +
+    '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">IO</h2><dl class="detail-grid">' +
+    row('Read', '<span class="bytes">' + fmt(ds.io.read_bytes_total) + '</span> (' + ds.io.read_ios_total.toLocaleString() + ' ops)') +
+    row('Written', '<span class="bytes">' + fmt(ds.io.write_bytes_total) + '</span> (' + ds.io.write_ios_total.toLocaleString() + ' ops)') +
+    row('In Progress', ds.io.ios_in_progress) +
+    '</dl></div>';
+}
+
+function showDeviceStatsPanel() {
+  selectedType = ''; selectedName = '';
+  highlightSelected();
+  renderDeviceStats();
+}
 
 function switchTab(name) {
   activeTab = name;
@@ -175,6 +260,10 @@ function highlightSelected() {
 
 function row(label, value) {
   return '<dt>' + label + '</dt><dd>' + value + '</dd>';
+}
+function errRow(label, val) {
+  var s = val > 0 ? ' style="color:#f85149;font-weight:600"' : '';
+  return '<dt>' + label + '</dt><dd><span' + s + '>' + val + '</span></dd>';
 }
 
 async function showVolume(name) {
@@ -203,10 +292,7 @@ async function showVolume(name) {
       '</dl></div>';
     document.getElementById('detail-panel').classList.add('active');
   } catch(err) {
-    document.getElementById('detail-content').innerHTML =
-      '<h2>Volume: ' + name + ' &mdash; deleted</h2>' +
-      '<div class="detail"><p class="empty">Volume has been deleted.</p></div>';
-    selectedType = ''; selectedName = '';
+    showDeviceStatsPanel();
   }
 }
 
@@ -229,10 +315,7 @@ async function showSnapshot(name) {
       '</dl></div>';
     document.getElementById('detail-panel').classList.add('active');
   } catch(err) {
-    document.getElementById('detail-content').innerHTML =
-      '<h2>Snapshot: ' + name + ' &mdash; deleted</h2>' +
-      '<div class="detail"><p class="empty">Snapshot has been deleted.</p></div>';
-    selectedType = ''; selectedName = '';
+    showDeviceStatsPanel();
   }
 }
 
@@ -247,14 +330,7 @@ async function refresh() {
     feats += '<span class="feat">refresh: {{REFRESH}}s</span>';
     document.getElementById('features').innerHTML = feats;
 
-    try {
-      const st = await api('/v1/stats');
-      const pct = st.total_bytes ? (st.used_bytes / st.total_bytes * 100) : 0;
-      const fill = document.getElementById('fs-fill');
-      fill.style.width = pct.toFixed(1) + '%';
-      fill.className = 'fs-bar-inner' + (pct > 90 ? ' crit' : pct > 75 ? ' warn' : '');
-      document.getElementById('fs-info').textContent = fmt(st.used_bytes) + ' / ' + fmt(st.total_bytes) + ' (' + pct.toFixed(1) + '% used, ' + fmt(st.free_bytes) + ' free)';
-    } catch(e) {}
+    if (cachedDeviceStats) updateFsBar(cachedDeviceStats);
 
     const v = await api('/v1/volumes');
     document.getElementById('tab-btn-volumes').textContent = 'Volumes (' + v.volumes.length + ')';
@@ -322,8 +398,141 @@ async function refresh() {
   }
 }
 
+// IO graph state
+var ioMaxSamples = Math.ceil(60 / {{REFRESH}});
+var ioReadRates = [];
+var ioWriteRates = [];
+var perfIops = [];
+var perfLatency = [];
+var perfUtil = [];
+var ioPrev = null;
+
+function fmtRate(bps) {
+  if (bps == null) return '-';
+  const u = ['B/s','KiB/s','MiB/s','GiB/s'];
+  let i = 0, v = bps;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return v.toFixed(i ? 1 : 0) + ' ' + u[i];
+}
+
+function fmtCompact(v) {
+  if (v >= 1073741824) return (v / 1073741824).toFixed(1) + 'G';
+  if (v >= 1048576) return (v / 1048576).toFixed(1) + 'M';
+  if (v >= 1024) return (v / 1024).toFixed(0) + 'K';
+  return v.toFixed(0);
+}
+
+function drawSparkline(canvasId, series) {
+  const c = document.getElementById(canvasId);
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const minLen = Math.min(...series.map(s => s.data.length));
+  if (minLen < 2) return;
+
+  const step = w / (ioMaxSamples - 1);
+  var labelY = 9;
+  series.forEach(function(s) {
+    const max = Math.max(...s.data, 1);
+    ctx.beginPath();
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 1.5;
+    const offset = ioMaxSamples - s.data.length;
+    for (let i = 0; i < s.data.length; i++) {
+      const x = (offset + i) * step;
+      const y = h - 4 - (s.data[i] / max) * (h - 8);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // scale label
+    var label = s.fmtMax ? s.fmtMax(max) : fmtCompact(max);
+    ctx.font = '9px ui-monospace,monospace';
+    ctx.fillStyle = s.color;
+    ctx.globalAlpha = 0.7;
+    ctx.fillText(label, 2, labelY);
+    ctx.globalAlpha = 1;
+    labelY += 10;
+  });
+}
+
+function drawIO() {
+  drawSparkline('io-canvas', [
+    { data: ioReadRates, color: '#58a6ff', fmtMax: function(v) { return fmtRate(v).replace(' ',''); } },
+    { data: ioWriteRates, color: '#f0883e', fmtMax: function(v) { return fmtRate(v).replace(' ',''); } }
+  ]);
+}
+
+function drawPerf() {
+  drawSparkline('perf-canvas', [
+    { data: perfIops, color: '#a5d6ff', fmtMax: function(v) { return v.toFixed(0) + ' iops'; } },
+    { data: perfLatency, color: '#d2a8ff', fmtMax: function(v) { return v.toFixed(1) + 'ms'; } },
+    { data: perfUtil, color: '#f778ba', fmtMax: function(v) { return v.toFixed(0) + '%'; } }
+  ]);
+}
+
+function updateFsBar(st) {
+  const pct = st.total_bytes ? (st.used_bytes / st.total_bytes * 100) : 0;
+  const fill = document.getElementById('fs-fill');
+  fill.style.width = pct.toFixed(1) + '%';
+  fill.className = 'fs-bar-inner' + (pct > 90 ? ' crit' : pct > 75 ? ' warn' : '');
+  document.getElementById('fs-info').textContent = fmt(st.used_bytes) + ' / ' + fmt(st.total_bytes) + ' (' + pct.toFixed(1) + '% used, ' + fmt(st.free_bytes) + ' free)';
+}
+
+async function refreshIO() {
+  try {
+    const ds = await api('/v1/stats');
+    cachedDeviceStats = ds;
+    updateFsBar(ds);
+    if (ioPrev) {
+      const dt = {{REFRESH}};
+      const rr = Math.max(0, ds.io.read_bytes_total - ioPrev.read) / dt;
+      const wr = Math.max(0, ds.io.write_bytes_total - ioPrev.write) / dt;
+      ioReadRates.push(rr);
+      ioWriteRates.push(wr);
+      if (ioReadRates.length > ioMaxSamples) { ioReadRates.shift(); ioWriteRates.shift(); }
+      document.getElementById('io-read-val').textContent = fmtRate(rr);
+      document.getElementById('io-write-val').textContent = fmtRate(wr);
+      drawIO();
+
+      // IOPS
+      var dOps = Math.max(0, (ds.io.read_ios_total - ioPrev.readIOs) + (ds.io.write_ios_total - ioPrev.writeIOs));
+      var iops = dOps / dt;
+      perfIops.push(iops);
+
+      // avg latency (ms/op) from weighted IO time delta
+      var dWeighted = Math.max(0, ds.io.weighted_io_time_ms_total - ioPrev.weightedMs);
+      var latMs = dOps > 0 ? dWeighted / dOps : 0;
+      perfLatency.push(latMs);
+
+      // %util from io_time delta
+      var dIoTime = Math.max(0, ds.io.io_time_ms_total - ioPrev.ioTimeMs);
+      var util = Math.min(100, dIoTime / (dt * 1000) * 100);
+      perfUtil.push(util);
+
+      if (perfIops.length > ioMaxSamples) { perfIops.shift(); perfLatency.shift(); perfUtil.shift(); }
+
+      document.getElementById('perf-iops-val').textContent = iops.toFixed(0);
+      document.getElementById('perf-lat-val').textContent = latMs.toFixed(1) + 'ms';
+      document.getElementById('perf-util-val').textContent = util.toFixed(0) + '%';
+      drawPerf();
+    }
+    ioPrev = {
+      read: ds.io.read_bytes_total,
+      write: ds.io.write_bytes_total,
+      readIOs: ds.io.read_ios_total,
+      writeIOs: ds.io.write_ios_total,
+      ioTimeMs: ds.io.io_time_ms_total,
+      weightedMs: ds.io.weighted_io_time_ms_total
+    };
+    if (!selectedName) renderDeviceStats();
+  } catch(e) {}
+}
+
 refresh();
+refreshIO();
 setInterval(refresh, {{REFRESH}} * 1000);
+setInterval(refreshIO, {{REFRESH}} * 1000);
 </script>
 </body>
 </html>

@@ -77,7 +77,7 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	return &Storage{basePath: basePath, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
 }
 
-func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInterval time.Duration) {
+func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInterval, deviceIOInterval, deviceStatsInterval time.Duration) {
 	for _, tenant := range s.tenants {
 		bp := filepath.Join(s.basePath, tenant)
 		if s.quotaEnabled {
@@ -87,6 +87,8 @@ func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInte
 			s.StartNFSReconciler(ctx, bp, reconcileInterval, tenant)
 		}
 	}
+	s.StartDeviceIOUpdater(ctx, deviceIOInterval)
+	s.StartDeviceStatsUpdater(ctx, deviceStatsInterval)
 }
 
 func (s *Storage) BasePath() string       { return s.basePath }

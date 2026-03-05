@@ -170,15 +170,48 @@ func (h *Handler) ListExports(c *echo.Context) error {
 func (h *Handler) Stats(c *echo.Context) error {
 	tenant := c.Get("tenant").(string)
 
-	stats, err := h.Store.Stats(tenant)
+	fs, err := h.Store.Stats(tenant)
 	if err != nil {
 		return StorageError(c, err)
 	}
 
+	ds, err := h.Store.DeviceStats(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error(), Code: "INTERNAL_ERROR"})
+	}
+
 	return c.JSON(http.StatusOK, StatsResponse{
-		TotalBytes: stats.TotalBytes,
-		UsedBytes:  stats.UsedBytes,
-		FreeBytes:  stats.FreeBytes,
+		TotalBytes: fs.TotalBytes,
+		UsedBytes:  fs.UsedBytes,
+		FreeBytes:  fs.FreeBytes,
+		Device:     ds.Device,
+		IO: DeviceIOStatsResponse{
+			ReadBytesTotal:        ds.IO.ReadBytes,
+			ReadIOsTotal:          ds.IO.ReadIOs,
+			ReadTimeMsTotal:       ds.IO.ReadTimeMs,
+			WriteBytesTotal:       ds.IO.WriteBytes,
+			WriteIOsTotal:         ds.IO.WriteIOs,
+			WriteTimeMsTotal:      ds.IO.WriteTimeMs,
+			IOsInProgress:         ds.IO.IOsInProgress,
+			IOTimeMsTotal:         ds.IO.IOTimeMs,
+			WeightedIOTimeMsTotal: ds.IO.WeightedIOTimeMs,
+		},
+		Errors: DeviceErrorsResponse{
+			ReadErrs:       ds.Errors.ReadErrs,
+			WriteErrs:      ds.Errors.WriteErrs,
+			FlushErrs:      ds.Errors.FlushErrs,
+			CorruptionErrs: ds.Errors.CorruptionErrs,
+			GenerationErrs: ds.Errors.GenerationErrs,
+		},
+		Filesystem: FilesystemStatsResponse{
+			TotalBytes:         ds.Filesystem.TotalBytes,
+			UsedBytes:          ds.Filesystem.UsedBytes,
+			FreeBytes:          ds.Filesystem.FreeBytes,
+			UnallocatedBytes:   ds.Filesystem.UnallocatedBytes,
+			MetadataUsedBytes:  ds.Filesystem.MetadataUsedBytes,
+			MetadataTotalBytes: ds.Filesystem.MetadataTotalBytes,
+			DataRatio:          ds.Filesystem.DataRatio,
+		},
 	})
 }
 
