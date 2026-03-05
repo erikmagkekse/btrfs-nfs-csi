@@ -83,7 +83,7 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+          echo "version=$(cat VERSION)-edge" >> "$GITHUB_OUTPUT"
           echo "commit=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx

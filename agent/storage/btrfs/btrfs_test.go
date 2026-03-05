@@ -186,6 +186,138 @@ func TestSubvolumeList(t *testing.T) {
 	})
 }
 
+func TestDeviceErrors(t *testing.T) {
+	deviceStatsOutput := strings.Join([]string{
+		"[/dev/sda].write_io_errs    0",
+		"[/dev/sda].read_io_errs     0",
+		"[/dev/sda].flush_io_errs    0",
+		"[/dev/sda].corruption_errs  0",
+		"[/dev/sda].generation_errs  0",
+	}, "\n")
+
+	t.Run("success", func(t *testing.T) {
+		m := &utils.MockRunner{Out: deviceStatsOutput}
+		mgr := newTestManager(m)
+
+		de, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, "/dev/sda", de.Device)
+		assert.Equal(t, uint64(0), de.ReadErrs)
+		assert.Equal(t, uint64(0), de.WriteErrs)
+		assert.Equal(t, uint64(0), de.FlushErrs)
+		assert.Equal(t, uint64(0), de.CorruptionErrs)
+		assert.Equal(t, uint64(0), de.GenerationErrs)
+	})
+
+	t.Run("with errors", func(t *testing.T) {
+		out := strings.Join([]string{
+			"[/dev/nvme0n1].write_io_errs    3",
+			"[/dev/nvme0n1].read_io_errs     5",
+			"[/dev/nvme0n1].flush_io_errs    1",
+			"[/dev/nvme0n1].corruption_errs  2",
+			"[/dev/nvme0n1].generation_errs  4",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		de, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, "/dev/nvme0n1", de.Device)
+		assert.Equal(t, uint64(5), de.ReadErrs)
+		assert.Equal(t, uint64(3), de.WriteErrs)
+		assert.Equal(t, uint64(1), de.FlushErrs)
+		assert.Equal(t, uint64(2), de.CorruptionErrs)
+		assert.Equal(t, uint64(4), de.GenerationErrs)
+	})
+
+	t.Run("command error", func(t *testing.T) {
+		m := &utils.MockRunner{Err: fmt.Errorf("device stats failed")}
+		mgr := newTestManager(m)
+
+		_, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
+		require.Error(t, err)
+	})
+
+	t.Run("empty output", func(t *testing.T) {
+		m := &utils.MockRunner{Out: ""}
+		mgr := newTestManager(m)
+
+		_, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
+		assert.ErrorContains(t, err, "no device found")
+	})
+}
+
+func TestFilesystemUsage(t *testing.T) {
+	fsUsageOutput := strings.Join([]string{
+		"Overall:",
+		"    Device size:                 107374182400",
+		"    Device allocated:             53687091200",
+		"    Device unallocated:           53687091200",
+		"    Device missing:                         0",
+		"    Device slack:                           0",
+		"    Used:                         42949672960",
+		"    Free (estimated):             64424509440      (min: 37580963840)",
+		"    Free (statfs, currentfull):   64424509440",
+		"    Data ratio:                          1.00",
+		"    Metadata ratio:                      2.00",
+		"    Global reserve:               536870912      (used: 0)",
+		"    Multiple profiles:                     no",
+		"",
+		"Data,single: Size:48318382080, Used:41875931136",
+		"   /dev/sda    48318382080",
+		"",
+		"Metadata,DUP: Size:5368709120, Used:2147483648",
+		"   /dev/sda    10737418240",
+		"",
+		"System,DUP: Size:8388608, Used:16384",
+		"   /dev/sda      16777216",
+		"",
+		"Unallocated:",
+		"   /dev/sda    53687091200",
+	}, "\n")
+
+	t.Run("success", func(t *testing.T) {
+		m := &utils.MockRunner{Out: fsUsageOutput}
+		mgr := newTestManager(m)
+
+		fu, err := mgr.FilesystemUsage(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, uint64(107374182400), fu.TotalBytes)
+		assert.Equal(t, uint64(53687091200), fu.UnallocatedBytes)
+		assert.Equal(t, uint64(42949672960), fu.UsedBytes)
+		assert.Equal(t, uint64(64424509440), fu.FreeBytes)
+		assert.Equal(t, 1.0, fu.DataRatio)
+		assert.Equal(t, uint64(5368709120), fu.MetadataTotalBytes)
+		assert.Equal(t, uint64(2147483648), fu.MetadataUsedBytes)
+	})
+
+	t.Run("raid1 data ratio", func(t *testing.T) {
+		out := strings.Join([]string{
+			"Overall:",
+			"    Device size:                 107374182400",
+			"    Used:                         42949672960",
+			"    Data ratio:                          2.00",
+			"",
+			"Data,RAID1: Size:48318382080, Used:41875931136",
+			"Metadata,RAID1: Size:5368709120, Used:2147483648",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		fu, err := mgr.FilesystemUsage(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, 2.0, fu.DataRatio)
+	})
+
+	t.Run("command error", func(t *testing.T) {
+		m := &utils.MockRunner{Err: fmt.Errorf("filesystem usage failed")}
+		mgr := newTestManager(m)
+
+		_, err := mgr.FilesystemUsage(context.Background(), "/mnt/data")
+		require.Error(t, err)
+	})
+}
+
 func TestIsValidCompression(t *testing.T) {
 	valid := []string{"", "none", "zstd", "lzo", "zlib", "zstd:1", "zstd:15", "zlib:9"}
 	for _, s := range valid {

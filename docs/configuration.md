@@ -15,6 +15,8 @@
 | `AGENT_EXPORTFS_BIN` | `exportfs` | exportfs binary path |
 | `AGENT_BTRFS_BIN` | `btrfs` | btrfs binary path |
 | `AGENT_NFS_RECONCILE_INTERVAL` | `10m` | Export reconciliation (`0` = off) |
+| `AGENT_DEVICE_IO_INTERVAL` | `5s` | Device IO stats update interval |
+| `AGENT_DEVICE_STATS_INTERVAL` | `1m` | btrfs device errors + filesystem usage update interval |
 | `AGENT_DASHBOARD_REFRESH_SECONDS` | `5` | Dashboard refresh |
 | `AGENT_DEFAULT_DIR_MODE` | `0700` | Default mode for volume/snapshot/clone directories |
 | `AGENT_DEFAULT_DATA_MODE` | `2770` | Default mode for data subvolumes (setgid + group rwx) |

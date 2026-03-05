@@ -94,9 +94,13 @@ type ExportListResponse struct {
 }
 
 type StatsResponse struct {
-	TotalBytes uint64 `json:"total_bytes"`
-	UsedBytes  uint64 `json:"used_bytes"`
-	FreeBytes  uint64 `json:"free_bytes"`
+	TotalBytes uint64                  `json:"total_bytes"`
+	UsedBytes  uint64                  `json:"used_bytes"`
+	FreeBytes  uint64                  `json:"free_bytes"`
+	Device     string                  `json:"device"`
+	IO         DeviceIOStatsResponse   `json:"io"`
+	Errors     DeviceErrorsResponse    `json:"errors"`
+	Filesystem FilesystemStatsResponse `json:"filesystem"`
 }
 
 type HealthResponse struct {
@@ -105,6 +109,36 @@ type HealthResponse struct {
 	Commit        string            `json:"commit"`
 	UptimeSeconds int               `json:"uptime_seconds"`
 	Features      map[string]string `json:"features"`
+}
+
+type DeviceIOStatsResponse struct {
+	ReadBytesTotal        uint64 `json:"read_bytes_total"`
+	ReadIOsTotal          uint64 `json:"read_ios_total"`
+	ReadTimeMsTotal       uint64 `json:"read_time_ms_total"`
+	WriteBytesTotal       uint64 `json:"write_bytes_total"`
+	WriteIOsTotal         uint64 `json:"write_ios_total"`
+	WriteTimeMsTotal      uint64 `json:"write_time_ms_total"`
+	IOsInProgress         uint64 `json:"ios_in_progress"`
+	IOTimeMsTotal         uint64 `json:"io_time_ms_total"`
+	WeightedIOTimeMsTotal uint64 `json:"weighted_io_time_ms_total"`
+}
+
+type DeviceErrorsResponse struct {
+	ReadErrs       uint64 `json:"read_errs"`
+	WriteErrs      uint64 `json:"write_errs"`
+	FlushErrs      uint64 `json:"flush_errs"`
+	CorruptionErrs uint64 `json:"corruption_errs"`
+	GenerationErrs uint64 `json:"generation_errs"`
+}
+
+type FilesystemStatsResponse struct {
+	TotalBytes         uint64  `json:"total_bytes"`
+	UsedBytes          uint64  `json:"used_bytes"`
+	FreeBytes          uint64  `json:"free_bytes"`
+	UnallocatedBytes   uint64  `json:"unallocated_bytes"`
+	MetadataUsedBytes  uint64  `json:"metadata_used_bytes"`
+	MetadataTotalBytes uint64  `json:"metadata_total_bytes"`
+	DataRatio          float64 `json:"data_ratio"`
 }
 
 type ErrorResponse struct {

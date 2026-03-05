@@ -94,7 +94,7 @@ func (a *Agent) Start(ctx context.Context) {
 	a.echo = e
 	a.ready = true
 
-	store.StartWorkers(ctx, a.cfg.UsageInterval, a.cfg.NFSReconcileInterval)
+	store.StartWorkers(ctx, a.cfg.UsageInterval, a.cfg.NFSReconcileInterval, a.cfg.DeviceIOInterval, a.cfg.DeviceStatsInterval)
 
 	go func() {
 		var err error

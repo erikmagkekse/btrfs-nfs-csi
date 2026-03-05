@@ -1,8 +1,8 @@
 # Metrics
 
-16 metrics across 3 components.
+36 metrics across 3 components.
 
-## Agent (6) - port 8080
+## Agent (26) - port 8080
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -12,8 +12,30 @@
 | `btrfs_nfs_csi_agent_exports` | Gauge | `tenant` |
 | `btrfs_nfs_csi_agent_volume_size_bytes` | Gauge | `tenant`, `volume` |
 | `btrfs_nfs_csi_agent_volume_used_bytes` | Gauge | `tenant`, `volume` |
+| `btrfs_nfs_csi_agent_device_read_bytes_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_read_ios_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_read_time_seconds_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_write_bytes_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_write_ios_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_write_time_seconds_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_ios_in_progress` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_io_time_seconds_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_io_weighted_time_seconds_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_read_errs_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_write_errs_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_flush_errs_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_corruption_errs_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_generation_errs_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_filesystem_size_bytes` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_filesystem_used_bytes` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_filesystem_unallocated_bytes` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_filesystem_metadata_used_bytes` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_filesystem_metadata_total_bytes` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_filesystem_data_ratio` | Gauge | `device` |
 
 **Buckets (http_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]`
+
+Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERVAL`). Device errors and filesystem allocation are updated every 1m (configurable via `AGENT_DEVICE_STATS_INTERVAL`).
 
 ## Controller (6) - port 9090
 
