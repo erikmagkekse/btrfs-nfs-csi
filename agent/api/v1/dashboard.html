@@ -63,19 +63,19 @@ tr.selected td { font-weight: 600; }
 .io-graphs { display: flex; gap: 12px; flex-shrink: 0; }
 .io-graph-box { display: flex; align-items: flex-start; gap: 6px; }
 .io-graph-box canvas { border: 1px solid #30363d; border-radius: 6px; background: #161b22; display: block; flex-shrink: 0; }
-.io-graph-legend { font-size: .7em; color: #8b949e; display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+.io-graph-legend { font-size: .65em; color: #8b949e; display: grid; grid-template-columns: auto 11ch; gap: 0 2px; white-space: nowrap; align-items: baseline; }
 .io-graph-legend .read { color: #58a6ff; }
 .io-graph-legend .write { color: #f0883e; }
 .io-graph-legend .iops { color: #a5d6ff; }
 .io-graph-legend .latency { color: #d2a8ff; }
 .io-graph-legend .util { color: #f778ba; }
-.io-graph-val { font-family: ui-monospace, monospace; margin-left: 2px; display: inline-block; min-width: 6ch; text-align: right; }
+.io-graph-val { font-family: ui-monospace, monospace; margin-left: 2px; display: inline-block; min-width: 9ch; text-align: right; }
 @media (max-width: 700px) {
   .header-row { flex-direction: column; }
   .io-graphs { width: 100%; }
   .io-graph-box { flex-direction: column; }
-  .io-graph-box canvas { width: 100%; }
-  .io-graph-legend { flex-direction: row; gap: 6px; margin-top: 2px; }
+  .io-graph-box canvas { width: 100%; height: auto; }
+  .io-graph-legend { margin-top: 2px; }
 }
 </style>
 </head>
@@ -87,18 +87,18 @@ tr.selected td { font-weight: 600; }
 </div>
 <div class="io-graphs">
 <div class="io-graph-box">
-<canvas id="io-canvas" width="160" height="48"></canvas>
+<canvas id="io-canvas" width="200" height="48"></canvas>
 <div class="io-graph-legend">
-<span><span class="read">&#9644;</span> <span class="io-graph-val read" id="io-read-val">-</span></span>
-<span><span class="write">&#9644;</span> <span class="io-graph-val write" id="io-write-val">-</span></span>
+<span class="read">R</span><span class="io-graph-val read" id="io-read-val">-</span>
+<span class="write">W</span><span class="io-graph-val write" id="io-write-val">-</span>
 </div>
 </div>
 <div class="io-graph-box">
-<canvas id="perf-canvas" width="160" height="48"></canvas>
+<canvas id="perf-canvas" width="200" height="48"></canvas>
 <div class="io-graph-legend">
-<span><span class="iops">&#9644;</span> <span class="io-graph-val iops" id="perf-iops-val">-</span></span>
-<span><span class="latency">&#9644;</span> <span class="io-graph-val latency" id="perf-lat-val">-</span></span>
-<span><span class="util">&#9644;</span> <span class="io-graph-val util" id="perf-util-val">-</span></span>
+<span class="iops">iops</span><span class="io-graph-val iops" id="perf-iops-val">-</span>
+<span class="latency">lat</span><span class="io-graph-val latency" id="perf-lat-val">-</span>
+<span class="util">util</span><span class="io-graph-val util" id="perf-util-val">-</span>
 </div>
 </div>
 </div>
@@ -399,7 +399,7 @@ async function refresh() {
 }
 
 // IO graph state
-var ioMaxSamples = Math.ceil(60 / {{REFRESH}});
+var ioMaxSamples = Math.ceil(120 / {{REFRESH}});
 var ioReadRates = [];
 var ioWriteRates = [];
 var perfIops = [];
