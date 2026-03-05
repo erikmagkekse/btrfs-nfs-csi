@@ -112,14 +112,14 @@ type HealthResponse struct {
 }
 
 type DeviceIOStatsResponse struct {
-	ReadBytesTotal       uint64 `json:"read_bytes_total"`
-	ReadIOsTotal         uint64 `json:"read_ios_total"`
-	ReadTimeMsTotal      uint64 `json:"read_time_ms_total"`
-	WriteBytesTotal      uint64 `json:"write_bytes_total"`
-	WriteIOsTotal        uint64 `json:"write_ios_total"`
-	WriteTimeMsTotal     uint64 `json:"write_time_ms_total"`
-	IOsInProgress        uint64 `json:"ios_in_progress"`
-	IOTimeMsTotal        uint64 `json:"io_time_ms_total"`
+	ReadBytesTotal        uint64 `json:"read_bytes_total"`
+	ReadIOsTotal          uint64 `json:"read_ios_total"`
+	ReadTimeMsTotal       uint64 `json:"read_time_ms_total"`
+	WriteBytesTotal       uint64 `json:"write_bytes_total"`
+	WriteIOsTotal         uint64 `json:"write_ios_total"`
+	WriteTimeMsTotal      uint64 `json:"write_time_ms_total"`
+	IOsInProgress         uint64 `json:"ios_in_progress"`
+	IOTimeMsTotal         uint64 `json:"io_time_ms_total"`
 	WeightedIOTimeMsTotal uint64 `json:"weighted_io_time_ms_total"`
 }
 
