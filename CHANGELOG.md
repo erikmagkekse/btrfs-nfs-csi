@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.9.8
+
+### Features
+- `/v1/stats` API endpoint with device IO counters, btrfs device errors, and filesystem allocation (#40)
+- 16 new Prometheus metrics for device IO, errors, and filesystem usage (#40)
+- IO throughput and device stats graphs on the web dashboard (#40)
+- Dedicated plain HTTP metrics server on `127.0.0.1:9090` via `AGENT_METRICS_ADDR` (#41)
+
+### Testing
+- NFS integration tests with real kernel exporter (#37, #38, #39)
+- Unit tests for reconciler and API error mapping (#37, #38, #39)
+- Unit and integration tests for agent storage layer (volumes, snapshots, clones, exports, metadata, usage, utils) (#37, #38, #39)
+- Migrated all tests to testify (#37, #38, #39)
+- Race detection and `gofmt` check added to CI (#37, #38, #39)
+
+### Refactoring
+- Storage layer split into separate files: volume, snapshot, clone, export, metadata, stats
+- Moved `/metrics` from authenticated API server (`:8080`) to dedicated metrics server (#41)
+
+### Other
+- Updated README: pre-1.0 notice, removed early-stage warning
+- Added block size parameter to mixed-load script
+
+
 ## v0.9.7
 
 ### Features
