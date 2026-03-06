@@ -38,6 +38,7 @@ const (
 type AgentConfig struct {
 	BasePath             string        `env:"AGENT_BASE_PATH" envDefault:"./storage"`
 	ListenAddr           string        `env:"AGENT_LISTEN_ADDR" envDefault:":8080"`
+	MetricsAddr          string        `env:"AGENT_METRICS_ADDR" envDefault:"127.0.0.1:9090"`
 	Tenants              string        `env:"AGENT_TENANTS,required"`
 	TLSCert              string        `env:"AGENT_TLS_CERT"`
 	TLSKey               string        `env:"AGENT_TLS_KEY"`

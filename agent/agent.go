@@ -45,7 +45,7 @@ func (a *Agent) Start(ctx context.Context) {
 
 	// unauthenticated endpoints
 	e.GET("/healthz", v1.Healthz(a.version, a.commit, features))
-	e.GET("/metrics", v1.MetricsHandler())
+	startMetricsServer(a.cfg.MetricsAddr)
 
 	// NFS exporter
 	var exp nfs.Exporter

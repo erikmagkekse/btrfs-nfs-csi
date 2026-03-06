@@ -2,7 +2,7 @@
 
 36 metrics across 3 components.
 
-## Agent (26) - port 8080
+## Agent (26) - port 9090
 
 | Metric | Type | Labels |
 |---|---|---|
