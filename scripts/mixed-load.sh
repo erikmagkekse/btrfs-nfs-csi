@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # mixed-load.sh - fio I/O load + API chaos for btrfs-nfs-csi
 #
-# Usage: mixed-load.sh [pods] [read_rate] [write_rate] [namespace]
+# Usage: mixed-load.sh [pods] [read_rate] [write_rate] [block_size] [namespace]
 #        mixed-load.sh cleanup [namespace]
 set -euo pipefail
 
@@ -9,7 +9,8 @@ KUBECTL="kubectl"
 PODS="${1:-10}"
 READ_RATE="${2:-10m}"
 WRITE_RATE="${3:-10m}"
-NAMESPACE="${4:-default}"
+BLOCK_SIZE="${4:-4k}"
+NAMESPACE="${5:-default}"
 SC="btrfs-nfs"
 SNAP_CLASS="btrfs-nfs"
 PREFIX="mixload"
@@ -42,7 +43,7 @@ declare -A TIMINGS
 TOTAL_START=$(date +%s%N)
 
 info "=== btrfs-nfs-csi mixed load test ==="
-info "Pods: ${PODS} | Read: ${READ_RATE}/s | Write: ${WRITE_RATE}/s | Namespace: ${NAMESPACE}"
+info "Pods: ${PODS} | Read: ${READ_RATE}/s | Write: ${WRITE_RATE}/s | BS: ${BLOCK_SIZE} | Namespace: ${NAMESPACE}"
 echo ""
 
 # --- phase 1: create PVCs + fio pods ---
@@ -77,7 +78,7 @@ spec:
     - name: fio
       image: ${FIO_IMAGE}
       command: ["fio"]
-      args: ["--name=mixed", "--directory=/data", "--rw=randrw", "--rwmixread=70", "--bs=4k", "--size=256m", "--rate=${READ_RATE},${WRITE_RATE}", "--runtime=120", "--time_based", "--group_reporting", "--output-format=terse", "--terse-version=3"]
+      args: ["--name=mixed", "--directory=/data", "--rw=randrw", "--rwmixread=70", "--bs=${BLOCK_SIZE}", "--size=256m", "--rate=${READ_RATE},${WRITE_RATE}", "--runtime=120", "--time_based", "--group_reporting", "--output-format=terse", "--terse-version=3"]
       volumeMounts:
         - name: data
           mountPath: /data
@@ -215,7 +216,7 @@ TOTAL_MS=$(ms "$TOTAL_START" "$TOTAL_END")
 # --- summary ---
 echo ""
 info "=== Results ==="
-info "Config:          ${PODS} pods, read=${READ_RATE}/s, write=${WRITE_RATE}/s"
+info "Config:          ${PODS} pods, read=${READ_RATE}/s, write=${WRITE_RATE}/s, bs=${BLOCK_SIZE}"
 info "Create:          ${TIMINGS[create]}ms"
 info "Snap during IO:  ${TIMINGS[snap_during_io]}ms"
 info "Resize during IO:${TIMINGS[resize_during_io]}ms"
