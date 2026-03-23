@@ -84,7 +84,7 @@ kubectl apply -f storageclass.yaml
 
 # Wait for the controller to connect to your agent:
 kubectl logs -n btrfs-nfs-csi deploy/btrfs-nfs-csi-controller -c csi-driver -f
-# Look for: "agent healthy - vibes immaculate, bits aligned, absolutely bussin"
+# Look for: "agent healthy" (a commit mismatch note is fine, only a WRN "version mismatch" is a problem)
 ```
 
 **3. That's it, test it!**

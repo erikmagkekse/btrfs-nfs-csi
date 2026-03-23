@@ -199,7 +199,7 @@ func (t *AgentTracker) checkAll(ctx context.Context) {
 			log.Warn().Str("agent", url).Str("agentVersion", health.Version).Str("driverVersion", t.version).Msg("agent/driver version mismatch")
 		} else if health.Commit != t.commit {
 			agentHealthTotal.WithLabelValues("healthy", sc).Inc()
-			log.Info().Str("agent", url).Str("agentCommit", health.Commit).Str("driverCommit", t.commit).Msg("agent/driver version match, commit mismatch (could be security update)")
+			log.Info().Str("agent", url).Str("agentCommit", health.Commit).Str("driverCommit", t.commit).Msg("agent healthy - commit mismatch, but same version (could be a security update)")
 		} else {
 			agentHealthTotal.WithLabelValues("healthy", sc).Inc()
 			log.Info().Str("agent", url).Str("version", health.Version).Str("commit", health.Commit).Msg("agent healthy - vibes immaculate, bits aligned, absolutely bussin")
