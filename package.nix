@@ -13,5 +13,5 @@ in buildGoModule {
     "-X main.version=${version} -X main.commit=${rev}"
   ];
 
-  vendorHash = "sha256-DGZmkT1mizfVN54VQ158BsrQOix2BPIyj1Ml4IAeFKg=";
+  vendorHash = "sha256-tW4yH0L+KbV/4LRC2+obTNUiQBMomMAj7k86bU3MkxY=";
 }
