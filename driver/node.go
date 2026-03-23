@@ -52,6 +52,13 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	args := []string{"-t", "nfs"}
 	mountOpts := "rw"
+	if vc := req.GetVolumeCapability(); vc != nil {
+		if am := vc.GetAccessMode(); am != nil &&
+			(am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY ||
+				am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY) {
+			mountOpts = "ro"
+		}
+	}
 	if opts := vc[config.ParamNFSMountOptions]; opts != "" {
 		mountOpts = mountOpts + "," + opts
 	}
@@ -121,7 +128,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 
 	if req.Readonly {
 		start = time.Now()
-		out, err = exec.CommandContext(mountCtx, "mount", "-o", "remount,ro,bind", req.TargetPath).CombinedOutput()
+		out, err = exec.CommandContext(mountCtx, "mount", "-o", "remount,ro,bind", dataDir, req.TargetPath).CombinedOutput()
 		mountDuration.WithLabelValues("remount_ro").Observe(time.Since(start).Seconds())
 		if err != nil {
 			mountOpsTotal.WithLabelValues("remount_ro", "error").Inc()
