@@ -227,7 +227,7 @@ function renderVolumes() {
   if (volSortCol) {
     var th = document.getElementById('th-' + volSortCol);
     th.classList.add(volSortAsc ? 'asc' : 'desc');
-    th.querySelector('.sort-arrow').textContent = volSortAsc ? ' \u25B2' : ' \u25BC';
+    th.querySelector('.sort-arrow').textContent = volSortAsc ? ' \u25B4' : ' \u25BE';
   }
 
   var vols = cachedVolumes.slice();
@@ -278,7 +278,7 @@ function renderSnapshots() {
   if (snapSortCol) {
     var th = document.getElementById('th-snap-' + snapSortCol);
     th.classList.add(snapSortAsc ? 'asc' : 'desc');
-    th.querySelector('.sort-arrow').textContent = snapSortAsc ? ' \u25B2' : ' \u25BC';
+    th.querySelector('.sort-arrow').textContent = snapSortAsc ? ' \u25B4' : ' \u25BE';
   }
 
   var snaps = cachedSnapshots.slice();
