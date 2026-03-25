@@ -127,6 +127,7 @@ This is an example working flake:
           services.btrfs-nfs-csi.agent.example = {
             basePath = "/export/data";
             listenAddr = ":8080";
+            metricsAddr = "127.0.0.1:9090";
 
             environmentFile = ./envfile.env;
           };
