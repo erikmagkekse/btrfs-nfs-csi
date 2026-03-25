@@ -19,6 +19,10 @@ table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: .9em
 th { text-align: left; padding: 6px 10px; border-bottom: 1px solid #30363d; color: #8b949e; font-weight: 500; }
 td { padding: 6px 10px; border-bottom: 1px solid #21262d; }
 tr:hover td { background: #161b22; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: #c9d1d9; }
+th.sortable .sort-arrow { font-size: .7em; margin-left: 4px; color: #484f58; }
+th.sortable.asc .sort-arrow, th.sortable.desc .sort-arrow { color: #58a6ff; }
 .mono { font-family: ui-monospace, monospace; font-size: .85em; }
 .bytes { color: #79c0ff; }
 .empty { color: #484f58; font-style: italic; padding: 16px 10px; }
@@ -122,13 +126,13 @@ tr.selected td { font-weight: 600; }
 </div>
 <div id="tab-volumes" class="tab-content active">
 <table>
-<thead><tr><th>Name</th><th>Usage</th><th></th><th>Clients</th><th>Created</th><th></th></tr></thead>
+<thead><tr><th>Name</th><th class="sortable" onclick="sortVolumes('size')" id="th-size">Usage<span class="sort-arrow"></span></th><th></th><th class="sortable" onclick="sortVolumes('clients')" id="th-clients">Clients<span class="sort-arrow"></span></th><th class="sortable" onclick="sortVolumes('created')" id="th-created">Created<span class="sort-arrow"></span></th><th></th></tr></thead>
 <tbody id="volumes"><tr><td class="empty" colspan="6">loading...</td></tr></tbody>
 </table>
 </div>
 <div id="tab-snapshots" class="tab-content">
 <table>
-<thead><tr><th>Name</th><th>Volume</th><th>Usage</th><th></th><th>Created</th><th></th></tr></thead>
+<thead><tr><th>Name</th><th>Volume</th><th class="sortable" onclick="sortSnapshots('size')" id="th-snap-size">Usage<span class="sort-arrow"></span></th><th></th><th class="sortable" onclick="sortSnapshots('created')" id="th-snap-created">Created<span class="sort-arrow"></span></th><th></th></tr></thead>
 <tbody id="snapshots"><tr><td class="empty" colspan="6">loading...</td></tr></tbody>
 </table>
 </div>
@@ -200,6 +204,114 @@ var activeTab = 'volumes';
 var selectedType = '';
 var selectedName = '';
 var cachedDeviceStats = null;
+var cachedVolumes = [];
+var volSortCol = null;
+var volSortAsc = true;
+var cachedSnapshots = [];
+var snapSortCol = null;
+var snapSortAsc = true;
+
+function sortVolumes(col) {
+  if (volSortCol === col) { volSortAsc = !volSortAsc; }
+  else { volSortCol = col; volSortAsc = true; }
+  renderVolumes();
+}
+
+function renderVolumes() {
+  // update sort indicators
+  ['size','clients','created'].forEach(function(c) {
+    var th = document.getElementById('th-' + c);
+    th.classList.remove('asc', 'desc');
+    th.querySelector('.sort-arrow').textContent = '';
+  });
+  if (volSortCol) {
+    var th = document.getElementById('th-' + volSortCol);
+    th.classList.add(volSortAsc ? 'asc' : 'desc');
+    th.querySelector('.sort-arrow').textContent = volSortAsc ? ' \u25B4' : ' \u25BE';
+  }
+
+  var vols = cachedVolumes.slice();
+  if (volSortCol) {
+    vols.sort(function(a, b) {
+      var va, vb;
+      if (volSortCol === 'size') { va = a.size_bytes ? a.used_bytes / a.size_bytes : 0; vb = b.size_bytes ? b.used_bytes / b.size_bytes : 0; }
+      else if (volSortCol === 'clients') { va = a.clients; vb = b.clients; }
+      else if (volSortCol === 'created') { va = a.created_at || ''; vb = b.created_at || ''; }
+      if (va < vb) return volSortAsc ? -1 : 1;
+      if (va > vb) return volSortAsc ? 1 : -1;
+      return 0;
+    });
+  }
+
+  var vb = document.getElementById('volumes');
+  if (!vols.length) {
+    vb.innerHTML = '<tr><td class="empty" colspan="6">no volumes</td></tr>';
+    return;
+  }
+  vb.innerHTML = vols.map(function(vol) {
+    var pct = vol.size_bytes ? (vol.used_bytes / vol.size_bytes * 100) : 0;
+    var color = pct > 90 ? '#f85149' : pct > 75 ? '#d29922' : '#238636';
+    return '<tr data-type="volume" data-name="' + vol.name + '">' +
+    '<td class="mono"><span class="link" onclick="showVolume(\'' + vol.name + '\')">' + vol.name + '</span></td>' +
+    '<td class="bytes">' + fmt(vol.used_bytes) + ' / ' + fmt(vol.size_bytes) + '</td>' +
+    '<td><div class="quota-bar"><div class="quota-fill" style="width:' + Math.min(pct,100).toFixed(1) + '%;background:' + color + '"></div></div></td>' +
+    '<td>' + vol.clients + '</td>' +
+    '<td>' + fmtDate(vol.created_at) + '</td>' +
+    '<td><button class="btn-del" onclick="del(\'volume\',\'' + vol.name + '\')">delete</button></td>' +
+    '</tr>';
+  }).join('');
+  highlightSelected();
+}
+
+function sortSnapshots(col) {
+  if (snapSortCol === col) { snapSortAsc = !snapSortAsc; }
+  else { snapSortCol = col; snapSortAsc = true; }
+  renderSnapshots();
+}
+
+function renderSnapshots() {
+  ['size','created'].forEach(function(c) {
+    var th = document.getElementById('th-snap-' + c);
+    th.classList.remove('asc', 'desc');
+    th.querySelector('.sort-arrow').textContent = '';
+  });
+  if (snapSortCol) {
+    var th = document.getElementById('th-snap-' + snapSortCol);
+    th.classList.add(snapSortAsc ? 'asc' : 'desc');
+    th.querySelector('.sort-arrow').textContent = snapSortAsc ? ' \u25B4' : ' \u25BE';
+  }
+
+  var snaps = cachedSnapshots.slice();
+  if (snapSortCol) {
+    snaps.sort(function(a, b) {
+      var va, vb;
+      if (snapSortCol === 'size') { va = a.size_bytes ? a.used_bytes / a.size_bytes : 0; vb = b.size_bytes ? b.used_bytes / b.size_bytes : 0; }
+      else if (snapSortCol === 'created') { va = a.created_at || ''; vb = b.created_at || ''; }
+      if (va < vb) return snapSortAsc ? -1 : 1;
+      if (va > vb) return snapSortAsc ? 1 : -1;
+      return 0;
+    });
+  }
+
+  var sb = document.getElementById('snapshots');
+  if (!snaps.length) {
+    sb.innerHTML = '<tr><td class="empty" colspan="6">no snapshots</td></tr>';
+    return;
+  }
+  sb.innerHTML = snaps.map(function(snap) {
+    var pct = snap.size_bytes ? (snap.used_bytes / snap.size_bytes * 100) : 0;
+    var color = pct > 90 ? '#f85149' : pct > 75 ? '#d29922' : '#238636';
+    return '<tr data-type="snapshot" data-name="' + snap.name + '">' +
+    '<td class="mono"><span class="link" onclick="showSnapshot(\'' + snap.name + '\')">' + snap.name + '</span></td>' +
+    '<td class="mono">' + snap.volume + '</td>' +
+    '<td class="bytes">' + fmt(snap.used_bytes) + ' / ' + fmt(snap.size_bytes) + '</td>' +
+    '<td><div class="quota-bar"><div class="quota-fill" style="width:' + Math.min(pct,100).toFixed(1) + '%;background:' + color + '"></div></div></td>' +
+    '<td>' + fmtDate(snap.created_at) + '</td>' +
+    '<td><button class="btn-del" onclick="del(\'snapshot\',\'' + snap.name + '\')">delete</button></td>' +
+    '</tr>';
+  }).join('');
+  highlightSelected();
+}
 
 function renderDeviceStats() {
   if (!cachedDeviceStats) {
@@ -334,43 +446,13 @@ async function refresh() {
 
     const v = await api('/v1/volumes');
     document.getElementById('tab-btn-volumes').textContent = 'Volumes (' + v.volumes.length + ')';
-    const vb = document.getElementById('volumes');
-    if (!v.volumes.length) {
-      vb.innerHTML = '<tr><td class="empty" colspan="6">no volumes</td></tr>';
-    } else {
-      vb.innerHTML = v.volumes.map(vol => {
-        const pct = vol.size_bytes ? (vol.used_bytes / vol.size_bytes * 100) : 0;
-        const color = pct > 90 ? '#f85149' : pct > 75 ? '#d29922' : '#238636';
-        return '<tr data-type="volume" data-name="' + vol.name + '">' +
-        '<td class="mono"><span class="link" onclick="showVolume(\'' + vol.name + '\')">' + vol.name + '</span></td>' +
-        '<td class="bytes">' + fmt(vol.used_bytes) + ' / ' + fmt(vol.size_bytes) + '</td>' +
-        '<td><div class="quota-bar"><div class="quota-fill" style="width:' + Math.min(pct,100).toFixed(1) + '%;background:' + color + '"></div></div></td>' +
-        '<td>' + vol.clients + '</td>' +
-        '<td>' + fmtDate(vol.created_at) + '</td>' +
-        '<td><button class="btn-del" onclick="del(\'volume\',\'' + vol.name + '\')">delete</button></td>' +
-        '</tr>';
-      }).join('');
-    }
+    cachedVolumes = v.volumes;
+    renderVolumes();
 
     const s = await api('/v1/snapshots');
     document.getElementById('tab-btn-snapshots').textContent = 'Snapshots (' + s.snapshots.length + ')';
-    const sb = document.getElementById('snapshots');
-    if (!s.snapshots.length) {
-      sb.innerHTML = '<tr><td class="empty" colspan="6">no snapshots</td></tr>';
-    } else {
-      sb.innerHTML = s.snapshots.map(snap => {
-        const pct = snap.size_bytes ? (snap.used_bytes / snap.size_bytes * 100) : 0;
-        const color = pct > 90 ? '#f85149' : pct > 75 ? '#d29922' : '#238636';
-        return '<tr data-type="snapshot" data-name="' + snap.name + '">' +
-        '<td class="mono"><span class="link" onclick="showSnapshot(\'' + snap.name + '\')">' + snap.name + '</span></td>' +
-        '<td class="mono">' + snap.volume + '</td>' +
-        '<td class="bytes">' + fmt(snap.used_bytes) + ' / ' + fmt(snap.size_bytes) + '</td>' +
-        '<td><div class="quota-bar"><div class="quota-fill" style="width:' + Math.min(pct,100).toFixed(1) + '%;background:' + color + '"></div></div></td>' +
-        '<td>' + fmtDate(snap.created_at) + '</td>' +
-        '<td><button class="btn-del" onclick="del(\'snapshot\',\'' + snap.name + '\')">delete</button></td>' +
-        '</tr>';
-      }).join('');
-    }
+    cachedSnapshots = s.snapshots;
+    renderSnapshots();
 
     const e = await api('/v1/exports');
     document.getElementById('tab-btn-exports').textContent = 'NFS Exports (' + e.exports.length + ')';

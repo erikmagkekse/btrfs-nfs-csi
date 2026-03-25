@@ -47,10 +47,11 @@ func (s *Server) ValidateVolumeCapabilities(_ context.Context, req *csi.Validate
 			switch am.Mode {
 			case csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER,
 				csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY,
+				csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY,
 				csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER:
 			default:
 				return &csi.ValidateVolumeCapabilitiesResponse{
-					Message: "only ReadWriteOnce, ReadOnlyOnce, and ReadWriteMany access modes are supported",
+					Message: "only ReadWriteOnce, ReadOnlyOnce, ReadOnlyMany, and ReadWriteMany access modes are supported",
 				}, nil
 			}
 		}

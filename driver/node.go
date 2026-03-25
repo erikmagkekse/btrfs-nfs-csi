@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -52,6 +54,13 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	args := []string{"-t", "nfs"}
 	mountOpts := "rw"
+	if vc := req.GetVolumeCapability(); vc != nil {
+		if am := vc.GetAccessMode(); am != nil &&
+			(am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY ||
+				am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY) {
+			mountOpts = "ro"
+		}
+	}
 	if opts := vc[config.ParamNFSMountOptions]; opts != "" {
 		mountOpts = mountOpts + "," + opts
 	}
@@ -121,12 +130,12 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 
 	if req.Readonly {
 		start = time.Now()
-		out, err = exec.CommandContext(mountCtx, "mount", "-o", "remount,ro,bind", req.TargetPath).CombinedOutput()
+		err = unix.Mount("", req.TargetPath, "", unix.MS_BIND|unix.MS_REMOUNT|unix.MS_RDONLY, "")
 		mountDuration.WithLabelValues("remount_ro").Observe(time.Since(start).Seconds())
 		if err != nil {
 			mountOpsTotal.WithLabelValues("remount_ro", "error").Inc()
 			_ = forceUnmount(ctx, req.TargetPath)
-			return nil, status.Errorf(codes.Internal, "remount ro: %v: %s", err, string(out))
+			return nil, status.Errorf(codes.Internal, "remount ro: %v", err)
 		}
 		mountOpsTotal.WithLabelValues("remount_ro", "success").Inc()
 	}
