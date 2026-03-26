@@ -8,6 +8,7 @@
 - Nix flake for package and NixOS service module, thanks to @nikp123 (#53)
 - Adding the ability to have multiple agents in the Nix module, thanks to @nikp123 (#62)
 - Improve dashboard formatting and UX (#64)
+- Simplify snapshot table view in dashboard (#65)
 
 ### Bug Fixes
 - Fix read-only PVC mounts not being remounted as read-only (#57)
