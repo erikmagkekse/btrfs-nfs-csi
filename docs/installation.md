@@ -21,8 +21,8 @@ The fastest way to get the agent running. Requires a mounted btrfs filesystem wi
 # export AGENT_TENANTS=default:$(openssl rand -hex 16)
 # export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdX  # optional, auto-format as btrfs + mount to AGENT_BASE_PATH 
-# export VERSION=0.9.8
-# export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.8  # override full image ref
+# export VERSION=0.9.9
+# export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.9  # override full image ref
 # export SKIP_PACKAGE_INSTALL=1
 
 curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scr
 | `AGENT_BASE_PATH` | `/export/data` | btrfs mount point |
 | `AGENT_TENANTS` | `default:<random>` | tenant:token pairs |
 | `AGENT_LISTEN_ADDR` | `:8080` | listen address |
-| `VERSION` | `0.9.8` | container image tag |
+| `VERSION` | `0.9.9` | container image tag |
 | `IMAGE` | `ghcr.io/erikmagkekse/btrfs-nfs-csi:<VERSION>` | full container image reference (overrides `VERSION`) |
 | `AGENT_BLOCK_DISK` | (unset) | block device to auto-format as btrfs and mount (e.g. `/dev/sdb`) |
 | `SKIP_PACKAGE_INSTALL` | (unset) | set to `1` to skip package installation |
@@ -103,6 +103,45 @@ curl -Lo /etc/systemd/system/btrfs-nfs-csi-agent.service \
 
 To build from source: `CGO_ENABLED=0 go build -o btrfs-nfs-csi .`
 
+### 3c. NixOS
+
+This is an example working flake:
+
+```nix
+{
+  inputs = {
+    ...
+    btrfs-nfs-csi.url = "github:erikmagkekse/btrfs-nfs-csi";
+  };
+
+  outputs = {
+    nixpkgs,
+    ...,
+    btrfs-nfs-csi
+  }: {
+    nixosConfigurations."demo" = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        btrfs-nfs-csi.nixosModules.btrfs-nfs-csi
+        {
+          services.btrfs-nfs-csi.agent.example = {
+            basePath = "/export/data";
+            listenAddr = ":8080";
+            metricsAddr = "127.0.0.1:9090";
+
+            environmentFile = ./envfile.env;
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+WARNING: The NixOS module does not read from ``/etc/btrfs-nfs-csi``, you need to specify the configuration file as an option.
+
+To hide environment secrets from the store, I suggest using something like [sops-nix](https://github.com/Mic92/sops-nix).
+
 ### 4. Configure and Start
 
 ```bash
@@ -154,8 +193,10 @@ kubectl logs -n btrfs-nfs-csi deploy/btrfs-nfs-csi-controller -c csi-driver
 ```
 
 ```
-INF agent healthy - vibes immaculate, bits aligned, absolutely bussin agent=http://10.0.1.100:8080 version=0.9.8
+INF agent healthy - vibes immaculate, bits aligned, absolutely bussin agent=http://10.0.1.100:8080 version=0.9.9
 ```
+
+> **Note:** If the agent and driver were built from slightly different commits of the same version, you'll see "agent healthy - commit mismatch" instead. This is normal and everything works fine. Only a WRN-level "version mismatch" indicates a real problem.
 
 ## Use it
 

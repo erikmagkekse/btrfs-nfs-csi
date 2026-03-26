@@ -63,7 +63,7 @@ spec:
   storageClassName: ${SC}
   resources:
     requests:
-      storage: 1Gi
+      storage: 2Gi
 ---
 apiVersion: v1
 kind: Pod
@@ -78,7 +78,7 @@ spec:
     - name: fio
       image: ${FIO_IMAGE}
       command: ["fio"]
-      args: ["--name=mixed", "--directory=/data", "--rw=randrw", "--rwmixread=70", "--bs=${BLOCK_SIZE}", "--size=256m", "--rate=${READ_RATE},${WRITE_RATE}", "--runtime=120", "--time_based", "--group_reporting", "--output-format=terse", "--terse-version=3"]
+      args: ["--name=mixed", "--directory=/data", "--rw=randrw", "--rwmixread=70", "--bs=${BLOCK_SIZE}", "--size=1G", "--rate=${READ_RATE},${WRITE_RATE}", "--runtime=120", "--time_based", "--group_reporting", "--output-format=terse", "--terse-version=3"]
       volumeMounts:
         - name: data
           mountPath: /data
