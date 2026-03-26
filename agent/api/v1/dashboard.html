@@ -24,13 +24,15 @@ th.sortable:hover { color: #c9d1d9; }
 th.sortable .sort-arrow { font-size: .7em; margin-left: 4px; color: #484f58; }
 th.sortable.asc .sort-arrow, th.sortable.desc .sort-arrow { color: #58a6ff; }
 .mono { font-family: ui-monospace, monospace; font-size: .85em; }
-.bytes { color: #79c0ff; }
+.bytes { color: #79c0ff; font-family: ui-monospace, monospace; font-size: .85em; }
 .empty { color: #484f58; font-style: italic; padding: 16px 10px; }
 #error { color: #f85149; margin: 10px 0; display: none; }
 .features { margin: 4px 0 0; font-size: .8em; color: #8b949e; }
 .feat { display: inline-block; padding: 1px 8px; border-radius: 10px; background: #21262d; margin-right: 6px; }
 .btn-del { background: none; border: 1px solid #f8514922; color: #f85149; padding: 2px 10px; border-radius: 6px; cursor: pointer; font-size: .8em; }
 .btn-del:hover { background: #f8514922; }
+.btn-close { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 1.2em; float: right; padding: 0 4px; }
+.btn-close:hover { color: #f0f6fc; }
 .main-layout { display: flex; gap: 16px; }
 .list-panel { flex: 6; min-width: 0; }
 .detail-panel { flex: 4; min-width: 250px; position: sticky; top: 20px; align-self: flex-start; display: none; }
@@ -327,14 +329,14 @@ function renderDeviceStats() {
   var metaPct = fs.metadata_total_bytes ? (fs.metadata_used_bytes / fs.metadata_total_bytes * 100) : 0;
 
   document.getElementById('detail-content').innerHTML =
-    '<h2>Device: ' + ds.device + '</h2>' +
-    '<div class="detail"><h2 style="margin-top:0">Filesystem</h2><dl class="detail-grid">' +
+    '<h2>BTRFS Device: ' + ds.device + '</h2>' +
+    '<div class="detail"><h2 style="margin-top:0">Disk Usage</h2><dl class="detail-grid">' +
     row('Total', '<span class="bytes">' + fmt(fs.total_bytes) + '</span>') +
-    row('Used', '<span class="bytes">' + fmt(fs.used_bytes) + '</span> (' + fsPct.toFixed(1) + '%)') +
+    row('Used', '<span class="bytes">' + fmt(fs.used_bytes) + '</span> <span class="mono">(' + fsPct.toFixed(1) + '%)</span>') +
     row('Free', '<span class="bytes">' + fmt(fs.free_bytes) + '</span>') +
     row('Unallocated', '<span class="bytes">' + fmt(fs.unallocated_bytes) + '</span>') +
-    row('Metadata', '<span class="bytes">' + fmt(fs.metadata_used_bytes) + ' / ' + fmt(fs.metadata_total_bytes) + '</span> (' + metaPct.toFixed(1) + '%)') +
-    row('Data Ratio', fs.data_ratio.toFixed(1) + 'x') +
+    row('Metadata', '<span class="bytes">' + fmt(fs.metadata_used_bytes) + ' / ' + fmt(fs.metadata_total_bytes) + '</span> <span class="mono">(' + metaPct.toFixed(1) + '%)</span>') +
+    row('Data Ratio', '<span class="mono">' + fs.data_ratio.toFixed(1) + 'x</span>') +
     '</dl></div>' +
     '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">Errors</h2><dl class="detail-grid">' +
     errRow('Read', e.read_errs) +
@@ -344,9 +346,9 @@ function renderDeviceStats() {
     errRow('Generation', e.generation_errs) +
     '</dl></div>' +
     '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">IO</h2><dl class="detail-grid">' +
-    row('Read', '<span class="bytes">' + fmt(ds.io.read_bytes_total) + '</span> (' + ds.io.read_ios_total.toLocaleString() + ' ops)') +
-    row('Written', '<span class="bytes">' + fmt(ds.io.write_bytes_total) + '</span> (' + ds.io.write_ios_total.toLocaleString() + ' ops)') +
-    row('In Progress', ds.io.ios_in_progress) +
+    row('Read', '<span class="bytes">' + fmt(ds.io.read_bytes_total) + '</span> <span class="mono">(' + ds.io.read_ios_total.toLocaleString() + ' ops)</span>') +
+    row('Written', '<span class="bytes">' + fmt(ds.io.write_bytes_total) + '</span> <span class="mono">(' + ds.io.write_ios_total.toLocaleString() + ' ops)</span>') +
+    row('In Progress', '<span class="mono">' + ds.io.ios_in_progress + '</span>') +
     '</dl></div>';
 }
 
@@ -375,7 +377,7 @@ function row(label, value) {
 }
 function errRow(label, val) {
   var s = val > 0 ? ' style="color:#f85149;font-weight:600"' : '';
-  return '<dt>' + label + '</dt><dd><span' + s + '>' + val + '</span></dd>';
+  return '<dt>' + label + '</dt><dd><span class="mono"' + s + '>' + val + '</span></dd>';
 }
 
 async function showVolume(name) {
@@ -388,19 +390,19 @@ async function showVolume(name) {
     const clients = vol.clients.length ? vol.clients.join(', ') : '-';
 
     document.getElementById('detail-content').innerHTML =
-      '<h2>Volume: ' + vol.name + '</h2>' +
+      '<h2>Volume: ' + vol.name + ' <button class="btn-close" onclick="showDeviceStatsPanel()">&times;</button></h2>' +
       '<div class="detail"><dl class="detail-grid">' +
       row('Path', '<span class="mono">' + vol.path + '</span>') +
-      row('Size', fmt(vol.size_bytes)) +
-      row('Used', fmt(vol.used_bytes) + ' / ' + fmt(quota) + ' (' + pct.toFixed(1) + '%)') +
-      row('Compression', vol.compression || '-') +
-      row('NoCOW', vol.nocow ? 'yes' : 'no') +
+      row('Size', '<span class="bytes">' + fmt(vol.size_bytes) + '</span>') +
+      row('Used', '<span class="bytes">' + fmt(vol.used_bytes) + ' / ' + fmt(quota) + '</span> <span class="mono">(' + pct.toFixed(1) + '%)</span>') +
+      row('Compression', '<span class="mono">' + (vol.compression || '-') + '</span>') +
+      row('NoCOW', '<span class="mono">' + (vol.nocow ? 'yes' : 'no') + '</span>') +
       row('Mode', '<span class="mono">' + (vol.mode || '-') + '</span>') +
-      row('UID:GID', vol.uid + ':' + vol.gid) +
-      row('Clients', clients) +
-      row('Created', fmtDate(vol.created_at)) +
-      row('Updated', fmtDate(vol.updated_at)) +
-      row('Last Attach', vol.last_attach_at ? fmtDate(vol.last_attach_at) : '-') +
+      row('UID:GID', '<span class="mono">' + vol.uid + ':' + vol.gid + '</span>') +
+      row('Clients', '<span class="mono">' + clients + '</span>') +
+      row('Created', '<span class="mono">' + fmtDate(vol.created_at) + '</span>') +
+      row('Updated', '<span class="mono">' + fmtDate(vol.updated_at) + '</span>') +
+      row('Last Attach', '<span class="mono">' + (vol.last_attach_at ? fmtDate(vol.last_attach_at) : '-') + '</span>') +
       '</dl></div>';
     document.getElementById('detail-panel').classList.add('active');
   } catch(err) {
@@ -414,16 +416,16 @@ async function showSnapshot(name) {
     const snap = await api('/v1/snapshots/' + name);
 
     document.getElementById('detail-content').innerHTML =
-      '<h2>Snapshot: ' + snap.name + '</h2>' +
+      '<h2>Snapshot: ' + snap.name + ' <button class="btn-close" onclick="showDeviceStatsPanel()">&times;</button></h2>' +
       '<div class="detail"><dl class="detail-grid">' +
       row('Volume', '<span class="link" onclick="showVolume(\'' + snap.volume + '\')">' + snap.volume + '</span>') +
       row('Path', '<span class="mono">' + snap.path + '</span>') +
-      row('Size', fmt(snap.size_bytes)) +
-      row('Used', fmt(snap.used_bytes)) +
-      row('Exclusive', fmt(snap.exclusive_bytes)) +
-      row('Read Only', snap.readonly ? 'yes' : 'no') +
-      row('Created', fmtDate(snap.created_at)) +
-      row('Updated', fmtDate(snap.updated_at)) +
+      row('Size', '<span class="bytes">' + fmt(snap.size_bytes) + '</span>') +
+      row('Used', '<span class="bytes">' + fmt(snap.used_bytes) + '</span>') +
+      row('Exclusive', '<span class="bytes">' + fmt(snap.exclusive_bytes) + '</span>') +
+      row('Read Only', '<span class="mono">' + (snap.readonly ? 'yes' : 'no') + '</span>') +
+      row('Created', '<span class="mono">' + fmtDate(snap.created_at) + '</span>') +
+      row('Updated', '<span class="mono">' + fmtDate(snap.updated_at) + '</span>') +
       '</dl></div>';
     document.getElementById('detail-panel').classList.add('active');
   } catch(err) {
@@ -462,7 +464,7 @@ async function refresh() {
     } else {
       eb.innerHTML = e.exports.map(ex => {
         const vol = ex.path.split('/').pop();
-        return '<tr><td class="mono">' + ex.path + '</td><td>' + ex.client + '</td>' +
+        return '<tr><td class="mono">' + ex.path + '</td><td class="mono">' + ex.client + '</td>' +
           '<td><button class="btn-del" onclick="unexport(\'' + vol + '\',\'' + ex.client + '\')">delete</button></td></tr>';
       }).join('');
     }
@@ -558,7 +560,7 @@ function updateFsBar(st) {
   const fill = document.getElementById('fs-fill');
   fill.style.width = pct.toFixed(1) + '%';
   fill.className = 'fs-bar-inner' + (pct > 90 ? ' crit' : pct > 75 ? ' warn' : '');
-  document.getElementById('fs-info').textContent = fmt(st.used_bytes) + ' / ' + fmt(st.total_bytes) + ' (' + pct.toFixed(1) + '% used, ' + fmt(st.free_bytes) + ' free)';
+  document.getElementById('fs-info').textContent = fmt(st.used_bytes) + ' / ' + fmt(st.total_bytes) + ' (' + pct.toFixed(1) + '% used, ' + fmt(st.free_bytes) + ' free) - statfs';
 }
 
 async function refreshIO() {
