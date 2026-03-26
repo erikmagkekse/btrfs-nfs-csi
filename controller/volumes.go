@@ -7,6 +7,7 @@ import (
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -32,7 +33,7 @@ func (s *Server) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 		for _, vol := range volList.Volumes {
 			entries = append(entries, &csi.ListVolumesResponse_Entry{
 				Volume: &csi.Volume{
-					VolumeId:      makeVolumeID(sc, vol.Name),
+					VolumeId:      utils.MakeVolumeID(sc, vol.Name),
 					CapacityBytes: int64(vol.SizeBytes),
 				},
 			})
@@ -101,7 +102,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		if snap == nil {
 			return nil, status.Error(codes.InvalidArgument, "only snapshot content source is supported")
 		}
-		_, snapName, err := parseVolumeID(snap.SnapshotId)
+		_, snapName, err := utils.ParseVolumeID(snap.SnapshotId)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
 		}
@@ -131,7 +132,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId:      makeVolumeID(sc, req.Name),
+				VolumeId:      utils.MakeVolumeID(sc, req.Name),
 				CapacityBytes: int64(sizeBytes),
 				VolumeContext: volCtx,
 				ContentSource: req.VolumeContentSource,
@@ -179,7 +180,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      makeVolumeID(sc, req.Name),
+			VolumeId:      utils.MakeVolumeID(sc, req.Name),
 			CapacityBytes: int64(sizeBytes),
 			VolumeContext: volCtx,
 		},
@@ -191,7 +192,7 @@ func (s *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		return nil, status.Error(codes.InvalidArgument, "volume ID required")
 	}
 
-	sc, name, err := parseVolumeID(req.VolumeId)
+	sc, name, err := utils.ParseVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -224,7 +225,7 @@ func (s *Server) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return nil, status.Error(codes.InvalidArgument, "volume ID required")
 	}
 
-	sc, name, err := parseVolumeID(req.VolumeId)
+	sc, name, err := utils.ParseVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}

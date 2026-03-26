@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -65,11 +66,10 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 // It extracts the volume name from the volumeId (format "storageClass|pvcName") and matches it
 // against NFS mount sources whose mountpoint contains "globalmount".
 func findStagingPath(volumeId string) string {
-	parts := strings.SplitN(volumeId, config.VolumeIDSep, 2)
-	if len(parts) != 2 {
+	_, volName, err := utils.ParseVolumeID(volumeId)
+	if err != nil {
 		return ""
 	}
-	volName := parts[1]
 
 	f, err := os.Open("/proc/self/mountinfo")
 	if err != nil {
