@@ -5,6 +5,7 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -22,7 +23,7 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	sc, name, err := parseVolumeID(req.VolumeId)
+	sc, name, err := utils.ParseVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -83,7 +84,7 @@ func (s *Server) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	sc, name, err := parseVolumeID(req.VolumeId)
+	sc, name, err := utils.ParseVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}

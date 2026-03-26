@@ -42,18 +42,6 @@ const (
 	secretAgentToken = "agentToken"
 )
 
-func makeVolumeID(storageClass, name string) string {
-	return storageClass + config.VolumeIDSep + name
-}
-
-func parseVolumeID(id string) (storageClass, name string, err error) {
-	parts := strings.SplitN(id, config.VolumeIDSep, 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("invalid volume ID: %s", id)
-	}
-	return parts[0], parts[1], nil
-}
-
 func parseNodeIP(nodeID string) (string, error) {
 	parts := strings.SplitN(nodeID, config.NodeIDSep, 2)
 	if len(parts) != 2 || parts[1] == "" {

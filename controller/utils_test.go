@@ -3,6 +3,7 @@ package controller
 import (
 	"testing"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -68,8 +69,8 @@ func TestPaginate(t *testing.T) {
 // --- TestMakeVolumeID / TestParseVolumeID ---
 
 func TestMakeVolumeID(t *testing.T) {
-	id := makeVolumeID("my-sc", "my-vol")
-	sc, name, err := parseVolumeID(id)
+	id := utils.MakeVolumeID("my-sc", "my-vol")
+	sc, name, err := utils.ParseVolumeID(id)
 	require.NoError(t, err)
 	assert.Equal(t, "my-sc", sc)
 	assert.Equal(t, "my-vol", name)
@@ -91,7 +92,7 @@ func TestParseVolumeID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc, name, err := parseVolumeID(tt.id)
+			sc, name, err := utils.ParseVolumeID(tt.id)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
