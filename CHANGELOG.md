@@ -7,6 +7,7 @@
 - ReadOnlyMany (ROX) access mode support for read-only PVC mounts (#57)
 - Nix flake for package and NixOS service module, thanks to @nikp123 (#53)
 - Adding the ability to have multiple agents in the Nix module, thanks to @nikp123 (#62)
+- Improve dashboard formatting and UX (#64)
 
 ### Bug Fixes
 - Fix read-only PVC mounts not being remounted as read-only (#57)
