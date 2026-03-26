@@ -1,9 +1,11 @@
 package driver
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
@@ -24,9 +26,15 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 		return nil, status.Error(codes.InvalidArgument, "volume path required")
 	}
 
-	// Try reading agent-written metadata from the staging path
-	if req.StagingTargetPath != "" {
-		metaPath := req.StagingTargetPath + "/" + config.MetadataFile
+	// Kubelet does not populate StagingTargetPath in NodeGetVolumeStats (kubernetes/kubernetes#109585).
+	// Resolve the staging path from /proc/self/mountinfo by matching the volume name in NFS sources.
+	stagingPath := req.StagingTargetPath
+	if stagingPath == "" {
+		stagingPath = findStagingPath(req.VolumeId)
+	}
+
+	if stagingPath != "" {
+		metaPath := stagingPath + "/" + config.MetadataFile
 		if data, err := os.ReadFile(metaPath); err == nil {
 			var vs volumeStats
 			if err := json.Unmarshal(data, &vs); err == nil && vs.QuotaBytes > 0 {
@@ -51,4 +59,49 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 	// No statfs fallback - returns NFS-level data which doesn't reflect per-volume quota.
 	// Better to return an error so kubelet retries than to report misleading capacity.
 	return nil, status.Errorf(codes.Unavailable, "%s not available, agent may be down", config.MetadataFile)
+}
+
+// findStagingPath parses /proc/self/mountinfo to find the globalmount staging path for a volume.
+// It extracts the volume name from the volumeId (format "storageClass|pvcName") and matches it
+// against NFS mount sources whose mountpoint contains "globalmount".
+func findStagingPath(volumeId string) string {
+	parts := strings.SplitN(volumeId, config.VolumeIDSep, 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	volName := parts[1]
+
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		fields := strings.Split(sc.Text(), " ")
+		if len(fields) < 10 {
+			continue
+		}
+		mountpoint := fields[4]
+		if !strings.Contains(mountpoint, "globalmount") {
+			continue
+		}
+		sepIdx := len(fields) - 4
+		for sepIdx > 5 && fields[sepIdx] != "-" {
+			sepIdx--
+		}
+		if fields[sepIdx] != "-" {
+			continue
+		}
+		fstype := fields[sepIdx+1]
+		if fstype != "nfs" && fstype != "nfs4" {
+			continue
+		}
+		source := fields[sepIdx+2]
+		if strings.HasSuffix(source, "/"+volName) {
+			return mountpoint
+		}
+	}
+	return ""
 }
