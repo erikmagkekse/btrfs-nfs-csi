@@ -5,6 +5,7 @@ on:
     branches: [edge]
     paths:
       - "**.go"
+      - "**.html"
       - "go.mod"
       - "go.sum"
       - "Containerfile*"
@@ -14,6 +15,7 @@ on:
     branches: [main, edge]
     paths:
       - "**.go"
+      - "**.html"
       - "go.mod"
       - "go.sum"
       - "Containerfile*"
