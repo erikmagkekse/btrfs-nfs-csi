@@ -43,11 +43,18 @@ var (
 		Help:      "Mount/unmount operation duration in seconds.",
 		Buckets:   []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 120},
 	}, []string{"operation"})
+
+	volumeStatsOpsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "node",
+		Name:      "volume_stats_ops_total",
+		Help:      "Total volume stats lookups by status.",
+	}, []string{"status"})
 )
 
 func init() {
 	prometheus.MustRegister(grpcRequestsTotal, grpcRequestDuration,
-		mountOpsTotal, mountDuration)
+		mountOpsTotal, mountDuration, volumeStatsOpsTotal)
 }
 
 func metricsInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

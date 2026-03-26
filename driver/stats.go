@@ -45,6 +45,7 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 				if avail < 0 {
 					avail = 0
 				}
+				volumeStatsOpsTotal.WithLabelValues("success").Inc()
 				return &csi.NodeGetVolumeStatsResponse{
 					Usage: []*csi.VolumeUsage{{
 						Available: avail,
@@ -59,6 +60,7 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 
 	// No statfs fallback - returns NFS-level data which doesn't reflect per-volume quota.
 	// Better to return an error so kubelet retries than to report misleading capacity.
+	volumeStatsOpsTotal.WithLabelValues("error").Inc()
 	return nil, status.Errorf(codes.Unavailable, "%s not available, agent may be down", config.MetadataFile)
 }
 
