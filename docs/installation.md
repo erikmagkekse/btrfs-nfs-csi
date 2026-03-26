@@ -124,11 +124,10 @@ This is an example working flake:
       modules = [
         btrfs-nfs-csi.nixosModules.btrfs-nfs-csi
         {
-          services.btrfs-nfs-csi.agent = {
-            enable = true;
-
+          services.btrfs-nfs-csi.agent.example = {
             basePath = "/export/data";
             listenAddr = ":8080";
+            metricsAddr = "127.0.0.1:9090";
 
             environmentFile = ./envfile.env;
           };

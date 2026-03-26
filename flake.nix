@@ -23,7 +23,7 @@
       flake.nixosModules = rec {
         btrfs-nfs-csi = { pkgs, lib, ... }: {
           imports = [ ./nixos.nix ];
-          services.btrfs-nfs-csi.agent.package = lib.mkDefault
+          services.btrfs-nfs-csi.package = lib.mkDefault
             self.packages.${pkgs.stdenv.hostPlatform.system}.btrfs-nfs-csi;
         };
         default = btrfs-nfs-csi;
