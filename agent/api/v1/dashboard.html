@@ -134,8 +134,8 @@ tr.selected td { font-weight: 600; }
 </div>
 <div id="tab-snapshots" class="tab-content">
 <table>
-<thead><tr><th>Name</th><th>Volume</th><th class="sortable" onclick="sortSnapshots('size')" id="th-snap-size">Usage<span class="sort-arrow"></span></th><th></th><th class="sortable" onclick="sortSnapshots('created')" id="th-snap-created">Created<span class="sort-arrow"></span></th><th></th></tr></thead>
-<tbody id="snapshots"><tr><td class="empty" colspan="6">loading...</td></tr></tbody>
+<thead><tr><th>Name</th><th class="sortable" onclick="sortSnapshots('used')" id="th-snap-used">Used<span class="sort-arrow"></span></th><th class="sortable" onclick="sortSnapshots('created')" id="th-snap-created">Created<span class="sort-arrow"></span></th><th></th></tr></thead>
+<tbody id="snapshots"><tr><td class="empty" colspan="4">loading...</td></tr></tbody>
 </table>
 </div>
 <div id="tab-exports" class="tab-content">
@@ -149,7 +149,7 @@ tr.selected td { font-weight: 600; }
 
 <script>
 function fmt(b) {
-  if (!b) return '-';
+  if (b == null) return '-';
   const u = ['B','KiB','MiB','GiB','TiB'];
   let i = 0;
   let v = b;
@@ -272,7 +272,7 @@ function sortSnapshots(col) {
 }
 
 function renderSnapshots() {
-  ['size','created'].forEach(function(c) {
+  ['used','created'].forEach(function(c) {
     var th = document.getElementById('th-snap-' + c);
     th.classList.remove('asc', 'desc');
     th.querySelector('.sort-arrow').textContent = '';
@@ -287,7 +287,7 @@ function renderSnapshots() {
   if (snapSortCol) {
     snaps.sort(function(a, b) {
       var va, vb;
-      if (snapSortCol === 'size') { va = a.size_bytes ? a.used_bytes / a.size_bytes : 0; vb = b.size_bytes ? b.used_bytes / b.size_bytes : 0; }
+      if (snapSortCol === 'used') { va = a.used_bytes || 0; vb = b.used_bytes || 0; }
       else if (snapSortCol === 'created') { va = a.created_at || ''; vb = b.created_at || ''; }
       if (va < vb) return snapSortAsc ? -1 : 1;
       if (va > vb) return snapSortAsc ? 1 : -1;
@@ -297,17 +297,13 @@ function renderSnapshots() {
 
   var sb = document.getElementById('snapshots');
   if (!snaps.length) {
-    sb.innerHTML = '<tr><td class="empty" colspan="6">no snapshots</td></tr>';
+    sb.innerHTML = '<tr><td class="empty" colspan="4">no snapshots</td></tr>';
     return;
   }
   sb.innerHTML = snaps.map(function(snap) {
-    var pct = snap.size_bytes ? (snap.used_bytes / snap.size_bytes * 100) : 0;
-    var color = pct > 90 ? '#f85149' : pct > 75 ? '#d29922' : '#238636';
     return '<tr data-type="snapshot" data-name="' + snap.name + '">' +
     '<td class="mono"><span class="link" onclick="showSnapshot(\'' + snap.name + '\')">' + snap.name + '</span></td>' +
-    '<td class="mono">' + snap.volume + '</td>' +
-    '<td class="bytes">' + fmt(snap.used_bytes) + ' / ' + fmt(snap.size_bytes) + '</td>' +
-    '<td><div class="quota-bar"><div class="quota-fill" style="width:' + Math.min(pct,100).toFixed(1) + '%;background:' + color + '"></div></div></td>' +
+    '<td class="bytes">' + fmt(snap.used_bytes) + '</td>' +
     '<td>' + fmtDate(snap.created_at) + '</td>' +
     '<td><button class="btn-del" onclick="del(\'snapshot\',\'' + snap.name + '\')">delete</button></td>' +
     '</tr>';
