@@ -25,7 +25,6 @@ type AgentTracker struct {
 	commit  string
 	mu      sync.RWMutex
 	agents  map[string]*agentAPI.Client
-	scNames map[string]string // agentURL -> SC name
 	scToURL map[string]string // SC name -> agentURL
 }
 
@@ -34,18 +33,8 @@ func NewAgentTracker(version, commit string) *AgentTracker {
 		version: version,
 		commit:  commit,
 		agents:  make(map[string]*agentAPI.Client),
-		scNames: make(map[string]string),
 		scToURL: make(map[string]string),
 	}
-}
-
-func (t *AgentTracker) StorageClass(agentURL string) string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	if name, ok := t.scNames[agentURL]; ok {
-		return name
-	}
-	return "unknown"
 }
 
 func (t *AgentTracker) AgentURL(scName string) (string, error) {
@@ -149,11 +138,9 @@ func (t *AgentTracker) discoverFromStorageClasses(ctx context.Context) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	scNames := make(map[string]string, len(scList))
 	scToURL := make(map[string]string, len(scList))
 	known := make(map[string]bool, len(scList))
 	for _, a := range scList {
-		scNames[a.agentURL] = a.scName
 		scToURL[a.scName] = a.agentURL
 		known[a.agentURL] = true
 
@@ -162,7 +149,6 @@ func (t *AgentTracker) discoverFromStorageClasses(ctx context.Context) {
 			log.Info().Str("agent", a.agentURL).Str("sc", a.scName).Msg("discovered agent from StorageClass")
 		}
 	}
-	t.scNames = scNames
 	t.scToURL = scToURL
 
 	for url := range t.agents {
@@ -175,34 +161,34 @@ func (t *AgentTracker) discoverFromStorageClasses(ctx context.Context) {
 
 func (t *AgentTracker) checkAll(ctx context.Context) {
 	t.mu.RLock()
-	snapshot := make(map[string]*agentAPI.Client, len(t.agents))
-	for url, c := range t.agents {
-		snapshot[url] = c
+	snapshot := make(map[string]*agentAPI.Client, len(t.scToURL))
+	for sc, url := range t.scToURL {
+		if c, ok := t.agents[url]; ok {
+			snapshot[sc] = c
+		}
 	}
 	t.mu.RUnlock()
 
-	for url, c := range snapshot {
+	for sc, c := range snapshot {
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		health, err := c.Healthz(checkCtx)
 		cancel()
 
-		sc := t.StorageClass(url)
-
 		if err != nil {
 			agentHealthTotal.WithLabelValues("error", sc).Inc()
-			log.Error().Err(err).Str("agent", url).Msg("agent health check failed")
+			log.Error().Err(err).Str("sc", sc).Msg("agent health check failed")
 			continue
 		}
 
 		if health.Version != t.version {
 			agentHealthTotal.WithLabelValues("version_mismatch", sc).Inc()
-			log.Warn().Str("agent", url).Str("agentVersion", health.Version).Str("driverVersion", t.version).Msg("agent/driver version mismatch")
+			log.Warn().Str("sc", sc).Str("agentVersion", health.Version).Str("driverVersion", t.version).Msg("agent/driver version mismatch")
 		} else if health.Commit != t.commit {
 			agentHealthTotal.WithLabelValues("healthy", sc).Inc()
-			log.Info().Str("agent", url).Str("agentCommit", health.Commit).Str("driverCommit", t.commit).Msg("agent healthy - commit mismatch, but same version (could be a security update)")
+			log.Info().Str("sc", sc).Str("agentCommit", health.Commit).Str("driverCommit", t.commit).Msg("agent healthy - commit mismatch, but same version (could be a security update)")
 		} else {
 			agentHealthTotal.WithLabelValues("healthy", sc).Inc()
-			log.Info().Str("agent", url).Str("version", health.Version).Str("commit", health.Commit).Msg("agent healthy - vibes immaculate, bits aligned, absolutely bussin")
+			log.Info().Str("sc", sc).Str("version", health.Version).Str("commit", health.Commit).Msg("agent healthy - vibes immaculate, bits aligned, absolutely bussin")
 		}
 	}
 }
