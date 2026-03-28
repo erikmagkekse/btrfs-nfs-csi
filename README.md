@@ -78,6 +78,13 @@ storageClasses:
     agentURL: "http://10.0.0.5:8080"
     agentToken: "your-tenant-token"  # from step 1
     isDefault: true
+
+# nfsServer must be reachable from the IP that NFS exports are created for.
+# By default the driver uses each node's primary IP (status.hostIP).
+# For separate storage networks uncomment one of these:
+# driver:
+#   storageInterface: "eth1"         # dedicated NIC
+#   storageCIDR: "10.10.0.0/24"     # or match by subnet
 EOF
 
 helm install btrfs-nfs-csi oci://ghcr.io/erikmagkekse/charts/btrfs-nfs-csi \
