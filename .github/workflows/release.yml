@@ -61,7 +61,7 @@ jobs:
 
   helm:
     if: github.event.base_ref == 'refs/heads/main'
-    uses: ./.github/workflows/helm-publish.yml
+    uses: ./.github/workflows/helm-release.yml
     permissions:
       contents: read
       packages: write

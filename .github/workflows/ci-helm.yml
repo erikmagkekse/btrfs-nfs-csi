@@ -5,12 +5,12 @@ on:
     branches: [edge]
     paths:
       - "charts/**"
-      - ".github/workflows/helm.yml"
+      - ".github/workflows/ci-helm.yml"
   pull_request:
     branches: [main, edge]
     paths:
       - "charts/**"
-      - ".github/workflows/helm.yml"
+      - ".github/workflows/ci-helm.yml"
 
 jobs:
   lint:
