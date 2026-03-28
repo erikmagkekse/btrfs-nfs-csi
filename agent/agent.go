@@ -51,7 +51,7 @@ func (a *Agent) Start(ctx context.Context) {
 	var exp nfs.Exporter
 	switch a.cfg.NFSExporter {
 	case "kernel":
-		exp = nfs.NewKernelExporter(a.cfg.ExportfsBin)
+		exp = nfs.NewKernelExporter(a.cfg.ExportfsBin, a.cfg.KernelExportOptions)
 	}
 
 	// parse tenants

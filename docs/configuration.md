@@ -14,6 +14,7 @@
 | `AGENT_FEATURE_QUOTA_UPDATE_INTERVAL` | `1m` | Usage update interval |
 | `AGENT_NFS_EXPORTER` | `kernel` | NFS exporter type |
 | `AGENT_EXPORTFS_BIN` | `exportfs` | exportfs binary path |
+| `AGENT_KERNEL_EXPORT_OPTIONS` | `rw,nohide,crossmnt,no_root_squash,no_subtree_check` | NFS export options (fsid is always appended automatically) |
 | `AGENT_BTRFS_BIN` | `btrfs` | btrfs binary path |
 | `AGENT_NFS_RECONCILE_INTERVAL` | `10m` | Export reconciliation (`0` = off) |
 | `AGENT_DEVICE_IO_INTERVAL` | `5s` | Device IO stats update interval |

@@ -20,8 +20,10 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+const defaultOpts = "rw,nohide,crossmnt,no_root_squash,no_subtree_check"
+
 func newTestExporter(m utils.Runner) *kernelExporter {
-	return &kernelExporter{bin: "exportfs", cmd: m}
+	return &kernelExporter{bin: "exportfs", cmd: m, opts: defaultOpts}
 }
 
 func TestExport(t *testing.T) {
@@ -50,6 +52,36 @@ func TestExport(t *testing.T) {
 
 		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
 		require.Error(t, err)
+	})
+}
+
+func TestExportCustomOptions(t *testing.T) {
+	t.Run("custom options passed through", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		e := &kernelExporter{bin: "exportfs", cmd: m, opts: "rw,no_root_squash,async"}
+
+		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+
+		args := strings.Join(m.Calls[0], " ")
+		assert.Contains(t, args, "rw,no_root_squash,async,fsid=")
+		assert.NotContains(t, args, "nohide")
+	})
+
+	t.Run("fsid always appended", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		e := &kernelExporter{bin: "exportfs", cmd: m, opts: "rw"}
+
+		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
+		require.NoError(t, err)
+
+		args := strings.Join(m.Calls[0], " ")
+		fsid := crc32.ChecksumIEEE([]byte("/data/vol1")) & fsidMask
+		if fsid == 0 {
+			fsid = 1
+		}
+		assert.Contains(t, args, fmt.Sprintf("rw,fsid=%d", fsid))
 	})
 }
 
