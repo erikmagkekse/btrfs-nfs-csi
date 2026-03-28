@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.9.10
+
+This release adds the Helm chart as the primary deployment method for the CSI driver and controller. It also fixes agent tracking when multiple StorageClasses share the same agent and consolidates health check metrics into `agent_ops_total`.
+
+### Features
+- Helm chart for CSI driver and controller deployment (#67)
+- Configurable kernel NFS export options via `AGENT_KERNEL_EXPORT_OPTIONS` (#66)
+
+### Improvements
+- Validate NoCOW and Compression values in controller (#68)
+
+### Bug Fixes
+- Fix multi-SC agent tracking: resolve StorageClass name from PVC instead of broken reverse-lookup (#68)
+
+### Refactoring
+- Move `IsValidCompression` to shared `utils/` package (#68)
+
+### Breaking Changes
+- `btrfs_nfs_csi_controller_agent_health_total` metric removed — use `agent_ops_total{operation="health_check"}` instead (#69)
+- Health checks now tracked in `agent_ops_total` and `agent_duration_seconds` with `operation=health_check` (#69)
+
 ## v0.9.9
 
 ### Features

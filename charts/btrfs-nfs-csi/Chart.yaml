@@ -3,7 +3,7 @@ name: btrfs-nfs-csi
 description: Kubernetes CSI driver that turns any btrfs filesystem into a full-featured NFS storage backend with instant snapshots, clones, and quotas
 type: application
 version: 0.1.0
-appVersion: "0.9.9"
+appVersion: "0.9.10"
 kubeVersion: ">=1.30.0-0"
 home: https://github.com/erikmagkekse/btrfs-nfs-csi
 sources:
