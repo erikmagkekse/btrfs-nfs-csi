@@ -147,7 +147,7 @@ go build -ldflags "-X main.version=$(cat VERSION) -X main.commit=$(git rev-parse
 
 ```bash
 sudo ./scripts/agent-dev-setup.sh up
-AGENT_BASE_PATH=/tmp/btrfs-nfs-csi-dev AGENT_TENANTS=dev:dev ./btrfs-nfs-csi agent
+sudo bash -c "AGENT_BASE_PATH=/tmp/btrfs-nfs-csi-dev AGENT_TENANTS=dev:dev ./btrfs-nfs-csi agent"
 sudo ./scripts/agent-dev-setup.sh down
 ```
 
