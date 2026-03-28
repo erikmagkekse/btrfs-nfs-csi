@@ -81,7 +81,13 @@ func resolveBlockDeviceFrom(path string, mountinfo string) (string, error) {
 		return "", fmt.Errorf("no mount found for %s", path)
 	}
 
-	// bestDevice is e.g. "/dev/sda1" or "/dev/nvme0n1p1"
+	// Resolve symlinks so device-mapper paths like /dev/mapper/VG-LV
+	// become /dev/dm-X which has a matching /sys/block/ entry.
+	resolved, err := filepath.EvalSymlinks(bestDevice)
+	if err == nil {
+		bestDevice = resolved
+	}
+
 	name := filepath.Base(bestDevice)
 
 	// If this is a partition, walk up to parent device

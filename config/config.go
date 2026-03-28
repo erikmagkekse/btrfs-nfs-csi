@@ -46,6 +46,7 @@ type AgentConfig struct {
 	UsageInterval        time.Duration `env:"AGENT_FEATURE_QUOTA_UPDATE_INTERVAL" envDefault:"1m"`
 	NFSExporter          string        `env:"AGENT_NFS_EXPORTER" envDefault:"kernel"`
 	ExportfsBin          string        `env:"AGENT_EXPORTFS_BIN" envDefault:"exportfs"`
+	KernelExportOptions  string        `env:"AGENT_KERNEL_EXPORT_OPTIONS" envDefault:"rw,nohide,crossmnt,no_root_squash,no_subtree_check"`
 	BtrfsBin             string        `env:"AGENT_BTRFS_BIN" envDefault:"btrfs"`
 	NFSReconcileInterval time.Duration `env:"AGENT_NFS_RECONCILE_INTERVAL" envDefault:"10m"`
 	DeviceIOInterval     time.Duration `env:"AGENT_DEVICE_IO_INTERVAL" envDefault:"5s"`

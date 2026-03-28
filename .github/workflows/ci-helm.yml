@@ -1,0 +1,40 @@
+name: Helm CI
+
+on:
+  push:
+    branches: [edge]
+    paths:
+      - "charts/**"
+      - ".github/workflows/ci-helm.yml"
+  pull_request:
+    branches: [main, edge]
+    paths:
+      - "charts/**"
+      - ".github/workflows/ci-helm.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify appVersion matches VERSION
+        run: |
+          APP_VERSION=$(grep 'appVersion:' charts/btrfs-nfs-csi/Chart.yaml | sed 's/.*"\(.*\)"/\1/')
+          VERSION=$(cat VERSION)
+          if [[ "${APP_VERSION}" != "${VERSION}" ]]; then
+            echo "::error::Chart appVersion (${APP_VERSION}) does not match VERSION file (${VERSION})"
+            exit 1
+          fi
+
+      - name: Lint
+        run: helm lint charts/btrfs-nfs-csi
+
+      - name: Template
+        run: |
+          helm template test charts/btrfs-nfs-csi \
+            --set 'storageClasses[0].name=btrfs-nfs' \
+            --set 'storageClasses[0].nfsServer=10.0.0.5' \
+            --set 'storageClasses[0].agentURL=http://10.0.0.5:8080' \
+            --set 'storageClasses[0].agentToken=ci-test' \
+            --namespace btrfs-nfs-csi

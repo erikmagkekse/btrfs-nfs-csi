@@ -25,7 +25,7 @@ func TestKernelExporterIntegration(t *testing.T) {
 func (s *KernelExporterSuite) SetupSuite() {
 	bin, err := exec.LookPath("exportfs")
 	s.Require().NoError(err, "exportfs not found")
-	s.exp = NewKernelExporter(bin)
+	s.exp = NewKernelExporter(bin, "rw,nohide,crossmnt,no_root_squash,no_subtree_check")
 	s.ctx = context.Background()
 }
 

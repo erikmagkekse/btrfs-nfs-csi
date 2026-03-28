@@ -1,0 +1,16 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "btrfs-nfs-csi.controllerName" . }}
+  labels:
+    {{- include "btrfs-nfs-csi.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "btrfs-nfs-csi.controllerServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "btrfs-nfs-csi.controllerName" . }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

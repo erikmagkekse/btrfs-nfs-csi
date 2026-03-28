@@ -14,20 +14,18 @@ const (
 	// fsidMask ensures the generated fsid is a positive 31-bit value.
 	fsidMask = 0x7FFFFFFF
 
-	// exportOpts is the default NFS export option set.
-	exportOpts = "rw,nohide,crossmnt,no_root_squash,no_subtree_check,fsid=%d"
-
 	// errNotFound is the exportfs error substring for missing exports.
 	errNotFound = "Could not find"
 )
 
 type kernelExporter struct {
-	bin string
-	cmd utils.Runner
+	bin  string
+	cmd  utils.Runner
+	opts string
 }
 
-func NewKernelExporter(bin string) Exporter {
-	return &kernelExporter{bin: bin, cmd: &utils.ShellRunner{}}
+func NewKernelExporter(bin, exportOpts string) Exporter {
+	return &kernelExporter{bin: bin, cmd: &utils.ShellRunner{}, opts: exportOpts}
 }
 
 func (e *kernelExporter) Export(ctx context.Context, path string, client string) error {
@@ -35,7 +33,7 @@ func (e *kernelExporter) Export(ctx context.Context, path string, client string)
 	if fsid == 0 {
 		fsid = 1
 	}
-	opts := fmt.Sprintf(exportOpts, fsid)
+	opts := fmt.Sprintf("%s,fsid=%d", e.opts, fsid)
 	return e.run(ctx, "-o", opts, fmt.Sprintf("%s:%s", client, path))
 }
 

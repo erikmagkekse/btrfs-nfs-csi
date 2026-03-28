@@ -1,4 +1,4 @@
-btrfs-nfs-csi
+/btrfs-nfs-csi
 *.exe
 *.dll
 *.so

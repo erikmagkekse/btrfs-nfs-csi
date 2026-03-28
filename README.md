@@ -48,7 +48,7 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - HA via DRBD + Pacemaker (active/passive failover)
 
 **Roadmap:**
-NFS-Ganesha support, `VOLUME_CONDITION` health reporting, Helm chart
+NFS-Ganesha support, `VOLUME_CONDITION` health reporting
 
 ## Quick Start
 
@@ -70,22 +70,32 @@ curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scr
 **2. Deploy the CSI driver and StorageClass** in your Kubernetes cluster:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/deploy/driver/setup.yaml
+# Create a values.yaml with your agent details:
+cat > values.yaml <<EOF
+storageClasses:
+  - name: btrfs-nfs
+    nfsServer: "10.0.0.5"             # your agent's IP
+    agentURL: "http://10.0.0.5:8080"
+    agentToken: "your-tenant-token"   # from step 1
+    isDefault: true
 
-# Download the StorageClass template and fill in your agent's details:
-curl -LO https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/deploy/driver/storageclass.yaml
+# nfsServer must be reachable from the IP that NFS exports are created for.
+# By default the driver uses each node's primary IP (status.hostIP).
+# For separate storage networks uncomment one of these:
+# driver:
+#   storageInterface: "eth1"        # dedicated NIC
+#   storageCIDR: "10.10.0.0/24"     # or match by subnet
+EOF
 
-# Edit storageclass.yaml: set agentToken, nfsServer and agentURL.
-# nfsServer must be reachable from the K8s nodes' IP (used for NFS exports by default).
-# For separate storage networks, see DRIVER_STORAGE_INTERFACE / DRIVER_STORAGE_CIDR.
-vi storageclass.yaml
-
-kubectl apply -f storageclass.yaml
+helm install btrfs-nfs-csi oci://ghcr.io/erikmagkekse/charts/btrfs-nfs-csi \
+  -n btrfs-nfs-csi --create-namespace -f values.yaml
 
 # Wait for the controller to connect to your agent:
 kubectl logs -n btrfs-nfs-csi deploy/btrfs-nfs-csi-controller -c csi-driver -f
 # Look for: "agent healthy" (a commit mismatch note is fine, only a WRN "version mismatch" is a problem)
 ```
+
+> For static manifests without Helm, see [docs/installation.md](docs/installation.md#static-manifests).
 
 **3. That's it, test it!**
 
@@ -137,7 +147,7 @@ go build -ldflags "-X main.version=$(cat VERSION) -X main.commit=$(git rev-parse
 
 ```bash
 sudo ./scripts/agent-dev-setup.sh up
-AGENT_BASE_PATH=/tmp/btrfs-nfs-csi-dev AGENT_TENANTS=dev:dev ./btrfs-nfs-csi agent
+sudo bash -c "AGENT_BASE_PATH=/tmp/btrfs-nfs-csi-dev AGENT_TENANTS=dev:dev ./btrfs-nfs-csi agent"
 sudo ./scripts/agent-dev-setup.sh down
 ```
 

@@ -21,8 +21,8 @@ The fastest way to get the agent running. Requires a mounted btrfs filesystem wi
 # export AGENT_TENANTS=default:$(openssl rand -hex 16)
 # export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdX  # optional, auto-format as btrfs + mount to AGENT_BASE_PATH 
-# export VERSION=0.9.9
-# export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.9  # override full image ref
+# export VERSION=0.9.10
+# export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.10  # override full image ref
 # export SKIP_PACKAGE_INSTALL=1
 
 curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scr
 | `AGENT_BASE_PATH` | `/export/data` | btrfs mount point |
 | `AGENT_TENANTS` | `default:<random>` | tenant:token pairs |
 | `AGENT_LISTEN_ADDR` | `:8080` | listen address |
-| `VERSION` | `0.9.9` | container image tag |
+| `VERSION` | `0.9.10` | container image tag |
 | `IMAGE` | `ghcr.io/erikmagkekse/btrfs-nfs-csi:<VERSION>` | full container image reference (overrides `VERSION`) |
 | `AGENT_BLOCK_DISK` | (unset) | block device to auto-format as btrfs and mount (e.g. `/dev/sdb`) |
 | `SKIP_PACKAGE_INSTALL` | (unset) | set to `1` to skip package installation |
@@ -175,6 +175,29 @@ Each tenant maps to one Kubernetes StorageClass. The StorageClass references the
 
 ## Driver Setup
 
+### Helm (Recommended)
+
+```bash
+helm install btrfs-nfs-csi oci://ghcr.io/erikmagkekse/charts/btrfs-nfs-csi \
+  -n btrfs-nfs-csi --create-namespace \
+  -f values.yaml
+```
+
+Minimal `values.yaml`:
+
+```yaml
+storageClasses:
+  - name: btrfs-nfs
+    nfsServer: "10.0.0.5"
+    agentURL: "http://10.0.0.5:8080"
+    existingSecret: "btrfs-nfs-creds"
+    isDefault: true
+```
+
+See the [Helm chart README](../charts/btrfs-nfs-csi/README.md) for all options.
+
+### Static Manifests
+
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/deploy/driver/setup.yaml
 # Download storageclass.yaml, edit it: set nfsServer, agentURL, agentToken
@@ -193,7 +216,7 @@ kubectl logs -n btrfs-nfs-csi deploy/btrfs-nfs-csi-controller -c csi-driver
 ```
 
 ```
-INF agent healthy - vibes immaculate, bits aligned, absolutely bussin agent=http://10.0.1.100:8080 version=0.9.9
+INF agent healthy - vibes immaculate, bits aligned, absolutely bussin sc=btrfs-nfs version=0.9.10
 ```
 
 > **Note:** If the agent and driver were built from slightly different commits of the same version, you'll see "agent healthy - commit mismatch" instead. This is normal and everything works fine. Only a WRN-level "version mismatch" indicates a real problem.

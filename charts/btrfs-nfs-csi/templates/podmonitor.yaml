@@ -1,0 +1,59 @@
+{{- if .Values.metrics.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "btrfs-nfs-csi.controllerName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "btrfs-nfs-csi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+    {{- with .Values.metrics.podMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.podMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "btrfs-nfs-csi.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller
+  podMetricsEndpoints:
+    - port: metrics
+      {{- with .Values.metrics.podMonitor.interval }}
+      interval: {{ . }}
+      {{- end }}
+      {{- with .Values.metrics.podMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ . }}
+      {{- end }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "btrfs-nfs-csi.driverName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "btrfs-nfs-csi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: driver
+    {{- with .Values.metrics.podMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.podMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "btrfs-nfs-csi.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: driver
+  podMetricsEndpoints:
+    - port: metrics
+      {{- with .Values.metrics.podMonitor.interval }}
+      interval: {{ . }}
+      {{- end }}
+      {{- with .Values.metrics.podMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ . }}
+      {{- end }}
+{{- end }}

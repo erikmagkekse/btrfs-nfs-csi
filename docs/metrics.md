@@ -1,6 +1,6 @@
 # Metrics
 
-36 metrics across 3 components.
+35 metrics across 3 components.
 
 ## Agent (26) - port 9090
 
@@ -37,7 +37,7 @@
 
 Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERVAL`). Device errors and filesystem allocation are updated every 1m (configurable via `AGENT_DEVICE_STATS_INTERVAL`).
 
-## Controller (6) - port 9090
+## Controller (5) - port 9090
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -45,14 +45,24 @@ Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERV
 | `btrfs_nfs_csi_controller_grpc_request_duration_seconds` | Histogram | `method` |
 | `btrfs_nfs_csi_controller_agent_ops_total` | Counter | `operation`, `status`, `storage_class` |
 | `btrfs_nfs_csi_controller_agent_duration_seconds` | Histogram | `operation`, `storage_class` |
-| `btrfs_nfs_csi_controller_agent_health_total` | Counter | `result`, `storage_class` |
 | `btrfs_nfs_csi_controller_k8s_ops_total` | Counter | `status` |
 
-**Operations:** `create_volume`, `delete_volume`, `create_snapshot`, `delete_snapshot`, `create_clone`, `export`, `unexport`, `update_volume`
+**Operations and their status values:**
 
-**Status:** `success`, `error`, `conflict`, `not_found`
+| Operation | Status |
+|---|---|
+| `create_volume` | `success`, `error`, `conflict` |
+| `delete_volume` | `success`, `error`, `not_found` |
+| `create_snapshot` | `success`, `error`, `conflict` |
+| `delete_snapshot` | `success`, `error`, `not_found` |
+| `create_clone` | `success`, `error`, `conflict` |
+| `export` | `success`, `error` |
+| `unexport` | `success`, `error`, `not_found` |
+| `update_volume` | `success`, `error` |
+| `list_volumes` | `success`, `error` |
+| `list_snapshots` | `success`, `error` |
+| `health_check` | `healthy`, `error`, `version_mismatch` |
 
-**Health results:** `healthy`, `error`, `version_mismatch`
 
 **Buckets (agent_duration):** `[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`
 
@@ -86,8 +96,8 @@ rate(btrfs_nfs_csi_node_mount_ops_total{operation="nfs_mount",status="error"}[5m
 # Force unmounts (stuck mounts)
 increase(btrfs_nfs_csi_node_mount_ops_total{operation="force_umount"}[1h])
 
-# Agent health failures
-rate(btrfs_nfs_csi_controller_agent_health_total{result="error"}[5m])
+# Agent health check errors
+rate(btrfs_nfs_csi_controller_agent_ops_total{operation="health_check",status="error"}[5m])
 
 # P99 mount latency
 histogram_quantile(0.99, rate(btrfs_nfs_csi_node_mount_duration_seconds_bucket{operation="nfs_mount"}[5m]))

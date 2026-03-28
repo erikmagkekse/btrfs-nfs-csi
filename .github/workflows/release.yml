@@ -58,3 +58,10 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ steps.version.outputs.commit }}
+
+  helm:
+    if: github.event.base_ref == 'refs/heads/main'
+    uses: ./.github/workflows/helm-release.yml
+    permissions:
+      contents: read
+      packages: write
