@@ -16,6 +16,7 @@ This release adds the Helm chart as the primary deployment method for the CSI dr
 ### Bug Fixes
 - Fix multi-SC agent tracking: resolve StorageClass name from PVC instead of broken reverse-lookup (#68)
 - Fix `snapshotClass: false` and `allowVolumeExpansion: false` ignored in Helm chart (#71)
+- Fix device sysfs stat lookup for LVM, mdraid, bcache and other device-mapper setups where the block device is a symlink (#73)
 
 ### Refactoring
 - Move `IsValidCompression` to shared `utils/` package (#68)
