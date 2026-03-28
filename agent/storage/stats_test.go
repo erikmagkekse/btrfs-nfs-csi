@@ -90,6 +90,23 @@ func TestResolveBlockDevice(t *testing.T) {
 		assert.ErrorContains(t, err, "no mount found")
 	})
 
+	t.Run("device-mapper symlink resolved", func(t *testing.T) {
+		dir := t.TempDir()
+		// simulate /dev/mapper/MyVG-MyLV -> /dev/dm-0
+		target := filepath.Join(dir, "dm-0")
+		require.NoError(t, os.WriteFile(target, nil, 0o644))
+		mapper := filepath.Join(dir, "mapper")
+		require.NoError(t, os.Mkdir(mapper, 0o755))
+		link := filepath.Join(mapper, "MyVG-MyLV")
+		require.NoError(t, os.Symlink(target, link))
+
+		info := "30 22 0:52 / /mnt/btrfs rw - btrfs " + link + " rw\n"
+		f := writeTempFile(t, info)
+		name, err := resolveBlockDeviceFrom("/mnt/btrfs/data", f)
+		require.NoError(t, err)
+		assert.Equal(t, "/dev/dm-0", name)
+	})
+
 	t.Run("root fallback", func(t *testing.T) {
 		f := writeTempFile(t, mountinfo)
 		name, err := resolveBlockDeviceFrom("/home/user", f)
