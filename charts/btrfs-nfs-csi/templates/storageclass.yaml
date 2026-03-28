@@ -72,9 +72,9 @@ parameters:
   csi.storage.k8s.io/controller-publish-secret-name: {{ $secretName }}
   csi.storage.k8s.io/controller-publish-secret-namespace: {{ $namespace }}
 reclaimPolicy: {{ .reclaimPolicy | default "Delete" }}
-allowVolumeExpansion: {{ .allowVolumeExpansion | default true }}
+allowVolumeExpansion: {{ ternary .allowVolumeExpansion true (hasKey . "allowVolumeExpansion") }}
 volumeBindingMode: {{ .volumeBindingMode | default "Immediate" }}
-{{- if ne (toString (default true .snapshotClass)) "false" }}
+{{- if not (and (hasKey . "snapshotClass") (not .snapshotClass)) }}
 ---
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass
