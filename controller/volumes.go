@@ -69,7 +69,12 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	s.agents.Track(agentURL, client)
-	sc := s.agents.StorageClass(agentURL)
+
+	vp := resolveVolumeParams(ctx, params)
+	sc := vp.StorageClass
+	if sc == "" {
+		return nil, status.Error(codes.Internal, "failed to resolve StorageClass name from PVC")
+	}
 
 	var sizeBytes uint64 = 1 << 30 // 1 GiB default
 	if req.CapacityRange != nil {
@@ -93,8 +98,6 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	if ns := params[config.PvcNamespaceKey]; ns != "" {
 		volCtx[config.PvcNamespaceKey] = ns
 	}
-
-	vp := resolveVolumeParams(ctx, params)
 
 	// Clone from snapshot
 	if req.VolumeContentSource != nil {
