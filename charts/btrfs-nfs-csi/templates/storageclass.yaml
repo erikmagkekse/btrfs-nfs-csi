@@ -1,0 +1,91 @@
+{{- $fullname := include "btrfs-nfs-csi.fullname" . }}
+{{- $namespace := .Release.Namespace }}
+{{- $labels := include "btrfs-nfs-csi.labels" . }}
+{{- $driverName := .Values.driverName }}
+{{- range .Values.storageClasses }}
+{{- $secretName := default (printf "%s-%s" $fullname .name) .existingSecret }}
+{{- if not .existingSecret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- $labels | nindent 4 }}
+type: Opaque
+stringData:
+  agentToken: {{ .agentToken | quote }}
+{{- end }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- $labels | nindent 4 }}
+    {{- with .labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- if or .isDefault .annotations }}
+  annotations:
+    {{- if .isDefault }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
+    {{- with .annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+provisioner: {{ $driverName }}
+parameters:
+  nfsServer: {{ .nfsServer | quote }}
+  agentURL: {{ .agentURL | quote }}
+  {{- if .nfsMountOptions }}
+  nfsMountOptions: {{ .nfsMountOptions | quote }}
+  {{- end }}
+  {{- if .nocow }}
+  nocow: {{ .nocow | quote }}
+  {{- end }}
+  {{- if .compression }}
+  compression: {{ .compression | quote }}
+  {{- end }}
+  {{- if .uid }}
+  uid: {{ .uid | quote }}
+  {{- end }}
+  {{- if .gid }}
+  gid: {{ .gid | quote }}
+  {{- end }}
+  {{- if .mode }}
+  mode: {{ .mode | quote }}
+  {{- end }}
+  csi.storage.k8s.io/provisioner-secret-name: {{ $secretName }}
+  csi.storage.k8s.io/provisioner-secret-namespace: {{ $namespace }}
+  csi.storage.k8s.io/controller-expand-secret-name: {{ $secretName }}
+  csi.storage.k8s.io/controller-expand-secret-namespace: {{ $namespace }}
+  csi.storage.k8s.io/controller-publish-secret-name: {{ $secretName }}
+  csi.storage.k8s.io/controller-publish-secret-namespace: {{ $namespace }}
+reclaimPolicy: {{ .reclaimPolicy | default "Delete" }}
+allowVolumeExpansion: {{ .allowVolumeExpansion | default true }}
+volumeBindingMode: {{ .volumeBindingMode | default "Immediate" }}
+{{- if ne (toString (default true .snapshotClass)) "false" }}
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- $labels | nindent 4 }}
+    {{- with .snapshotClassLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .snapshotClassAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+driver: {{ $driverName }}
+deletionPolicy: {{ .snapshotDeletionPolicy | default "Delete" }}
+parameters:
+  csi.storage.k8s.io/snapshotter-secret-name: {{ $secretName }}
+  csi.storage.k8s.io/snapshotter-secret-namespace: {{ $namespace }}
+{{- end }}
+{{- end }}

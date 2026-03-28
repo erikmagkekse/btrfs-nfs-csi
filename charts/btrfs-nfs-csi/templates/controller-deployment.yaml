@@ -1,0 +1,236 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "btrfs-nfs-csi.controllerName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "btrfs-nfs-csi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  replicas: {{ .Values.controller.replicas }}
+  selector:
+    matchLabels:
+      {{- include "btrfs-nfs-csi.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      {{- with .Values.controller.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "btrfs-nfs-csi.labels" . | nindent 8 }}
+        app.kubernetes.io/component: controller
+        {{- with .Values.controller.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "btrfs-nfs-csi.controllerServiceAccountName" . }}
+      {{- with .Values.controller.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.controller.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: csi-driver
+          image: {{ include "btrfs-nfs-csi.driverImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - controller
+          {{- with .Values.controller.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.controller.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: DRIVER_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DRIVER_METRICS_ADDR
+              value: {{ .Values.controller.metricsAddr | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            {{- with .Values.controller.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 9090
+          {{- with .Values.controller.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            {{- with .Values.controller.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+        {{- $sc := .Values.controller.sidecars }}
+        - name: csi-provisioner
+          image: "{{ $sc.provisioner.image.repository }}:{{ $sc.provisioner.image.tag }}"
+          imagePullPolicy: {{ $sc.provisioner.image.pullPolicy }}
+          {{- with $sc.provisioner.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election
+            - --extra-create-metadata
+          {{- with $sc.provisioner.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.provisioner.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.provisioner.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            {{- with $sc.provisioner.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+        - name: csi-attacher
+          image: "{{ $sc.attacher.image.repository }}:{{ $sc.attacher.image.tag }}"
+          imagePullPolicy: {{ $sc.attacher.image.pullPolicy }}
+          {{- with $sc.attacher.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election
+          {{- with $sc.attacher.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.attacher.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.attacher.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            {{- with $sc.attacher.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+        - name: csi-snapshotter
+          image: "{{ $sc.snapshotter.image.repository }}:{{ $sc.snapshotter.image.tag }}"
+          imagePullPolicy: {{ $sc.snapshotter.image.pullPolicy }}
+          {{- with $sc.snapshotter.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election
+          {{- with $sc.snapshotter.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.snapshotter.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.snapshotter.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            {{- with $sc.snapshotter.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+        - name: csi-resizer
+          image: "{{ $sc.resizer.image.repository }}:{{ $sc.resizer.image.tag }}"
+          imagePullPolicy: {{ $sc.resizer.image.pullPolicy }}
+          {{- with $sc.resizer.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - --csi-address=/csi/csi.sock
+            - --leader-election
+          {{- with $sc.resizer.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.resizer.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.resizer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            {{- with $sc.resizer.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+        - name: liveness-probe
+          image: "{{ $sc.livenessProbe.image.repository }}:{{ $sc.livenessProbe.image.tag }}"
+          imagePullPolicy: {{ $sc.livenessProbe.image.pullPolicy }}
+          {{- with $sc.livenessProbe.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - --csi-address=/csi/csi.sock
+            - --health-port=9808
+          {{- with $sc.livenessProbe.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.livenessProbe.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.livenessProbe.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            {{- with $sc.livenessProbe.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+        {{- with .Values.controller.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

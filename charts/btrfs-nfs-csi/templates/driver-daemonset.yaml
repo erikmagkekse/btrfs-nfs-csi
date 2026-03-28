@@ -1,0 +1,187 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "btrfs-nfs-csi.driverName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "btrfs-nfs-csi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: driver
+spec:
+  {{- with .Values.driver.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "btrfs-nfs-csi.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: driver
+  template:
+    metadata:
+      {{- with .Values.driver.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "btrfs-nfs-csi.labels" . | nindent 8 }}
+        app.kubernetes.io/component: driver
+        {{- with .Values.driver.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "btrfs-nfs-csi.driverServiceAccountName" . }}
+      {{- with .Values.driver.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- if or .Values.driver.hostNetwork .Values.driver.storageInterface .Values.driver.storageCIDR }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
+      {{- with .Values.driver.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.driver.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.driver.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.driver.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: csi-driver
+          image: {{ include "btrfs-nfs-csi.driverImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - driver
+          {{- with .Values.driver.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            privileged: true
+          env:
+            - name: DRIVER_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            {{- if .Values.driver.storageInterface }}
+            - name: DRIVER_STORAGE_INTERFACE
+              value: {{ .Values.driver.storageInterface | quote }}
+            {{- else if .Values.driver.storageCIDR }}
+            - name: DRIVER_STORAGE_CIDR
+              value: {{ .Values.driver.storageCIDR | quote }}
+            {{- else }}
+            - name: DRIVER_NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            {{- end }}
+            - name: DRIVER_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DRIVER_METRICS_ADDR
+              value: {{ .Values.driver.metricsAddr | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            {{- with .Values.driver.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 9090
+          {{- with .Values.driver.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: pods-mount-dir
+              mountPath: {{ .Values.kubeletDir }}
+              mountPropagation: Bidirectional
+            {{- with .Values.driver.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+        {{- $sc := .Values.driver.sidecars }}
+        - name: node-driver-registrar
+          image: "{{ $sc.nodeDriverRegistrar.image.repository }}:{{ $sc.nodeDriverRegistrar.image.tag }}"
+          imagePullPolicy: {{ $sc.nodeDriverRegistrar.image.pullPolicy }}
+          {{- with $sc.nodeDriverRegistrar.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path={{ .Values.kubeletDir }}/plugins/{{ .Values.driverName }}/csi.sock
+          {{- with $sc.nodeDriverRegistrar.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.nodeDriverRegistrar.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.nodeDriverRegistrar.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+            {{- with $sc.nodeDriverRegistrar.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+        - name: liveness-probe
+          image: "{{ $sc.livenessProbe.image.repository }}:{{ $sc.livenessProbe.image.tag }}"
+          imagePullPolicy: {{ $sc.livenessProbe.image.pullPolicy }}
+          {{- with $sc.livenessProbe.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - --csi-address=/csi/csi.sock
+            - --health-port=9808
+          {{- with $sc.livenessProbe.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.livenessProbe.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sc.livenessProbe.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            {{- with $sc.livenessProbe.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: {{ .Values.kubeletDir }}/plugins/{{ .Values.driverName }}
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: {{ .Values.kubeletDir }}
+            type: Directory
+        - name: registration-dir
+          hostPath:
+            path: {{ .Values.kubeletDir }}/plugins_registry
+            type: Directory
+        {{- with .Values.driver.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

@@ -1,0 +1,31 @@
+name: Helm
+
+on:
+  push:
+    branches: [edge]
+    paths:
+      - "charts/**"
+      - ".github/workflows/helm.yml"
+  pull_request:
+    branches: [main, edge]
+    paths:
+      - "charts/**"
+      - ".github/workflows/helm.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Lint
+        run: helm lint charts/btrfs-nfs-csi
+
+      - name: Template
+        run: |
+          helm template test charts/btrfs-nfs-csi \
+            --set 'storageClasses[0].name=btrfs-nfs' \
+            --set 'storageClasses[0].nfsServer=10.0.0.5' \
+            --set 'storageClasses[0].agentURL=http://10.0.0.5:8080' \
+            --set 'storageClasses[0].agentToken=ci-test' \
+            --namespace btrfs-nfs-csi

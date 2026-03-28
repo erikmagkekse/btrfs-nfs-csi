@@ -1,0 +1,245 @@
+# Do not change after volumes exist, but normaly you dont even change this, you can add multiple StorageClasses per agent, or for multiple agents
+driverName: btrfs-nfs-csi
+
+# debug, info, warn, error
+logLevel: info
+
+nameOverride: ""
+fullnameOverride: ""
+imagePullSecrets: []
+
+image:
+  repository: ghcr.io/erikmagkekse/btrfs-nfs-csi
+  tag: "" # defaults to appVersion
+  pullPolicy: IfNotPresent
+
+rbac:
+  create: true
+  controllerExtraRules: []
+  driverExtraRules: []
+
+serviceAccount:
+  controller:
+    create: true
+    automount: true
+    annotations: {}
+    name: ""
+  driver:
+    create: true
+    automount: true
+    annotations: {}
+    name: ""
+
+# Controller (Deployment)
+controller:
+  replicas: 1
+  metricsAddr: ":9090"
+  priorityClassName: system-cluster-critical
+  podSecurityContext: {}
+  securityContext:
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65534
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/master
+      operator: Exists
+      effect: NoSchedule
+  nodeSelector: {}
+  affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+  extraArgs: []
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+
+  sidecars:
+    provisioner:
+      image:
+        repository: registry.k8s.io/sig-storage/csi-provisioner
+        tag: v5.3.0
+        pullPolicy: IfNotPresent
+      securityContext: {}
+      extraArgs: []
+      extraEnv: []
+      extraVolumeMounts: []
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+    attacher:
+      image:
+        repository: registry.k8s.io/sig-storage/csi-attacher
+        tag: v4.11.0
+        pullPolicy: IfNotPresent
+      securityContext: {}
+      extraArgs: []
+      extraEnv: []
+      extraVolumeMounts: []
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+    snapshotter:
+      image:
+        repository: registry.k8s.io/sig-storage/csi-snapshotter
+        tag: v8.5.0
+        pullPolicy: IfNotPresent
+      securityContext: {}
+      extraArgs: []
+      extraEnv: []
+      extraVolumeMounts: []
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+    resizer:
+      image:
+        repository: registry.k8s.io/sig-storage/csi-resizer
+        tag: v2.1.0
+        pullPolicy: IfNotPresent
+      securityContext: {}
+      extraArgs: []
+      extraEnv: []
+      extraVolumeMounts: []
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+    livenessProbe:
+      image:
+        repository: registry.k8s.io/sig-storage/livenessprobe
+        tag: v2.18.0
+        pullPolicy: IfNotPresent
+      securityContext: {}
+      extraArgs: []
+      extraEnv: []
+      extraVolumeMounts: []
+      resources:
+        requests:
+          cpu: 5m
+          memory: 16Mi
+        limits:
+          memory: 64Mi
+
+# Driver (DaemonSet)
+driver:
+  metricsAddr: ":9090"
+  priorityClassName: system-node-critical
+
+  # Node IP for NFS exports. Default uses the node's primary IP (status.hostIP),
+  # which is fine if your nodes only have a single network interface.
+  # Set one of these for dedicated storage networks (both require hostNetwork):
+  storageInterface: "" # NIC name, e.g. "eth1"
+  storageCIDR: "" # subnet CIDR, e.g. "10.10.0.0/24"
+  hostNetwork: false # auto-enabled when storageInterface or storageCIDR is set
+
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  podSecurityContext: {}
+  # securityContext is always privileged: true (mount operations)
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/master
+      operator: Exists
+      effect: NoSchedule
+    - operator: Exists
+      effect: NoExecute
+    - operator: Exists
+      effect: NoSchedule
+  nodeSelector: {}
+  affinity: {}
+  podAnnotations: {}
+  podLabels: {}
+  extraArgs: []
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+
+  sidecars:
+    nodeDriverRegistrar:
+      image:
+        repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
+        tag: v2.16.0
+        pullPolicy: IfNotPresent
+      securityContext: {}
+      extraArgs: []
+      extraEnv: []
+      extraVolumeMounts: []
+      resources:
+        requests:
+          cpu: 5m
+          memory: 16Mi
+        limits:
+          memory: 64Mi
+    livenessProbe:
+      image:
+        repository: registry.k8s.io/sig-storage/livenessprobe
+        tag: v2.18.0
+        pullPolicy: IfNotPresent
+      securityContext: {}
+      extraArgs: []
+      extraEnv: []
+      extraVolumeMounts: []
+      resources:
+        requests:
+          cpu: 5m
+          memory: 16Mi
+        limits:
+          memory: 64Mi
+
+kubeletDir: /var/lib/kubelet
+
+# Extra manifests to deploy (e.g. SealedSecrets, ServiceMonitors, ConfigMaps)
+extraDeploy: []
+
+# Each entry creates a Secret, StorageClass, and optionally a VolumeSnapshotClass
+storageClasses: []
+# - name: btrfs-nfs
+#   nfsServer: "10.0.0.5"
+#   agentURL: "http://10.0.0.5:8080"
+#   existingSecret: "my-secret"     # recommended: pre-existing Secret with agentToken key
+#   agentToken: "changeme"          # alternative: chart creates Secret (plain text in values)
+#   nfsMountOptions: "nfsvers=4.2,hard,noatime,rsize=1048576,wsize=1048576,nconnect=8"
+#   nocow: ""                          # "true" | "false"
+#   compression: ""                    # zstd, lzo, zlib, zstd:3, none
+#   uid: ""
+#   gid: ""
+#   mode: ""                           # octal, e.g. "2770"
+#   reclaimPolicy: Delete              # Delete | Retain
+#   allowVolumeExpansion: true
+#   volumeBindingMode: Immediate       # Immediate | WaitForFirstConsumer
+#   labels: {}
+#   annotations: {}
+#   isDefault: false
+#   snapshotClass: true
+#   snapshotDeletionPolicy: Delete     # Delete | Retain
+#   snapshotClassLabels: {}
+#   snapshotClassAnnotations: {}

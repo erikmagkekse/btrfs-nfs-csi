@@ -1,0 +1,29 @@
+Thank you for installing btrfs-nfs-csi!
+
+  Driver:     {{ .Values.driverName }}
+  Namespace:  {{ .Release.Namespace }}
+  Controller: {{ include "btrfs-nfs-csi.controllerName" . }} ({{ .Values.controller.replicas }} replica(s))
+  Driver:     {{ include "btrfs-nfs-csi.driverName" . }} (DaemonSet on all nodes)
+{{- if .Values.storageClasses }}
+
+StorageClasses created:
+{{- range .Values.storageClasses }}
+  - {{ .name }} -> {{ .nfsServer }} ({{ .agentURL }})
+{{- end }}
+{{- else }}
+
+  WARNING: No storageClasses configured yet!
+  Add at least one entry to storageClasses[] in your values to start provisioning volumes.
+{{- end }}
+
+Get started:
+  kubectl get pods -n {{ .Release.Namespace }}
+  kubectl get csidrivers {{ .Values.driverName }}
+{{- if .Values.storageClasses }}
+  kubectl get sc {{ (index .Values.storageClasses 0).name }}
+{{- end }}
+
+If you like this project, give us a star!
+  https://github.com/erikmagkekse/btrfs-nfs-csi
+
+Happy storing!

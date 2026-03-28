@@ -175,6 +175,29 @@ Each tenant maps to one Kubernetes StorageClass. The StorageClass references the
 
 ## Driver Setup
 
+### Helm (Recommended)
+
+```bash
+helm install btrfs-nfs-csi oci://ghcr.io/erikmagkekse/charts/btrfs-nfs-csi \
+  -n btrfs-nfs-csi --create-namespace \
+  -f values.yaml
+```
+
+Minimal `values.yaml`:
+
+```yaml
+storageClasses:
+  - name: btrfs-nfs
+    nfsServer: "10.0.0.5"
+    agentURL: "http://10.0.0.5:8080"
+    existingSecret: "btrfs-nfs-creds"
+    isDefault: true
+```
+
+See the [Helm chart README](../charts/btrfs-nfs-csi/README.md) for all options.
+
+### Static Manifests
+
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/deploy/driver/setup.yaml
 # Download storageclass.yaml, edit it: set nfsServer, agentURL, agentToken
