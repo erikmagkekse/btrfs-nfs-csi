@@ -6,9 +6,9 @@ import (
 	"strconv"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/k8s"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	"github.com/rs/zerolog/log"
 )
@@ -79,7 +79,7 @@ func (vp *volumeParams) validate() error {
 	if vp.NoCOW != "" && vp.NoCOW != "true" && vp.NoCOW != "false" {
 		return fmt.Errorf("invalid nocow %q: must be \"true\" or \"false\"", vp.NoCOW)
 	}
-	if vp.Compression != "" && !btrfs.IsValidCompression(vp.Compression) {
+	if vp.Compression != "" && !utils.IsValidCompression(vp.Compression) {
 		return fmt.Errorf("invalid compression %q", vp.Compression)
 	}
 	if vp.UID != "" {

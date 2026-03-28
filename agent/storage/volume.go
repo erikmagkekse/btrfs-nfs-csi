@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	"github.com/rs/zerolog/log"
 )
@@ -30,7 +30,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	if req.NoCOW && req.Compression != "" && req.Compression != "none" {
 		return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
 	}
-	if !btrfs.IsValidCompression(req.Compression) {
+	if !utils.IsValidCompression(req.Compression) {
 		return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
 	}
 	if req.QuotaBytes == 0 {
@@ -200,7 +200,7 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("new size %d must be larger than current size %d", *req.SizeBytes, cur.SizeBytes)}
 	}
 	if req.Compression != nil {
-		if !btrfs.IsValidCompression(*req.Compression) {
+		if !utils.IsValidCompression(*req.Compression) {
 			return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
 		}
 		if cur.NoCOW && *req.Compression != "" && *req.Compression != "none" {
