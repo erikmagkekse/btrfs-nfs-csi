@@ -96,6 +96,14 @@ spec:
           ports:
             - name: metrics
               containerPort: 9090
+          {{- with .Values.driver.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.driver.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.driver.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

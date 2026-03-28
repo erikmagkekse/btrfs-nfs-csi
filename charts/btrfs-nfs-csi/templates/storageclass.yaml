@@ -4,6 +4,13 @@
 {{- $driverName := .Values.driverName }}
 {{- range .Values.storageClasses }}
 {{- $secretName := default (printf "%s-%s" $fullname .name) .existingSecret }}
+{{- $existing := lookup "storage.k8s.io/v1" "StorageClass" "" .name }}
+{{- if and $existing (ne (index $existing.metadata.labels "app.kubernetes.io/instance") $.Release.Name) }}
+{{- fail (printf "StorageClass %q already exists and is managed by a different release" .name) }}
+{{- end }}
+{{- if and (not .existingSecret) (not .agentToken) }}
+{{- fail (printf "StorageClass %q: set either existingSecret or agentToken" .name) }}
+{{- end }}
 {{- if not .existingSecret }}
 ---
 apiVersion: v1

@@ -106,6 +106,9 @@ driver:
 | `controller.affinity` | `{}` | Affinity rules |
 | `controller.podAnnotations` | `{}` | Pod annotations |
 | `controller.podLabels` | `{}` | Extra pod labels |
+| `controller.livenessProbe` | httpGet /healthz:9808 | Liveness probe (fully customizable) |
+| `controller.readinessProbe` | `{}` | Readiness probe (disabled by default) |
+| `controller.topologySpreadConstraints` | `[]` | Topology spread for HA with replicas > 1 |
 | `controller.extraArgs` | `[]` | Extra args for csi-driver container |
 | `controller.extraEnv` | `[]` | Extra env vars |
 | `controller.extraVolumes` | `[]` | Extra volumes |
@@ -145,6 +148,8 @@ Sidecars: `provisioner`, `attacher`, `snapshotter`, `resizer`, `livenessProbe`
 | `driver.affinity` | `{}` | Affinity rules |
 | `driver.podAnnotations` | `{}` | Pod annotations |
 | `driver.podLabels` | `{}` | Extra pod labels |
+| `driver.livenessProbe` | httpGet /healthz:9808 | Liveness probe (fully customizable) |
+| `driver.readinessProbe` | `{}` | Readiness probe (disabled by default) |
 | `driver.extraArgs` | `[]` | Extra args for csi-driver container |
 | `driver.extraEnv` | `[]` | Extra env vars |
 | `driver.extraVolumes` | `[]` | Extra volumes |
@@ -181,6 +186,23 @@ Each entry in `storageClasses[]` creates a Secret, StorageClass, and optionally 
 | `snapshotClassLabels` | | `{}` | Extra labels on the VolumeSnapshotClass |
 | `snapshotClassAnnotations` | | `{}` | Extra annotations on the VolumeSnapshotClass |
 | `snapshotDeletionPolicy` | | `Delete` | `Delete` or `Retain` |
+
+### Metrics
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `metrics.podMonitor.enabled` | `false` | Create PodMonitors for Prometheus Operator |
+| `metrics.podMonitor.labels` | `{}` | Extra labels (e.g. `release: kube-prometheus-stack`) |
+| `metrics.podMonitor.annotations` | `{}` | Extra annotations |
+| `metrics.podMonitor.interval` | | Scrape interval |
+| `metrics.podMonitor.scrapeTimeout` | | Scrape timeout |
+
+### Validation
+
+The chart includes built-in safety checks:
+
+- **Token validation**: Fails if a StorageClass has neither `existingSecret` nor `agentToken` set
+- **Collision detection**: Fails if a StorageClass or CSIDriver name is already owned by a different Helm release (via `lookup`)
 
 ## Uninstall
 
