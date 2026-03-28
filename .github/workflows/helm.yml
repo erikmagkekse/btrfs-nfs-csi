@@ -18,6 +18,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Verify appVersion matches VERSION
+        run: |
+          APP_VERSION=$(grep 'appVersion:' charts/btrfs-nfs-csi/Chart.yaml | sed 's/.*"\(.*\)"/\1/')
+          VERSION=$(cat VERSION)
+          if [[ "${APP_VERSION}" != "${VERSION}" ]]; then
+            echo "::error::Chart appVersion (${APP_VERSION}) does not match VERSION file (${VERSION})"
+            exit 1
+          fi
+
       - name: Lint
         run: helm lint charts/btrfs-nfs-csi
 

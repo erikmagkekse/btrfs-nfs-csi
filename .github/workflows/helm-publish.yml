@@ -1,0 +1,39 @@
+name: Helm Publish
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: azure/setup-helm@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify appVersion matches VERSION
+        run: |
+          APP_VERSION=$(grep 'appVersion:' charts/btrfs-nfs-csi/Chart.yaml | sed 's/.*"\(.*\)"/\1/')
+          VERSION=$(cat VERSION)
+          if [[ "${APP_VERSION}" != "${VERSION}" ]]; then
+            echo "::error::Chart appVersion (${APP_VERSION}) does not match VERSION file (${VERSION})"
+            exit 1
+          fi
+
+      - name: Lint
+        run: helm lint charts/btrfs-nfs-csi
+
+      - name: Package and push
+        run: |
+          helm package charts/btrfs-nfs-csi
+          helm push btrfs-nfs-csi-*.tgz oci://ghcr.io/erikmagkekse/charts
