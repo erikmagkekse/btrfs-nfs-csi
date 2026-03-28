@@ -8,16 +8,18 @@ import (
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/k8s"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	"github.com/rs/zerolog/log"
 )
 
 type volumeParams struct {
-	NoCOW       string
-	Compression string
-	UID         string
-	GID         string
-	Mode        string
+	StorageClass string
+	NoCOW        string
+	Compression  string
+	UID          string
+	GID          string
+	Mode         string
 }
 
 func resolveVolumeParams(ctx context.Context, params map[string]string) volumeParams {
@@ -39,14 +41,19 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 		Metadata struct {
 			Annotations map[string]string `json:"annotations"`
 		} `json:"metadata"`
+		Spec struct {
+			StorageClassName string `json:"storageClassName"`
+		} `json:"spec"`
 	}
 	path := "/api/v1/namespaces/" + pvcNamespace + "/persistentvolumeclaims/" + pvcName
 	if err := k8s.Get(ctx, path, &obj); err != nil {
 		ctrlK8sOpsTotal.WithLabelValues("error").Inc()
-		log.Warn().Err(err).Str("pvc", pvcNamespace+"/"+pvcName).Msg("failed to fetch PVC annotations, using SC defaults")
+		log.Warn().Err(err).Str("pvc", pvcNamespace+"/"+pvcName).Msg("failed to fetch PVC, using SC defaults")
 		return vp
 	}
 	ctrlK8sOpsTotal.WithLabelValues("success").Inc()
+
+	vp.StorageClass = obj.Spec.StorageClassName
 
 	annos := obj.Metadata.Annotations
 	if v, ok := annos[config.AnnoPrefix+config.ParamNoCOW]; ok {
@@ -69,6 +76,12 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 }
 
 func (vp *volumeParams) validate() error {
+	if vp.NoCOW != "" && vp.NoCOW != "true" && vp.NoCOW != "false" {
+		return fmt.Errorf("invalid nocow %q: must be \"true\" or \"false\"", vp.NoCOW)
+	}
+	if vp.Compression != "" && !utils.IsValidCompression(vp.Compression) {
+		return fmt.Errorf("invalid compression %q", vp.Compression)
+	}
 	if vp.UID != "" {
 		if _, err := strconv.Atoi(vp.UID); err != nil {
 			return fmt.Errorf("invalid uid %q: %v", vp.UID, err)
