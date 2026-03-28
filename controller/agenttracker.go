@@ -171,23 +171,25 @@ func (t *AgentTracker) checkAll(ctx context.Context) {
 
 	for sc, c := range snapshot {
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		start := time.Now()
 		health, err := c.Healthz(checkCtx)
+		agentDuration.WithLabelValues("health_check", sc).Observe(time.Since(start).Seconds())
 		cancel()
 
 		if err != nil {
-			agentHealthTotal.WithLabelValues("error", sc).Inc()
+			agentOpsTotal.WithLabelValues("health_check", "error", sc).Inc()
 			log.Error().Err(err).Str("sc", sc).Msg("agent health check failed")
 			continue
 		}
 
 		if health.Version != t.version {
-			agentHealthTotal.WithLabelValues("version_mismatch", sc).Inc()
+			agentOpsTotal.WithLabelValues("health_check", "version_mismatch", sc).Inc()
 			log.Warn().Str("sc", sc).Str("agentVersion", health.Version).Str("driverVersion", t.version).Msg("agent/driver version mismatch")
 		} else if health.Commit != t.commit {
-			agentHealthTotal.WithLabelValues("healthy", sc).Inc()
+			agentOpsTotal.WithLabelValues("health_check", "healthy", sc).Inc()
 			log.Info().Str("sc", sc).Str("agentCommit", health.Commit).Str("driverCommit", t.commit).Msg("agent healthy - commit mismatch, but same version (could be a security update)")
 		} else {
-			agentHealthTotal.WithLabelValues("healthy", sc).Inc()
+			agentOpsTotal.WithLabelValues("health_check", "healthy", sc).Inc()
 			log.Info().Str("sc", sc).Str("version", health.Version).Str("commit", health.Commit).Msg("agent healthy - vibes immaculate, bits aligned, absolutely bussin")
 		}
 	}

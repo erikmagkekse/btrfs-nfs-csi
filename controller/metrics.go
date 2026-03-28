@@ -44,13 +44,6 @@ var (
 		Buckets:   []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10},
 	}, []string{"operation", "storage_class"})
 
-	agentHealthTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "btrfs_nfs_csi",
-		Subsystem: "controller",
-		Name:      "agent_health_total",
-		Help:      "Total agent health check results.",
-	}, []string{"result", "storage_class"})
-
 	ctrlK8sOpsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "btrfs_nfs_csi",
 		Subsystem: "controller",
@@ -61,7 +54,7 @@ var (
 
 func init() {
 	prometheus.MustRegister(grpcRequestsTotal, grpcRequestDuration,
-		agentOpsTotal, agentDuration, agentHealthTotal, ctrlK8sOpsTotal)
+		agentOpsTotal, agentDuration, ctrlK8sOpsTotal)
 }
 
 func metricsInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
