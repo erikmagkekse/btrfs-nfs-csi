@@ -424,3 +424,4 @@ func TestDevices(t *testing.T) {
 		assert.ErrorContains(t, err, "no devices found")
 	})
 }
+

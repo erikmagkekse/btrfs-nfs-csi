@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -41,7 +42,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	stagingPath := req.StagingTargetPath
 
-	if isMountPoint(stagingPath) {
+	if utils.IsMountPoint(stagingPath) {
 		log.Debug().Str("path", stagingPath).Msg("already mounted at staging path")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
@@ -106,7 +107,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if isMountPoint(req.TargetPath) {
+	if utils.IsMountPoint(req.TargetPath) {
 		log.Info().Str("path", req.TargetPath).Msg("already mounted, skipping publish")
 		return &csi.NodePublishVolumeResponse{}, nil
 	}

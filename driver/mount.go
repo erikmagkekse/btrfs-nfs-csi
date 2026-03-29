@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/sys/unix"
 )
 
 // cleanupMountPoint unmounts the path if it is a mount point and removes the directory.
@@ -22,7 +21,7 @@ func cleanupMountPoint(ctx context.Context, path string) error {
 		return err
 	}
 
-	if isMountPoint(path) {
+	if utils.IsMountPoint(path) {
 		log.Info().Str("path", path).Msg("unmounting")
 		if err := forceUnmount(ctx, path); err != nil {
 			return err
@@ -56,15 +55,4 @@ func forceUnmount(ctx context.Context, path string) error {
 	mountOpsTotal.WithLabelValues("force_umount", "success").Inc()
 	mountDuration.WithLabelValues("force_umount").Observe(time.Since(start).Seconds())
 	return nil
-}
-
-func isMountPoint(path string) bool {
-	var st, pst unix.Stat_t
-	if err := unix.Lstat(path, &st); err != nil {
-		return false
-	}
-	if err := unix.Lstat(filepath.Dir(path), &pst); err != nil {
-		return false
-	}
-	return st.Dev != pst.Dev
 }
