@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
@@ -29,7 +30,7 @@ func TestCreateVolume(t *testing.T) {
 			{name: "empty_name", req: VolumeCreateRequest{SizeBytes: 1024}, code: ErrInvalid},
 			{name: "invalid_name", req: VolumeCreateRequest{Name: "bad name!", SizeBytes: 1024}, code: ErrInvalid},
 			{name: "name_too_long", req: VolumeCreateRequest{
-				Name:      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Name:      strings.Repeat("a", 129),
 				SizeBytes: 1024,
 			}, code: ErrInvalid},
 			{name: "zero_size", req: VolumeCreateRequest{Name: "vol", SizeBytes: 0}, code: ErrInvalid},

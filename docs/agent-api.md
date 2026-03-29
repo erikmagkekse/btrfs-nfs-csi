@@ -28,7 +28,7 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
 
 ### POST /v1/volumes
 
-`name`: 1-64 chars `[a-zA-Z0-9_-]`. `nocow` + `compression` mutually exclusive. 409 returns existing volume.
+`name`: 1-128 chars `[a-zA-Z0-9_-]`. `nocow` + `compression` mutually exclusive. 409 returns existing volume.
 
 ```json
 // Request
