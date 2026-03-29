@@ -74,6 +74,12 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	}
 	log.Info().Int("count", len(tenants)).Msg("tenants configured")
 
+	devices, err := mgr.Devices(ctx, basePath)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to resolve block devices")
+	}
+	log.Info().Str("filesystem", basePath).Strs("devices", devices).Msg("block devices resolved")
+
 	return &Storage{basePath: basePath, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
 }
 

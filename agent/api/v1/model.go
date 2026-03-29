@@ -97,10 +97,14 @@ type StatsResponse struct {
 	TotalBytes uint64                  `json:"total_bytes"`
 	UsedBytes  uint64                  `json:"used_bytes"`
 	FreeBytes  uint64                  `json:"free_bytes"`
-	Device     string                  `json:"device"`
-	IO         DeviceIOStatsResponse   `json:"io"`
-	Errors     DeviceErrorsResponse    `json:"errors"`
+	Devices    []DeviceStatsResponse   `json:"devices"`
 	Filesystem FilesystemStatsResponse `json:"filesystem"`
+}
+
+type DeviceStatsResponse struct {
+	Device string                `json:"device"`
+	IO     DeviceIOStatsResponse `json:"io"`
+	Errors DeviceErrorsResponse  `json:"errors"`
 }
 
 type HealthResponse struct {

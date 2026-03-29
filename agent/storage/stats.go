@@ -26,86 +26,25 @@ type DeviceIOStats struct {
 	WeightedIOTimeMs uint64
 }
 
+type PerDeviceStats struct {
+	Device string
+	IO     DeviceIOStats
+	Errors btrfs.DeviceErrors
+}
+
 type DeviceStats struct {
-	Device     string
-	IO         DeviceIOStats
-	Errors     btrfs.DeviceErrors
+	Devices    []PerDeviceStats
 	Filesystem btrfs.FilesystemUsage
-}
-
-// resolveBlockDevice finds the block device name for a path by parsing
-// /proc/self/mountinfo. This works for btrfs where stat(2) returns virtual
-// major:minor (0:XX) that don't exist in /sys/dev/block/.
-func resolveBlockDevice(path string) (string, error) {
-	return resolveBlockDeviceFrom(path, "/proc/self/mountinfo")
-}
-
-func resolveBlockDeviceFrom(path string, mountinfo string) (string, error) {
-	data, err := os.ReadFile(mountinfo)
-	if err != nil {
-		return "", fmt.Errorf("read mountinfo: %w", err)
-	}
-
-	// Find the longest mount point prefix that matches path.
-	// mountinfo format: id parent major:minor root mount_point opts ... - fstype source super_opts
-	var bestMount string
-	var bestDevice string
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 10 {
-			continue
-		}
-		mountPoint := fields[4]
-		if !strings.HasPrefix(path, mountPoint) {
-			continue
-		}
-		if len(mountPoint) <= len(bestMount) {
-			continue
-		}
-		// find mount source after the " - " separator
-		sep := -1
-		for i, f := range fields {
-			if f == "-" {
-				sep = i
-				break
-			}
-		}
-		if sep < 0 || sep+2 >= len(fields) {
-			continue
-		}
-		bestMount = mountPoint
-		bestDevice = fields[sep+2]
-	}
-
-	if bestDevice == "" {
-		return "", fmt.Errorf("no mount found for %s", path)
-	}
-
-	// Resolve symlinks so device-mapper paths like /dev/mapper/VG-LV
-	// become /dev/dm-X which has a matching /sys/block/ entry.
-	resolved, err := filepath.EvalSymlinks(bestDevice)
-	if err == nil {
-		bestDevice = resolved
-	}
-
-	name := filepath.Base(bestDevice)
-
-	// If this is a partition, walk up to parent device
-	if _, err := os.Stat(filepath.Join("/sys/class/block", name, "partition")); err == nil {
-		// read the parent symlink: /sys/class/block/sda1 -> ../devices/.../sda/sda1
-		link, err := os.Readlink(filepath.Join("/sys/class/block", name))
-		if err == nil {
-			name = filepath.Base(filepath.Dir(link))
-		}
-	}
-
-	return "/dev/" + name, nil
 }
 
 // readDeviceIOStats reads /sys/block/<dev>/stat and returns IO counters.
 // See https://www.kernel.org/doc/Documentation/block/stat.txt
 func readDeviceIOStats(device string) (*DeviceIOStats, error) {
-	data, err := os.ReadFile(filepath.Join("/sys/block", filepath.Base(device), "stat"))
+	resolved := device
+	if r, err := filepath.EvalSymlinks(device); err == nil {
+		resolved = r
+	}
+	data, err := os.ReadFile(filepath.Join("/sys/block", filepath.Base(resolved), "stat"))
 	if err != nil {
 		return nil, fmt.Errorf("read sysfs stat for %s: %w", device, err)
 	}
@@ -145,7 +84,7 @@ func parseDeviceIOStats(data string) (*DeviceIOStats, error) {
 // StartDeviceIOUpdater polls sysfs IO counters at a high frequency (default 5s).
 func (s *Storage) StartDeviceIOUpdater(ctx context.Context, interval time.Duration) {
 	go func() {
-		s.updateDeviceIO()
+		s.updateDeviceIO(ctx)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -153,34 +92,35 @@ func (s *Storage) StartDeviceIOUpdater(ctx context.Context, interval time.Durati
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.updateDeviceIO()
+				s.updateDeviceIO(ctx)
 			}
 		}
 	}()
 }
 
-func (s *Storage) updateDeviceIO() {
-	device, err := resolveBlockDevice(s.basePath)
+func (s *Storage) updateDeviceIO(ctx context.Context) {
+	devices, err := s.btrfs.Devices(ctx, s.basePath)
 	if err != nil {
-		log.Warn().Err(err).Msg("device io updater: failed to resolve block device")
+		log.Warn().Err(err).Msg("device io updater: failed to discover devices")
 		return
 	}
+	for _, device := range devices {
+		io, err := readDeviceIOStats(device)
+		if err != nil {
+			log.Warn().Err(err).Str("device", device).Msg("device io updater: failed to read IO stats")
+			continue
+		}
 
-	io, err := readDeviceIOStats(device)
-	if err != nil {
-		log.Warn().Err(err).Msg("device io updater: failed to read IO stats")
-		return
+		DeviceReadBytesTotal.WithLabelValues(device).Set(float64(io.ReadBytes))
+		DeviceReadIOsTotal.WithLabelValues(device).Set(float64(io.ReadIOs))
+		DeviceReadTimeSecondsTotal.WithLabelValues(device).Set(float64(io.ReadTimeMs) / 1000.0)
+		DeviceWriteBytesTotal.WithLabelValues(device).Set(float64(io.WriteBytes))
+		DeviceWriteIOsTotal.WithLabelValues(device).Set(float64(io.WriteIOs))
+		DeviceWriteTimeSecondsTotal.WithLabelValues(device).Set(float64(io.WriteTimeMs) / 1000.0)
+		DeviceIOsInProgress.WithLabelValues(device).Set(float64(io.IOsInProgress))
+		DeviceIOTimeSecondsTotal.WithLabelValues(device).Set(float64(io.IOTimeMs) / 1000.0)
+		DeviceIOWeightedTimeSecondsTotal.WithLabelValues(device).Set(float64(io.WeightedIOTimeMs) / 1000.0)
 	}
-
-	DeviceReadBytesTotal.WithLabelValues(device).Set(float64(io.ReadBytes))
-	DeviceReadIOsTotal.WithLabelValues(device).Set(float64(io.ReadIOs))
-	DeviceReadTimeSecondsTotal.WithLabelValues(device).Set(float64(io.ReadTimeMs) / 1000.0)
-	DeviceWriteBytesTotal.WithLabelValues(device).Set(float64(io.WriteBytes))
-	DeviceWriteIOsTotal.WithLabelValues(device).Set(float64(io.WriteIOs))
-	DeviceWriteTimeSecondsTotal.WithLabelValues(device).Set(float64(io.WriteTimeMs) / 1000.0)
-	DeviceIOsInProgress.WithLabelValues(device).Set(float64(io.IOsInProgress))
-	DeviceIOTimeSecondsTotal.WithLabelValues(device).Set(float64(io.IOTimeMs) / 1000.0)
-	DeviceIOWeightedTimeSecondsTotal.WithLabelValues(device).Set(float64(io.WeightedIOTimeMs) / 1000.0)
 }
 
 // StartDeviceStatsUpdater polls btrfs device errors and filesystem usage (default 1m).
@@ -201,53 +141,62 @@ func (s *Storage) StartDeviceStatsUpdater(ctx context.Context, interval time.Dur
 }
 
 func (s *Storage) updateBtrfsStats(ctx context.Context) {
-	device, err := resolveBlockDevice(s.basePath)
-	if err != nil {
-		log.Warn().Err(err).Msg("device stats updater: failed to resolve block device")
-		return
-	}
-
-	de, err := s.btrfs.DeviceErrors(ctx, s.basePath)
+	errs, err := s.btrfs.DeviceErrors(ctx, s.basePath)
 	if err != nil {
 		log.Warn().Err(err).Msg("device stats updater: btrfs device errors failed")
 	} else {
-		DeviceReadErrsTotal.WithLabelValues(device).Set(float64(de.ReadErrs))
-		DeviceWriteErrsTotal.WithLabelValues(device).Set(float64(de.WriteErrs))
-		DeviceFlushErrsTotal.WithLabelValues(device).Set(float64(de.FlushErrs))
-		DeviceCorruptionErrsTotal.WithLabelValues(device).Set(float64(de.CorruptionErrs))
-		DeviceGenerationErrsTotal.WithLabelValues(device).Set(float64(de.GenerationErrs))
+		for _, de := range errs {
+			DeviceReadErrsTotal.WithLabelValues(de.Device).Set(float64(de.ReadErrs))
+			DeviceWriteErrsTotal.WithLabelValues(de.Device).Set(float64(de.WriteErrs))
+			DeviceFlushErrsTotal.WithLabelValues(de.Device).Set(float64(de.FlushErrs))
+			DeviceCorruptionErrsTotal.WithLabelValues(de.Device).Set(float64(de.CorruptionErrs))
+			DeviceGenerationErrsTotal.WithLabelValues(de.Device).Set(float64(de.GenerationErrs))
+		}
 	}
 
 	fu, err := s.btrfs.FilesystemUsage(ctx, s.basePath)
 	if err != nil {
 		log.Warn().Err(err).Msg("device stats updater: btrfs filesystem usage failed")
 	} else {
-		FilesystemSizeBytes.WithLabelValues(device).Set(float64(fu.TotalBytes))
-		FilesystemUsedBytes.WithLabelValues(device).Set(float64(fu.UsedBytes))
-		FilesystemUnallocatedBytes.WithLabelValues(device).Set(float64(fu.UnallocatedBytes))
-		FilesystemMetadataUsedBytes.WithLabelValues(device).Set(float64(fu.MetadataUsedBytes))
-		FilesystemMetadataTotalBytes.WithLabelValues(device).Set(float64(fu.MetadataTotalBytes))
-		FilesystemDataRatio.WithLabelValues(device).Set(fu.DataRatio)
+		FilesystemSizeBytes.WithLabelValues(s.basePath).Set(float64(fu.TotalBytes))
+		FilesystemUsedBytes.WithLabelValues(s.basePath).Set(float64(fu.UsedBytes))
+		FilesystemUnallocatedBytes.WithLabelValues(s.basePath).Set(float64(fu.UnallocatedBytes))
+		FilesystemMetadataUsedBytes.WithLabelValues(s.basePath).Set(float64(fu.MetadataUsedBytes))
+		FilesystemMetadataTotalBytes.WithLabelValues(s.basePath).Set(float64(fu.MetadataTotalBytes))
+		FilesystemDataRatio.WithLabelValues(s.basePath).Set(fu.DataRatio)
 	}
 
-	log.Debug().Str("device", device).Msg("device stats updater: metrics updated")
+	log.Debug().Msg("device stats updater: metrics updated")
 }
 
-// DeviceStats collects device IO, btrfs errors, and filesystem usage for the base path.
+// DeviceStats collects per-device IO and error stats plus global filesystem usage.
 func (s *Storage) DeviceStats(ctx context.Context) (*DeviceStats, error) {
-	device, err := resolveBlockDevice(s.basePath)
+	devList, err := s.btrfs.Devices(ctx, s.basePath)
 	if err != nil {
-		return nil, fmt.Errorf("resolve block device: %w", err)
+		return nil, fmt.Errorf("discover devices: %w", err)
 	}
 
-	io, err := readDeviceIOStats(device)
-	if err != nil {
-		return nil, fmt.Errorf("read device IO stats: %w", err)
-	}
-
-	de, err := s.btrfs.DeviceErrors(ctx, s.basePath)
+	errList, err := s.btrfs.DeviceErrors(ctx, s.basePath)
 	if err != nil {
 		return nil, fmt.Errorf("btrfs device errors: %w", err)
+	}
+	errByDevice := make(map[string]btrfs.DeviceErrors, len(errList))
+	for _, de := range errList {
+		errByDevice[de.Device] = de
+	}
+
+	var devices []PerDeviceStats
+	for _, device := range devList {
+		io, err := readDeviceIOStats(device)
+		if err != nil {
+			log.Warn().Err(err).Str("device", device).Msg("device stats: failed to read IO stats")
+			continue
+		}
+		devices = append(devices, PerDeviceStats{
+			Device: device,
+			IO:     *io,
+			Errors: errByDevice[device],
+		})
 	}
 
 	fu, err := s.btrfs.FilesystemUsage(ctx, s.basePath)
@@ -256,9 +205,7 @@ func (s *Storage) DeviceStats(ctx context.Context) (*DeviceStats, error) {
 	}
 
 	return &DeviceStats{
-		Device:     device,
-		IO:         *io,
-		Errors:     de,
+		Devices:    devices,
 		Filesystem: fu,
 	}, nil
 }

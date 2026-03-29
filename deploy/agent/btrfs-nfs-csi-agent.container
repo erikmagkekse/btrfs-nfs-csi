@@ -10,6 +10,7 @@ EnvironmentFile=/etc/btrfs-nfs-csi/agent.env
 Network=host
 PodmanArgs=--privileged --pid=host
 SecurityLabelDisable=true
+Volume=/dev:/dev
 Volume=/var/lib/nfs:/var/lib/nfs
 # Adjust to match AGENT_BASE_PATH in agent.env
 Volume=/export/data:/export/data

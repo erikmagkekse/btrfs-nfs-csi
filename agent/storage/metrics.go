@@ -131,48 +131,49 @@ var (
 		Help:      "Total btrfs generation errors on the device.",
 	}, []string{"device"})
 
-	// Filesystem allocation metrics
+	// Filesystem allocation metrics (labeled by mount path, not device,
+	// because filesystem usage spans all devices in a multi-device setup)
 	FilesystemSizeBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "btrfs_nfs_csi",
 		Subsystem: "agent",
 		Name:      "filesystem_size_bytes",
 		Help:      "Total filesystem size in bytes.",
-	}, []string{"device"})
+	}, []string{"path"})
 
 	FilesystemUsedBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "btrfs_nfs_csi",
 		Subsystem: "agent",
 		Name:      "filesystem_used_bytes",
 		Help:      "Used filesystem space in bytes.",
-	}, []string{"device"})
+	}, []string{"path"})
 
 	FilesystemUnallocatedBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "btrfs_nfs_csi",
 		Subsystem: "agent",
 		Name:      "filesystem_unallocated_bytes",
 		Help:      "Unallocated filesystem space in bytes.",
-	}, []string{"device"})
+	}, []string{"path"})
 
 	FilesystemMetadataUsedBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "btrfs_nfs_csi",
 		Subsystem: "agent",
 		Name:      "filesystem_metadata_used_bytes",
 		Help:      "Used metadata space in bytes.",
-	}, []string{"device"})
+	}, []string{"path"})
 
 	FilesystemMetadataTotalBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "btrfs_nfs_csi",
 		Subsystem: "agent",
 		Name:      "filesystem_metadata_total_bytes",
 		Help:      "Total metadata allocation in bytes.",
-	}, []string{"device"})
+	}, []string{"path"})
 
 	FilesystemDataRatio = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "btrfs_nfs_csi",
 		Subsystem: "agent",
 		Name:      "filesystem_data_ratio",
 		Help:      "Data RAID profile ratio (1.0 for single, 2.0 for RAID1/DUP).",
-	}, []string{"device"})
+	}, []string{"path"})
 )
 
 func init() {

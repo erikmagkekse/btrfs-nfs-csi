@@ -26,12 +26,12 @@
 | `btrfs_nfs_csi_agent_device_flush_errs_total` | Gauge | `device` |
 | `btrfs_nfs_csi_agent_device_corruption_errs_total` | Gauge | `device` |
 | `btrfs_nfs_csi_agent_device_generation_errs_total` | Gauge | `device` |
-| `btrfs_nfs_csi_agent_filesystem_size_bytes` | Gauge | `device` |
-| `btrfs_nfs_csi_agent_filesystem_used_bytes` | Gauge | `device` |
-| `btrfs_nfs_csi_agent_filesystem_unallocated_bytes` | Gauge | `device` |
-| `btrfs_nfs_csi_agent_filesystem_metadata_used_bytes` | Gauge | `device` |
-| `btrfs_nfs_csi_agent_filesystem_metadata_total_bytes` | Gauge | `device` |
-| `btrfs_nfs_csi_agent_filesystem_data_ratio` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_filesystem_size_bytes` | Gauge | `path` |
+| `btrfs_nfs_csi_agent_filesystem_used_bytes` | Gauge | `path` |
+| `btrfs_nfs_csi_agent_filesystem_unallocated_bytes` | Gauge | `path` |
+| `btrfs_nfs_csi_agent_filesystem_metadata_used_bytes` | Gauge | `path` |
+| `btrfs_nfs_csi_agent_filesystem_metadata_total_bytes` | Gauge | `path` |
+| `btrfs_nfs_csi_agent_filesystem_data_ratio` | Gauge | `path` |
 
 **Buckets (http_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]`
 

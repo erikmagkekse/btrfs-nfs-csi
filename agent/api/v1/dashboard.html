@@ -318,15 +318,31 @@ function renderDeviceStats() {
     return;
   }
   var ds = cachedDeviceStats;
-  var e = ds.errors;
   var fs = ds.filesystem;
 
   var fsPct = fs.total_bytes ? (fs.used_bytes / fs.total_bytes * 100) : 0;
   var metaPct = fs.metadata_total_bytes ? (fs.metadata_used_bytes / fs.metadata_total_bytes * 100) : 0;
 
+  var devHtml = '';
+  for (var i = 0; i < ds.devices.length; i++) {
+    var d = ds.devices[i];
+    var e = d.errors;
+    var hasErrs = e.read_errs || e.write_errs || e.flush_errs || e.corruption_errs || e.generation_errs;
+    var errText = hasErrs
+      ? '<span class="mono" style="color:#f85149;font-weight:600">Read:' + e.read_errs + '  Write:' + e.write_errs + '  Flush:' + e.flush_errs + '  Corruption:' + e.corruption_errs + '  Generation:' + e.generation_errs + '</span>'
+      : '<span class="mono" style="color:#238636">No errors</span>';
+    devHtml +=
+      '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">Device: ' + d.device + '</h2><dl class="detail-grid">' +
+      row('Read', '<span class="bytes">' + fmt(d.io.read_bytes_total) + '</span> <span class="mono">(' + d.io.read_ios_total.toLocaleString() + ' ops)</span>') +
+      row('Written', '<span class="bytes">' + fmt(d.io.write_bytes_total) + '</span> <span class="mono">(' + d.io.write_ios_total.toLocaleString() + ' ops)</span>') +
+      row('In Progress', '<span class="mono">' + d.io.ios_in_progress + '</span>') +
+      row('Errors', errText) +
+      '</dl></div>';
+  }
+
   document.getElementById('detail-content').innerHTML =
-    '<h2>BTRFS Device: ' + ds.device + '</h2>' +
-    '<div class="detail"><h2 style="margin-top:0">Disk Usage</h2><dl class="detail-grid">' +
+    '<h2>BTRFS Filesystem (' + ds.devices.length + ' Device' + (ds.devices.length > 1 ? 's' : '') + ')</h2>' +
+    '<div class="detail"><h2 style="margin-top:0">Usage</h2><dl class="detail-grid">' +
     row('Total', '<span class="bytes">' + fmt(fs.total_bytes) + '</span>') +
     row('Used', '<span class="bytes">' + fmt(fs.used_bytes) + '</span> <span class="mono">(' + fsPct.toFixed(1) + '%)</span>') +
     row('Free', '<span class="bytes">' + fmt(fs.free_bytes) + '</span>') +
@@ -334,18 +350,8 @@ function renderDeviceStats() {
     row('Metadata', '<span class="bytes">' + fmt(fs.metadata_used_bytes) + ' / ' + fmt(fs.metadata_total_bytes) + '</span> <span class="mono">(' + metaPct.toFixed(1) + '%)</span>') +
     row('Data Ratio', '<span class="mono">' + fs.data_ratio.toFixed(1) + 'x</span>') +
     '</dl></div>' +
-    '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">Errors</h2><dl class="detail-grid">' +
-    errRow('Read', e.read_errs) +
-    errRow('Write', e.write_errs) +
-    errRow('Flush', e.flush_errs) +
-    errRow('Corruption', e.corruption_errs) +
-    errRow('Generation', e.generation_errs) +
-    '</dl></div>' +
-    '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">IO</h2><dl class="detail-grid">' +
-    row('Read', '<span class="bytes">' + fmt(ds.io.read_bytes_total) + '</span> <span class="mono">(' + ds.io.read_ios_total.toLocaleString() + ' ops)</span>') +
-    row('Written', '<span class="bytes">' + fmt(ds.io.write_bytes_total) + '</span> <span class="mono">(' + ds.io.write_ios_total.toLocaleString() + ' ops)</span>') +
-    row('In Progress', '<span class="mono">' + ds.io.ios_in_progress + '</span>') +
-    '</dl></div>';
+    devHtml;
+
 }
 
 function showDeviceStatsPanel() {
@@ -486,6 +492,19 @@ var perfIops = [];
 var perfLatency = [];
 var perfUtil = [];
 var ioPrev = null;
+function computeRates(cur, prev, dt) {
+  var rr = Math.max(0, cur.read - prev.read) / dt;
+  var wr = Math.max(0, cur.write - prev.write) / dt;
+  var dOps = Math.max(0, (cur.readIOs - prev.readIOs) + (cur.writeIOs - prev.writeIOs));
+  var iops = dOps / dt;
+  var dWeighted = Math.max(0, cur.weightedMs - prev.weightedMs);
+  var latMs = dOps > 0 ? dWeighted / dOps : 0;
+  var dIoTime = Math.max(0, cur.ioTimeMs - prev.ioTimeMs);
+  var util = Math.min(100, dIoTime / (dt * 1000) * 100);
+  return {rr: rr, wr: wr, iops: iops, latMs: latMs, util: util};
+}
+
+
 
 function fmtRate(bps) {
   if (bps == null) return '-';
@@ -564,47 +583,33 @@ async function refreshIO() {
     const ds = await api('/v1/stats');
     cachedDeviceStats = ds;
     updateFsBar(ds);
+    // aggregate IO across all devices
+    var agg = {read:0, write:0, readIOs:0, writeIOs:0, ioTimeMs:0, weightedMs:0};
+    for (var i = 0; i < ds.devices.length; i++) {
+      var dio = ds.devices[i].io;
+      agg.read += dio.read_bytes_total;
+      agg.write += dio.write_bytes_total;
+      agg.readIOs += dio.read_ios_total;
+      agg.writeIOs += dio.write_ios_total;
+      agg.ioTimeMs += dio.io_time_ms_total;
+      agg.weightedMs += dio.weighted_io_time_ms_total;
+    }
     if (ioPrev) {
-      const dt = {{REFRESH}};
-      const rr = Math.max(0, ds.io.read_bytes_total - ioPrev.read) / dt;
-      const wr = Math.max(0, ds.io.write_bytes_total - ioPrev.write) / dt;
-      ioReadRates.push(rr);
-      ioWriteRates.push(wr);
+      var r = computeRates(agg, ioPrev, {{REFRESH}});
+      ioReadRates.push(r.rr); ioWriteRates.push(r.wr);
       if (ioReadRates.length > ioMaxSamples) { ioReadRates.shift(); ioWriteRates.shift(); }
-      document.getElementById('io-read-val').textContent = fmtRate(rr);
-      document.getElementById('io-write-val').textContent = fmtRate(wr);
+      document.getElementById('io-read-val').textContent = fmtRate(r.rr);
+      document.getElementById('io-write-val').textContent = fmtRate(r.wr);
       drawIO();
 
-      // IOPS
-      var dOps = Math.max(0, (ds.io.read_ios_total - ioPrev.readIOs) + (ds.io.write_ios_total - ioPrev.writeIOs));
-      var iops = dOps / dt;
-      perfIops.push(iops);
-
-      // avg latency (ms/op) from weighted IO time delta
-      var dWeighted = Math.max(0, ds.io.weighted_io_time_ms_total - ioPrev.weightedMs);
-      var latMs = dOps > 0 ? dWeighted / dOps : 0;
-      perfLatency.push(latMs);
-
-      // %util from io_time delta
-      var dIoTime = Math.max(0, ds.io.io_time_ms_total - ioPrev.ioTimeMs);
-      var util = Math.min(100, dIoTime / (dt * 1000) * 100);
-      perfUtil.push(util);
-
+      perfIops.push(r.iops); perfLatency.push(r.latMs); perfUtil.push(r.util);
       if (perfIops.length > ioMaxSamples) { perfIops.shift(); perfLatency.shift(); perfUtil.shift(); }
-
-      document.getElementById('perf-iops-val').textContent = iops.toFixed(0);
-      document.getElementById('perf-lat-val').textContent = latMs.toFixed(1) + 'ms';
-      document.getElementById('perf-util-val').textContent = util.toFixed(0) + '%';
+      document.getElementById('perf-iops-val').textContent = r.iops.toFixed(0);
+      document.getElementById('perf-lat-val').textContent = r.latMs.toFixed(1) + 'ms';
+      document.getElementById('perf-util-val').textContent = r.util.toFixed(0) + '%';
       drawPerf();
     }
-    ioPrev = {
-      read: ds.io.read_bytes_total,
-      write: ds.io.write_bytes_total,
-      readIOs: ds.io.read_ios_total,
-      writeIOs: ds.io.write_ios_total,
-      ioTimeMs: ds.io.io_time_ms_total,
-      weightedMs: ds.io.weighted_io_time_ms_total
-    };
+    ioPrev = agg;
     if (!selectedName) renderDeviceStats();
   } catch(e) {}
 }

@@ -42,6 +42,8 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
   - UID/GID/mode
 - Per-node NFS exports (auto-managed via `exportfs`)
 - Multi-tenant: one agent serves multiple clusters
+- Multi-device support (RAID0/1/10) with per-device IO stats and error tracking
+- Dynamic device discovery -- hot-added devices are picked up automatically
 - Prometheus `/metrics` on all components
 - Web dashboard (`/v1/dashboard`)
 - TLS support

@@ -187,26 +187,22 @@ func TestSubvolumeList(t *testing.T) {
 }
 
 func TestDeviceErrors(t *testing.T) {
-	deviceStatsOutput := strings.Join([]string{
-		"[/dev/sda].write_io_errs    0",
-		"[/dev/sda].read_io_errs     0",
-		"[/dev/sda].flush_io_errs    0",
-		"[/dev/sda].corruption_errs  0",
-		"[/dev/sda].generation_errs  0",
-	}, "\n")
-
-	t.Run("success", func(t *testing.T) {
-		m := &utils.MockRunner{Out: deviceStatsOutput}
+	t.Run("single device", func(t *testing.T) {
+		out := strings.Join([]string{
+			"[/dev/sda].write_io_errs    0",
+			"[/dev/sda].read_io_errs     0",
+			"[/dev/sda].flush_io_errs    0",
+			"[/dev/sda].corruption_errs  0",
+			"[/dev/sda].generation_errs  0",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
 		mgr := newTestManager(m)
 
-		de, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
+		errs, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
 		require.NoError(t, err)
-		assert.Equal(t, "/dev/sda", de.Device)
-		assert.Equal(t, uint64(0), de.ReadErrs)
-		assert.Equal(t, uint64(0), de.WriteErrs)
-		assert.Equal(t, uint64(0), de.FlushErrs)
-		assert.Equal(t, uint64(0), de.CorruptionErrs)
-		assert.Equal(t, uint64(0), de.GenerationErrs)
+		require.Len(t, errs, 1)
+		assert.Equal(t, "/dev/sda", errs[0].Device)
+		assert.Equal(t, uint64(0), errs[0].ReadErrs)
 	})
 
 	t.Run("with errors", func(t *testing.T) {
@@ -220,14 +216,41 @@ func TestDeviceErrors(t *testing.T) {
 		m := &utils.MockRunner{Out: out}
 		mgr := newTestManager(m)
 
-		de, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
+		errs, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
 		require.NoError(t, err)
-		assert.Equal(t, "/dev/nvme0n1", de.Device)
-		assert.Equal(t, uint64(5), de.ReadErrs)
-		assert.Equal(t, uint64(3), de.WriteErrs)
-		assert.Equal(t, uint64(1), de.FlushErrs)
-		assert.Equal(t, uint64(2), de.CorruptionErrs)
-		assert.Equal(t, uint64(4), de.GenerationErrs)
+		require.Len(t, errs, 1)
+		assert.Equal(t, "/dev/nvme0n1", errs[0].Device)
+		assert.Equal(t, uint64(5), errs[0].ReadErrs)
+		assert.Equal(t, uint64(3), errs[0].WriteErrs)
+		assert.Equal(t, uint64(1), errs[0].FlushErrs)
+		assert.Equal(t, uint64(2), errs[0].CorruptionErrs)
+		assert.Equal(t, uint64(4), errs[0].GenerationErrs)
+	})
+
+	t.Run("multi device", func(t *testing.T) {
+		out := strings.Join([]string{
+			"[/dev/sda].write_io_errs    1",
+			"[/dev/sda].read_io_errs     2",
+			"[/dev/sda].flush_io_errs    0",
+			"[/dev/sda].corruption_errs  0",
+			"[/dev/sda].generation_errs  0",
+			"[/dev/sdb].write_io_errs    0",
+			"[/dev/sdb].read_io_errs     0",
+			"[/dev/sdb].flush_io_errs    3",
+			"[/dev/sdb].corruption_errs  0",
+			"[/dev/sdb].generation_errs  0",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		errs, err := mgr.DeviceErrors(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		require.Len(t, errs, 2)
+		assert.Equal(t, "/dev/sda", errs[0].Device)
+		assert.Equal(t, uint64(1), errs[0].WriteErrs)
+		assert.Equal(t, uint64(2), errs[0].ReadErrs)
+		assert.Equal(t, "/dev/sdb", errs[1].Device)
+		assert.Equal(t, uint64(3), errs[1].FlushErrs)
 	})
 
 	t.Run("command error", func(t *testing.T) {
@@ -335,5 +358,69 @@ func TestSetCompression(t *testing.T) {
 		err := mgr.SetCompression(context.Background(), "/mnt/data/vol1", "zstd:420")
 		require.Error(t, err)
 		assert.Empty(t, m.Calls)
+	})
+}
+
+func TestDevices(t *testing.T) {
+	t.Run("single device", func(t *testing.T) {
+		out := strings.Join([]string{
+			"Label: none  uuid: abc-123",
+			"\tTotal devices 1 FS bytes used 10.00GiB",
+			"\tdevid    1 size 50.00GiB used 15.00GiB path /dev/vdb",
+			"",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		devices, err := mgr.Devices(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"/dev/vdb"}, devices)
+	})
+
+	t.Run("raid1 two devices", func(t *testing.T) {
+		out := strings.Join([]string{
+			"Label: none  uuid: abc-123",
+			"\tTotal devices 2 FS bytes used 10.00GiB",
+			"\tdevid    1 size 50.00GiB used 15.00GiB path /dev/sda",
+			"\tdevid    2 size 50.00GiB used 15.00GiB path /dev/sdb",
+			"",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		devices, err := mgr.Devices(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"/dev/sda", "/dev/sdb"}, devices)
+	})
+
+	t.Run("dm device", func(t *testing.T) {
+		out := strings.Join([]string{
+			"Label: none  uuid: abc-123",
+			"\tTotal devices 1 FS bytes used 10.00GiB",
+			"\tdevid    1 size 50.00GiB used 15.00GiB path /dev/dm-0",
+			"",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		devices, err := mgr.Devices(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"/dev/dm-0"}, devices)
+	})
+
+	t.Run("command error", func(t *testing.T) {
+		m := &utils.MockRunner{Err: fmt.Errorf("show failed")}
+		mgr := newTestManager(m)
+
+		_, err := mgr.Devices(context.Background(), "/mnt/data")
+		require.Error(t, err)
+	})
+
+	t.Run("no devices in output", func(t *testing.T) {
+		m := &utils.MockRunner{Out: "Label: none  uuid: abc-123\n"}
+		mgr := newTestManager(m)
+
+		_, err := mgr.Devices(context.Background(), "/mnt/data")
+		assert.ErrorContains(t, err, "no devices found")
 	})
 }
