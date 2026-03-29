@@ -74,16 +74,16 @@ curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scr
 cat > values.yaml <<EOF
 storageClasses:
   - name: btrfs-nfs
-    nfsServer: "10.0.0.5"           # your agent's IP
+    nfsServer: "10.0.0.5"             # your agent's IP
     agentURL: "http://10.0.0.5:8080"
-    agentToken: "your-tenant-token"  # from step 1
+    agentToken: "your-tenant-token"   # from step 1
     isDefault: true
 
 # nfsServer must be reachable from the IP that NFS exports are created for.
 # By default the driver uses each node's primary IP (status.hostIP).
 # For separate storage networks uncomment one of these:
 # driver:
-#   storageInterface: "eth1"         # dedicated NIC
+#   storageInterface: "eth1"        # dedicated NIC
 #   storageCIDR: "10.10.0.0/24"     # or match by subnet
 EOF
 
@@ -147,7 +147,7 @@ go build -ldflags "-X main.version=$(cat VERSION) -X main.commit=$(git rev-parse
 
 ```bash
 sudo ./scripts/agent-dev-setup.sh up
-AGENT_BASE_PATH=/tmp/btrfs-nfs-csi-dev AGENT_TENANTS=dev:dev ./btrfs-nfs-csi agent
+sudo bash -c "AGENT_BASE_PATH=/tmp/btrfs-nfs-csi-dev AGENT_TENANTS=dev:dev ./btrfs-nfs-csi agent"
 sudo ./scripts/agent-dev-setup.sh down
 ```
 

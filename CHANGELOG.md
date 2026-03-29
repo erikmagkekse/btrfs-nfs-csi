@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.9.10
+
+This release adds the Helm chart as the primary deployment method for the CSI driver and controller. It also fixes agent tracking when multiple StorageClasses share the same agent and consolidates health check metrics into `agent_ops_total`.
+
+### Features
+- Helm chart for CSI driver and controller deployment (#67)
+- Configurable kernel NFS export options via `AGENT_KERNEL_EXPORT_OPTIONS` (#66)
+- Helm Release workflow with `azure/setup-helm` + `docker/login-action` (#71)
+- appVersion/VERSION mismatch check in Helm CI and release workflows (#71)
+
+### Improvements
+- Validate NoCOW and Compression values in controller (#68)
+
+### Bug Fixes
+- Fix multi-SC agent tracking: resolve StorageClass name from PVC instead of broken reverse-lookup (#68)
+- Fix `snapshotClass: false` and `allowVolumeExpansion: false` ignored in Helm chart (#71)
+- Fix device sysfs stat lookup for LVM, mdraid, bcache and other device-mapper setups where the block device is a symlink (#73)
+
+### Refactoring
+- Move `IsValidCompression` to shared `utils/` package (#68)
+- Rename `helm.yml` to `ci-helm.yml`, add `helm-release.yml` as reusable workflow (#71)
+
+### Breaking Changes
+- `btrfs_nfs_csi_controller_agent_health_total` metric removed — use `agent_ops_total{operation="health_check"}` instead (#69)
+- Health checks now tracked in `agent_ops_total` and `agent_duration_seconds` with `operation=health_check` (#69)
+
 ## v0.9.9
 
 ### Features
