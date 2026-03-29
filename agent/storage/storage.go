@@ -12,6 +12,7 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	"github.com/rs/zerolog/log"
 )
@@ -19,6 +20,7 @@ import (
 // Storage encapsulates all btrfs volume, snapshot, and clone operations.
 type Storage struct {
 	basePath        string
+	mountPoint      string
 	quotaEnabled    bool
 	btrfs           *btrfs.Manager
 	exporter        nfs.Exporter
@@ -45,6 +47,13 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	}
 	if !btrfs.IsBtrfs(basePath) {
 		log.Fatal().Str("path", basePath).Msg("base path is not on a btrfs filesystem")
+	}
+	mountPoint, err := utils.FindMountPoint(basePath)
+	if err != nil {
+		log.Fatal().Err(err).Str("path", basePath).Msg("failed to resolve btrfs mount point")
+	}
+	if mountPoint != basePath {
+		log.Info().Str("basePath", basePath).Str("mountPoint", mountPoint).Msg("base path is a subdirectory of btrfs mount")
 	}
 	mgr := btrfs.NewManager(btrfsBin)
 	if !mgr.IsAvailable(ctx) {
@@ -74,13 +83,13 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	}
 	log.Info().Int("count", len(tenants)).Msg("tenants configured")
 
-	devices, err := mgr.Devices(ctx, basePath)
+	devices, err := mgr.Devices(ctx, mountPoint)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to resolve block devices")
 	}
 	log.Info().Str("filesystem", basePath).Strs("devices", devices).Msg("block devices resolved")
 
-	return &Storage{basePath: basePath, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
+	return &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
 }
 
 func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInterval, deviceIOInterval, deviceStatsInterval time.Duration) {

@@ -99,7 +99,7 @@ func (s *Storage) StartDeviceIOUpdater(ctx context.Context, interval time.Durati
 }
 
 func (s *Storage) updateDeviceIO(ctx context.Context) {
-	devices, err := s.btrfs.Devices(ctx, s.basePath)
+	devices, err := s.btrfs.Devices(ctx, s.mountPoint)
 	if err != nil {
 		log.Warn().Err(err).Msg("device io updater: failed to discover devices")
 		return
@@ -154,7 +154,7 @@ func (s *Storage) updateBtrfsStats(ctx context.Context) {
 		}
 	}
 
-	fu, err := s.btrfs.FilesystemUsage(ctx, s.basePath)
+	fu, err := s.btrfs.FilesystemUsage(ctx, s.mountPoint)
 	if err != nil {
 		log.Warn().Err(err).Msg("device stats updater: btrfs filesystem usage failed")
 	} else {
@@ -171,7 +171,7 @@ func (s *Storage) updateBtrfsStats(ctx context.Context) {
 
 // DeviceStats collects per-device IO and error stats plus global filesystem usage.
 func (s *Storage) DeviceStats(ctx context.Context) (*DeviceStats, error) {
-	devList, err := s.btrfs.Devices(ctx, s.basePath)
+	devList, err := s.btrfs.Devices(ctx, s.mountPoint)
 	if err != nil {
 		return nil, fmt.Errorf("discover devices: %w", err)
 	}
@@ -199,7 +199,7 @@ func (s *Storage) DeviceStats(ctx context.Context) (*DeviceStats, error) {
 		})
 	}
 
-	fu, err := s.btrfs.FilesystemUsage(ctx, s.basePath)
+	fu, err := s.btrfs.FilesystemUsage(ctx, s.mountPoint)
 	if err != nil {
 		return nil, fmt.Errorf("btrfs filesystem usage: %w", err)
 	}

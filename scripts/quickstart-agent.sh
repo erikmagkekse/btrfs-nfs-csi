@@ -182,9 +182,7 @@ if [[ -n "${AGENT_BLOCK_DISK}" ]] && ! ${UPGRADE}; then
 fi
 
 # 3. verify btrfs
-mountpoint -q "${AGENT_BASE_PATH}" 2>/dev/null || fatal "${AGENT_BASE_PATH} is not a mount point. Mount a btrfs filesystem there first."
-
-fstype=$(findmnt -n -o FSTYPE --target "${AGENT_BASE_PATH}")
+fstype=$(findmnt -n -o FSTYPE --target "${AGENT_BASE_PATH}" 2>/dev/null) || fatal "${AGENT_BASE_PATH} is not on a mounted filesystem. Mount a btrfs filesystem first."
 [[ "${fstype}" == "btrfs" ]] || fatal "${AGENT_BASE_PATH} is ${fstype}, not btrfs."
 
 if ! btrfs qgroup show "${AGENT_BASE_PATH}" &>/dev/null; then

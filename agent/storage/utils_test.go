@@ -32,6 +32,7 @@ func testStorageWithRunner(t *testing.T, runner *utils.MockRunner, exporter *nfs
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 	s := &Storage{
 		basePath:        base,
+		mountPoint:      base,
 		btrfs:           mgr,
 		exporter:        exporter,
 		tenants:         []string{tenant},
