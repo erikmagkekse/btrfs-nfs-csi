@@ -12,7 +12,7 @@
 
 ```
 CreateVolume   → POST /v1/volumes (btrfs subvolume create, compression, quota, chown)
-Publish        → POST /v1/volumes/:name/export (exportfs, retry 3x)
+Publish        → POST /v1/volumes/:name/export (exportfs)
 NodeStage      → mount -t nfs server:path staging
 NodePublish    → mount --bind staging/data target
 NodeUnpublish  → umount target
