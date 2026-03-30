@@ -1,8 +1,8 @@
 # Metrics
 
-35 metrics across 3 components.
+38 metrics across 3 components.
 
-## Agent (26) - port 9090
+## Agent (29) - port 9090
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -21,6 +21,9 @@
 | `btrfs_nfs_csi_agent_device_ios_in_progress` | Gauge | `device` |
 | `btrfs_nfs_csi_agent_device_io_time_seconds_total` | Gauge | `device` |
 | `btrfs_nfs_csi_agent_device_io_weighted_time_seconds_total` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_size_bytes` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_allocated_bytes` | Gauge | `device` |
+| `btrfs_nfs_csi_agent_device_present` | Gauge | `device` |
 | `btrfs_nfs_csi_agent_device_read_errs_total` | Gauge | `device` |
 | `btrfs_nfs_csi_agent_device_write_errs_total` | Gauge | `device` |
 | `btrfs_nfs_csi_agent_device_flush_errs_total` | Gauge | `device` |
@@ -35,7 +38,7 @@
 
 **Buckets (http_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]`
 
-Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERVAL`). Device errors and filesystem allocation are updated every 1m (configurable via `AGENT_DEVICE_STATS_INTERVAL`).
+Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERVAL`). Device errors and filesystem allocation are updated every 1m (configurable via `AGENT_DEVICE_STATS_INTERVAL`). Missing devices (e.g. physically removed drives in a RAID setup) are skipped during IO polling.
 
 ## Controller (5) - port 9090
 
@@ -61,7 +64,7 @@ Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERV
 | `update_volume` | `success`, `error` |
 | `list_volumes` | `success`, `error` |
 | `list_snapshots` | `success`, `error` |
-| `health_check` | `healthy`, `error`, `version_mismatch` |
+| `health_check` | `healthy`, `degraded`, `error`, `version_mismatch` |
 
 
 **Buckets (agent_duration):** `[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`
@@ -86,6 +89,12 @@ Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERV
 ```promql
 # Volumes near quota (> 90%)
 btrfs_nfs_csi_agent_volume_used_bytes / btrfs_nfs_csi_agent_volume_size_bytes > 0.9
+
+# Missing device alert
+btrfs_nfs_csi_agent_device_present == 0
+
+# Device allocation > 90%
+btrfs_nfs_csi_agent_device_allocated_bytes / btrfs_nfs_csi_agent_device_size_bytes > 0.9
 
 # Agent error rate
 sum(rate(btrfs_nfs_csi_controller_agent_ops_total{status="error"}[5m]))

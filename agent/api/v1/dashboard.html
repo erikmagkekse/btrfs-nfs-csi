@@ -318,21 +318,32 @@ function renderDeviceStats() {
     return;
   }
   var ds = cachedDeviceStats;
-  var fs = ds.filesystem;
+  var fs = ds.btrfs;
 
   var fsPct = fs.total_bytes ? (fs.used_bytes / fs.total_bytes * 100) : 0;
   var metaPct = fs.metadata_total_bytes ? (fs.metadata_used_bytes / fs.metadata_total_bytes * 100) : 0;
 
   var devHtml = '';
-  for (var i = 0; i < ds.devices.length; i++) {
-    var d = ds.devices[i];
+  for (var i = 0; i < ds.btrfs.devices.length; i++) {
+    var d = ds.btrfs.devices[i];
+    var devLabel = 'devid=' + d.devid + ' ' + d.device;
+    if (d.missing) {
+      devHtml +=
+        '<div class="detail" style="margin-top:8px;border:1px solid #f85149"><h2 style="margin-top:0;color:#f85149">Device: ' + devLabel + ' MISSING</h2><dl class="detail-grid">' +
+        row('Status', '<span class="mono" style="color:#f85149;font-weight:600">Device is not available</span>') +
+        '</dl></div>';
+      continue;
+    }
     var e = d.errors;
     var hasErrs = e.read_errs || e.write_errs || e.flush_errs || e.corruption_errs || e.generation_errs;
     var errText = hasErrs
       ? '<span class="mono" style="color:#f85149;font-weight:600">Read:' + e.read_errs + '  Write:' + e.write_errs + '  Flush:' + e.flush_errs + '  Corruption:' + e.corruption_errs + '  Generation:' + e.generation_errs + '</span>'
       : '<span class="mono" style="color:#238636">No errors</span>';
+    var allocPct = d.size_bytes ? (d.allocated_bytes / d.size_bytes * 100) : 0;
     devHtml +=
-      '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">Device: ' + d.device + '</h2><dl class="detail-grid">' +
+      '<div class="detail" style="margin-top:8px"><h2 style="margin-top:0">Device: ' + devLabel + '</h2><dl class="detail-grid">' +
+      row('Size', '<span class="bytes">' + fmt(d.size_bytes) + '</span>') +
+      row('Allocated', '<span class="bytes">' + fmt(d.allocated_bytes) + '</span> <span class="mono">(' + allocPct.toFixed(1) + '%)</span>') +
       row('Read', '<span class="bytes">' + fmt(d.io.read_bytes_total) + '</span> <span class="mono">(' + d.io.read_ios_total.toLocaleString() + ' ops)</span>') +
       row('Written', '<span class="bytes">' + fmt(d.io.write_bytes_total) + '</span> <span class="mono">(' + d.io.write_ios_total.toLocaleString() + ' ops)</span>') +
       row('In Progress', '<span class="mono">' + d.io.ios_in_progress + '</span>') +
@@ -341,7 +352,7 @@ function renderDeviceStats() {
   }
 
   document.getElementById('detail-content').innerHTML =
-    '<h2>BTRFS Filesystem (' + ds.devices.length + ' Device' + (ds.devices.length > 1 ? 's' : '') + ')</h2>' +
+    '<h2>BTRFS Filesystem (' + ds.btrfs.devices.length + ' Device' + (ds.btrfs.devices.length > 1 ? 's' : '') + ')</h2>' +
     '<div class="detail"><h2 style="margin-top:0">Usage</h2><dl class="detail-grid">' +
     row('Total', '<span class="bytes">' + fmt(fs.total_bytes) + '</span>') +
     row('Used', '<span class="bytes">' + fmt(fs.used_bytes) + '</span> <span class="mono">(' + fsPct.toFixed(1) + '%)</span>') +
@@ -377,11 +388,6 @@ function highlightSelected() {
 function row(label, value) {
   return '<dt>' + label + '</dt><dd>' + value + '</dd>';
 }
-function errRow(label, val) {
-  var s = val > 0 ? ' style="color:#f85149;font-weight:600"' : '';
-  return '<dt>' + label + '</dt><dd><span class="mono"' + s + '>' + val + '</span></dd>';
-}
-
 async function showVolume(name) {
   selectedType = 'volume'; selectedName = name; highlightSelected();
   try {
@@ -446,7 +452,7 @@ async function refresh() {
     feats += '<span class="feat">refresh: {{REFRESH}}s</span>';
     document.getElementById('features').innerHTML = feats;
 
-    if (cachedDeviceStats) updateFsBar(cachedDeviceStats);
+    if (cachedDeviceStats) updateFsBar(cachedDeviceStats.statfs);
 
     const v = await api('/v1/volumes');
     document.getElementById('tab-btn-volumes').textContent = 'Volumes (' + v.volumes.length + ')';
@@ -582,11 +588,11 @@ async function refreshIO() {
   try {
     const ds = await api('/v1/stats');
     cachedDeviceStats = ds;
-    updateFsBar(ds);
+    updateFsBar(ds.statfs);
     // aggregate IO across all devices
     var agg = {read:0, write:0, readIOs:0, writeIOs:0, ioTimeMs:0, weightedMs:0};
-    for (var i = 0; i < ds.devices.length; i++) {
-      var dio = ds.devices[i].io;
+    for (var i = 0; i < ds.btrfs.devices.length; i++) {
+      var dio = ds.btrfs.devices[i].io;
       agg.read += dio.read_bytes_total;
       agg.write += dio.write_bytes_total;
       agg.readIOs += dio.read_ios_total;

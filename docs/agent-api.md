@@ -257,44 +257,50 @@ Returns a summary list of snapshots for a specific volume. Same response format 
 
 ### GET /v1/stats
 
-Filesystem space usage, per-device IO counters (from sysfs), per-device btrfs error counters, and btrfs filesystem allocation. Devices are discovered dynamically -- hot-added devices appear automatically.
+Filesystem space usage, per-device IO counters (from sysfs), per-device btrfs error counters, and btrfs filesystem allocation. Devices are discovered dynamically, hot-added devices appear automatically. Missing devices (e.g. physically removed drives in a RAID setup) are included with `"missing": true`.
 
 ```json
 {
-  "total_bytes": 1099511627776,
-  "used_bytes": 10737418240,
-  "free_bytes": 1088774209536,
-  "devices": [
-    {
-      "device": "/dev/vdb",
-      "io": {
-        "read_bytes_total": 126418944,
-        "read_ios_total": 12345,
-        "read_time_ms_total": 5678,
-        "write_bytes_total": 1011357696,
-        "write_ios_total": 54321,
-        "write_time_ms_total": 8765,
-        "ios_in_progress": 0,
-        "io_time_ms_total": 45678,
-        "weighted_io_time_ms_total": 56789
-      },
-      "errors": {
-        "read_errs": 0,
-        "write_errs": 0,
-        "flush_errs": 0,
-        "corruption_errs": 0,
-        "generation_errs": 0
-      }
-    }
-  ],
-  "filesystem": {
+  "statfs": {
+    "total_bytes": 1099511627776,
+    "used_bytes": 10737418240,
+    "free_bytes": 1088774209536
+  },
+  "btrfs": {
     "total_bytes": 107374182400,
     "used_bytes": 42949672960,
     "free_bytes": 64424509440,
     "unallocated_bytes": 53687091200,
     "metadata_used_bytes": 2147483648,
     "metadata_total_bytes": 5368709120,
-    "data_ratio": 1.0
+    "data_ratio": 1.0,
+    "devices": [
+      {
+        "devid": "1",
+        "device": "/dev/sdb",
+        "missing": false,
+        "size_bytes": 10737418240,
+        "allocated_bytes": 1354235904,
+        "io": {
+          "read_bytes_total": 126418944,
+          "read_ios_total": 12345,
+          "read_time_ms_total": 5678,
+          "write_bytes_total": 1011357696,
+          "write_ios_total": 54321,
+          "write_time_ms_total": 8765,
+          "ios_in_progress": 0,
+          "io_time_ms_total": 45678,
+          "weighted_io_time_ms_total": 56789
+        },
+        "errors": {
+          "read_errs": 0,
+          "write_errs": 0,
+          "flush_errs": 0,
+          "corruption_errs": 0,
+          "generation_errs": 0
+        }
+      }
+    ]
   }
 }
 ```
@@ -308,6 +314,8 @@ HTML dashboard (requires auth, use Basic in browser).
 ## Unauthenticated
 
 ### GET /healthz
+
+`status` is `"ok"` or `"degraded"` (missing device or btrfs device errors).
 
 ```json
 {

@@ -43,8 +43,6 @@ func (a *Agent) Start(ctx context.Context) {
 		features["nfs_reconcile"] = a.cfg.NFSReconcileInterval.String()
 	}
 
-	// unauthenticated endpoints
-	e.GET("/healthz", v1.Healthz(a.version, a.commit, features))
 	startMetricsServer(a.cfg.MetricsAddr)
 
 	// NFS exporter
@@ -67,6 +65,9 @@ func (a *Agent) Start(ctx context.Context) {
 		a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin,
 	)
 	h := &v1.Handler{Store: store}
+
+	// unauthenticated endpoints
+	e.GET("/healthz", v1.Healthz(a.version, a.commit, features, store))
 
 	// v1 API with auth
 	api := e.Group("/v1", v1.AuthMiddleware(tenants))

@@ -183,7 +183,11 @@ func (h *Handler) Stats(c *echo.Context) error {
 	devices := make([]DeviceStatsResponse, len(ds.Devices))
 	for i, d := range ds.Devices {
 		devices[i] = DeviceStatsResponse{
-			Device: d.Device,
+			DevID:          d.DevID,
+			Device:         d.Device,
+			Missing:        d.Missing,
+			SizeBytes:      d.SizeBytes,
+			AllocatedBytes: d.AllocatedBytes,
 			IO: DeviceIOStatsResponse{
 				ReadBytesTotal:        d.IO.ReadBytes,
 				ReadIOsTotal:          d.IO.ReadIOs,
@@ -206,11 +210,12 @@ func (h *Handler) Stats(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, StatsResponse{
-		TotalBytes: fs.TotalBytes,
-		UsedBytes:  fs.UsedBytes,
-		FreeBytes:  fs.FreeBytes,
-		Devices:    devices,
-		Filesystem: FilesystemStatsResponse{
+		Statfs: StatfsResponse{
+			TotalBytes: fs.TotalBytes,
+			UsedBytes:  fs.UsedBytes,
+			FreeBytes:  fs.FreeBytes,
+		},
+		Btrfs: FilesystemStatsResponse{
 			TotalBytes:         ds.Filesystem.TotalBytes,
 			UsedBytes:          ds.Filesystem.UsedBytes,
 			FreeBytes:          ds.Filesystem.FreeBytes,
@@ -218,6 +223,7 @@ func (h *Handler) Stats(c *echo.Context) error {
 			MetadataUsedBytes:  ds.Filesystem.MetadataUsedBytes,
 			MetadataTotalBytes: ds.Filesystem.MetadataTotalBytes,
 			DataRatio:          ds.Filesystem.DataRatio,
+			Devices:            devices,
 		},
 	})
 }
