@@ -365,8 +365,8 @@ func TestDevices(t *testing.T) {
 	t.Run("single device", func(t *testing.T) {
 		out := strings.Join([]string{
 			"Label: none  uuid: abc-123",
-			"\tTotal devices 1 FS bytes used 10.00GiB",
-			"\tdevid    1 size 50.00GiB used 15.00GiB path /dev/vdb",
+			"\tTotal devices 1 FS bytes used 10737418240",
+			"\tdevid    1 size 53687091200 used 16106127360 path /dev/vdb",
 			"",
 		}, "\n")
 		m := &utils.MockRunner{Out: out}
@@ -374,15 +374,20 @@ func TestDevices(t *testing.T) {
 
 		devices, err := mgr.Devices(context.Background(), "/mnt/data")
 		require.NoError(t, err)
-		assert.Equal(t, []string{"/dev/vdb"}, devices)
+		require.Len(t, devices, 1)
+		assert.Equal(t, "1", devices[0].DevID)
+		assert.Equal(t, "/dev/vdb", devices[0].Device)
+		assert.False(t, devices[0].Missing)
+		assert.Equal(t, uint64(53687091200), devices[0].SizeBytes)
+		assert.Equal(t, uint64(16106127360), devices[0].AllocatedBytes)
 	})
 
 	t.Run("raid1 two devices", func(t *testing.T) {
 		out := strings.Join([]string{
 			"Label: none  uuid: abc-123",
-			"\tTotal devices 2 FS bytes used 10.00GiB",
-			"\tdevid    1 size 50.00GiB used 15.00GiB path /dev/sda",
-			"\tdevid    2 size 50.00GiB used 15.00GiB path /dev/sdb",
+			"\tTotal devices 2 FS bytes used 10737418240",
+			"\tdevid    1 size 53687091200 used 16106127360 path /dev/sda",
+			"\tdevid    2 size 53687091200 used 16106127360 path /dev/sdb",
 			"",
 		}, "\n")
 		m := &utils.MockRunner{Out: out}
@@ -390,14 +395,80 @@ func TestDevices(t *testing.T) {
 
 		devices, err := mgr.Devices(context.Background(), "/mnt/data")
 		require.NoError(t, err)
-		assert.Equal(t, []string{"/dev/sda", "/dev/sdb"}, devices)
+		require.Len(t, devices, 2)
+		assert.Equal(t, "1", devices[0].DevID)
+		assert.Equal(t, "/dev/sda", devices[0].Device)
+		assert.Equal(t, "2", devices[1].DevID)
+		assert.Equal(t, "/dev/sdb", devices[1].Device)
+	})
+
+	t.Run("missing device", func(t *testing.T) {
+		out := strings.Join([]string{
+			"Label: none  uuid: abc-123",
+			"\tTotal devices 2 FS bytes used 10737418240",
+			"\tdevid    1 size 10737418240 used 1354235904 path /dev/sdb",
+			"\tdevid    2 size 0 used 0 path /dev/sdc MISSING",
+			"",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		devices, err := mgr.Devices(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		require.Len(t, devices, 2)
+		assert.Equal(t, "/dev/sdb", devices[0].Device)
+		assert.False(t, devices[0].Missing)
+		assert.Equal(t, uint64(10737418240), devices[0].SizeBytes)
+		assert.Equal(t, "/dev/sdc", devices[1].Device)
+		assert.True(t, devices[1].Missing)
+		assert.Equal(t, uint64(0), devices[1].SizeBytes)
+	})
+
+	t.Run("missing device with missing disk path", func(t *testing.T) {
+		out := strings.Join([]string{
+			"Label: none  uuid: abc-123",
+			"\tTotal devices 2 FS bytes used 10737418240",
+			"\tdevid    1 size 10737418240 used 1354235904 path /dev/sdb",
+			"\tdevid    2 size 0 used 0 path <missing disk> MISSING",
+			"",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		devices, err := mgr.Devices(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		require.Len(t, devices, 2)
+		assert.False(t, devices[0].Missing)
+		assert.Equal(t, "2", devices[1].DevID)
+		assert.Equal(t, "<missing disk>", devices[1].Device)
+		assert.True(t, devices[1].Missing)
+	})
+
+	t.Run("missing device with empty path", func(t *testing.T) {
+		out := strings.Join([]string{
+			"Label: none  uuid: abc-123",
+			"\tTotal devices 2 FS bytes used 10737418240",
+			"\tdevid    1 size 10737418240 used 1354235904 path /dev/sdb",
+			"\tdevid    2 size 0 used 0 path  MISSING",
+			"",
+		}, "\n")
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		devices, err := mgr.Devices(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		require.Len(t, devices, 2)
+		assert.False(t, devices[0].Missing)
+		assert.Equal(t, "2", devices[1].DevID)
+		assert.Equal(t, "", devices[1].Device)
+		assert.True(t, devices[1].Missing)
 	})
 
 	t.Run("dm device", func(t *testing.T) {
 		out := strings.Join([]string{
 			"Label: none  uuid: abc-123",
-			"\tTotal devices 1 FS bytes used 10.00GiB",
-			"\tdevid    1 size 50.00GiB used 15.00GiB path /dev/dm-0",
+			"\tTotal devices 1 FS bytes used 10737418240",
+			"\tdevid    1 size 53687091200 used 16106127360 path /dev/dm-0",
 			"",
 		}, "\n")
 		m := &utils.MockRunner{Out: out}
@@ -405,7 +476,8 @@ func TestDevices(t *testing.T) {
 
 		devices, err := mgr.Devices(context.Background(), "/mnt/data")
 		require.NoError(t, err)
-		assert.Equal(t, []string{"/dev/dm-0"}, devices)
+		require.Len(t, devices, 1)
+		assert.Equal(t, "/dev/dm-0", devices[0].Device)
 	})
 
 	t.Run("command error", func(t *testing.T) {

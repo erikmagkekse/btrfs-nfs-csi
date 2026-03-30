@@ -95,6 +95,27 @@ var (
 		Help:      "Weighted total time spent on IO operations in seconds.",
 	}, []string{"device"})
 
+	DeviceSizeBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "agent",
+		Name:      "device_size_bytes",
+		Help:      "Total size of the block device in bytes.",
+	}, []string{"device"})
+
+	DeviceAllocatedBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "agent",
+		Name:      "device_allocated_bytes",
+		Help:      "Bytes allocated by btrfs on the block device.",
+	}, []string{"device"})
+
+	DevicePresentGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "agent",
+		Name:      "device_present",
+		Help:      "Whether the block device is present (1) or missing (0).",
+	}, []string{"device"})
+
 	// Device error metrics
 	DeviceReadErrsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "btrfs_nfs_csi",
@@ -192,6 +213,9 @@ func init() {
 		DeviceIOsInProgress,
 		DeviceIOTimeSecondsTotal,
 		DeviceIOWeightedTimeSecondsTotal,
+		DeviceSizeBytes,
+		DeviceAllocatedBytes,
+		DevicePresentGauge,
 		// Device errors
 		DeviceReadErrsTotal,
 		DeviceWriteErrsTotal,

@@ -6,20 +6,53 @@ import (
 	"strings"
 )
 
-// parseDevices extracts device paths from `btrfs filesystem show` output.
-// Format: devid    1 size 50.00GiB used 15.00GiB path /dev/sda
-func parseDevices(out string) ([]string, error) {
-	var devices []string
+// parseDevices extracts device info from `btrfs filesystem show --raw` output.
+// Format: devid    1 size 10737418240 used 1354235904 path /dev/sda
+// Missing (known path): devid    2 size 0 used 0 path /dev/sdc MISSING
+// Missing (never seen): devid    2 size 0 used 0 path <missing disk> MISSING
+// Missing (empty path): devid    2 size 0 used 0 path  MISSING
+func parseDevices(out string) ([]BTRFSDevice, error) {
+	var devices []BTRFSDevice
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "devid") {
 			continue
 		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		devID := fields[1]
+
 		idx := strings.LastIndex(line, " path ")
 		if idx < 0 {
 			continue
 		}
-		devices = append(devices, strings.TrimSpace(line[idx+6:]))
+		pathPart := strings.TrimSpace(line[idx+6:])
+		missing := strings.HasSuffix(pathPart, "MISSING")
+		path := pathPart
+		if missing {
+			path = strings.TrimSpace(strings.TrimSuffix(pathPart, "MISSING"))
+		}
+
+		// format (--raw): devid    1 size 10737418240 used 1354235904 path /dev/sdb
+		var sizeBytes, allocBytes uint64
+		if len(fields) >= 8 {
+			var sizeErr, allocErr error
+			sizeBytes, sizeErr = strconv.ParseUint(fields[3], 10, 64)
+			allocBytes, allocErr = strconv.ParseUint(fields[5], 10, 64)
+			if !missing && (sizeErr != nil || allocErr != nil) {
+				return nil, fmt.Errorf("devid %s: failed to parse size/used fields from %q", devID, line)
+			}
+		}
+
+		devices = append(devices, BTRFSDevice{
+			DevID:          devID,
+			Device:         strings.TrimSpace(path),
+			Missing:        missing,
+			SizeBytes:      sizeBytes,
+			AllocatedBytes: allocBytes,
+		})
 	}
 	if len(devices) == 0 {
 		return nil, fmt.Errorf("no devices found in btrfs filesystem show output")

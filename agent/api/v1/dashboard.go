@@ -18,7 +18,7 @@ func ServeDashboard(refreshSeconds int) echo.HandlerFunc {
 		tenant := c.Get("tenant").(string)
 		display := ""
 		if tenant != "" {
-			display = " &mdash; " + tenant
+			display = " " + tenant
 		}
 		r := strings.NewReplacer("{{TENANT}}", display, "{{REFRESH}}", refresh)
 		html := r.Replace(dashboardHTML)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,6 +28,15 @@ type Storage struct {
 	tenants         []string
 	defaultDirMode  os.FileMode
 	defaultDataMode string
+
+	// cachedDevices is written by both the IO poller (5s) and btrfs stats poller (1m).
+	// Each poller loads the current state, updates its own fields (IO or Errors),
+	// and preserves the other poller's fields from the previous snapshot.
+	// Uses atomic.Pointer instead of a mutex. Concurrent load+store from two pollers
+	// may cause one update to be lost, but the next poll cycle self-corrects
+	// (max 5s for IO, max 1m for errors).
+	cachedDevices    atomic.Pointer[[]DeviceState]
+	cachedFilesystem atomic.Pointer[btrfs.FilesystemUsage]
 }
 
 func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode, btrfsBin string) *Storage {
@@ -87,9 +97,21 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to resolve block devices")
 	}
-	log.Info().Str("filesystem", basePath).Strs("devices", devices).Msg("block devices resolved")
+	for _, d := range devices {
+		if d.Missing {
+			log.Warn().Str("devid", d.DevID).Str("device", d.Device).Msg("block device missing")
+		} else {
+			log.Info().Str("devid", d.DevID).Str("device", d.Device).Msg("block device resolved")
+		}
+	}
 
-	return &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
+	initialStates := make([]DeviceState, len(devices))
+	for i, d := range devices {
+		initialStates[i] = DeviceState{BTRFSDevice: d}
+	}
+	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode}
+	s.cachedDevices.Store(&initialStates)
+	return s
 }
 
 func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInterval, deviceIOInterval, deviceStatsInterval time.Duration) {

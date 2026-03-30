@@ -182,13 +182,17 @@ func (t *AgentTracker) checkAll(ctx context.Context) {
 			continue
 		}
 
-		if health.Version != t.version {
+		switch {
+		case health.Status == agentAPI.HealthStatusDegraded:
+			agentOpsTotal.WithLabelValues("health_check", "degraded", sc).Inc()
+			log.Warn().Str("sc", sc).Msg("agent reports degraded status (missing device or btrfs errors)")
+		case health.Version != t.version:
 			agentOpsTotal.WithLabelValues("health_check", "version_mismatch", sc).Inc()
 			log.Warn().Str("sc", sc).Str("agentVersion", health.Version).Str("driverVersion", t.version).Msg("agent/driver version mismatch")
-		} else if health.Commit != t.commit {
+		case health.Commit != t.commit:
 			agentOpsTotal.WithLabelValues("health_check", "healthy", sc).Inc()
 			log.Info().Str("sc", sc).Str("agentCommit", health.Commit).Str("driverCommit", t.commit).Msg("agent healthy - commit mismatch, but same version (could be a security update)")
-		} else {
+		default:
 			agentOpsTotal.WithLabelValues("health_check", "healthy", sc).Inc()
 			log.Info().Str("sc", sc).Str("version", health.Version).Str("commit", health.Commit).Msg("agent healthy - vibes immaculate, bits aligned, absolutely bussin")
 		}
