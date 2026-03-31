@@ -309,8 +309,13 @@ func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 		return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
 	}
 
-	if err := s.exporter.Unexport(ctx, volDir, ""); err != nil {
-		log.Warn().Err(err).Str("path", volDir).Msg("failed to unexport via NFS")
+	var meta VolumeMetadata
+	metaPath := filepath.Join(volDir, config.MetadataFile)
+	if err := ReadMetadata(metaPath, &meta); err != nil {
+		return fmt.Errorf("failed to read volume metadata: %w", err)
+	}
+	if len(meta.Clients) > 0 {
+		return &StorageError{Code: ErrBusy, Message: fmt.Sprintf("volume %q still has active NFS exports", name)}
 	}
 
 	dataDir := filepath.Join(volDir, config.DataDir)

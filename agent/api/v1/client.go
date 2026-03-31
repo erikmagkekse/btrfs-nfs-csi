@@ -218,3 +218,10 @@ func IsNotFound(err error) bool {
 	}
 	return false
 }
+
+func IsLocked(err error) bool {
+	if ae, ok := err.(*AgentError); ok {
+		return ae.StatusCode == http.StatusLocked
+	}
+	return false
+}
