@@ -126,7 +126,7 @@ All fields optional. `size_bytes` must be larger than current.
 
 ### DELETE /v1/volumes/:name
 
-204 No Content. 404 if not found.
+204 No Content. 404 if not found. 423 if the volume still has active NFS exports, unexport all clients first.
 
 ## NFS Exports
 

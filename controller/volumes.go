@@ -213,6 +213,10 @@ func (s *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 			agentOpsTotal.WithLabelValues("delete_volume", "not_found", sc).Inc()
 			return &csi.DeleteVolumeResponse{}, nil
 		}
+		if agentAPI.IsLocked(deleteErr) {
+			agentOpsTotal.WithLabelValues("delete_volume", "busy", sc).Inc()
+			return nil, status.Errorf(codes.FailedPrecondition, "delete volume: %v", deleteErr)
+		}
 		agentOpsTotal.WithLabelValues("delete_volume", "error", sc).Inc()
 		return nil, status.Errorf(codes.Internal, "delete volume: %v", deleteErr)
 	}

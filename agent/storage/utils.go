@@ -12,6 +12,7 @@ const (
 	ErrInvalid       = "INVALID"
 	ErrNotFound      = "NOT_FOUND"
 	ErrAlreadyExists = "ALREADY_EXISTS"
+	ErrBusy          = "BUSY"
 )
 
 type StorageError struct {

@@ -12,7 +12,6 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -501,20 +500,17 @@ func TestDeleteVolume(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
-		s, bp, _, exporter := newTestStorage(t)
+		s, bp, _, _ := newTestStorage(t)
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
 		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol"})
-
-		exporter.On("Unexport", mock.Anything, volDir, "").Return(nil)
 
 		err := s.DeleteVolume(ctx, "test", "myvol")
 		require.NoError(t, err, "DeleteVolume")
 
 		_, statErr := os.Stat(volDir)
 		assert.True(t, os.IsNotExist(statErr), "volDir should be removed")
-		exporter.AssertExpectations(t)
 	})
 
 	t.Run("not_found", func(t *testing.T) {
@@ -524,20 +520,18 @@ func TestDeleteVolume(t *testing.T) {
 		requireStorageError(t, err, ErrNotFound)
 	})
 
-	t.Run("unexport_failure_continues", func(t *testing.T) {
-		s, bp, _, exporter := newTestStorage(t)
+	t.Run("busy_with_exports", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol"})
-
-		exporter.On("Unexport", mock.Anything, volDir, "").Return(fmt.Errorf("nfs error"))
+		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol", Clients: []string{"10.0.0.1"}})
 
 		err := s.DeleteVolume(ctx, "test", "myvol")
-		require.NoError(t, err, "unexport failure should not block delete")
+		requireStorageError(t, err, ErrBusy)
 
 		_, statErr := os.Stat(volDir)
-		assert.True(t, os.IsNotExist(statErr), "volDir should be removed despite unexport failure")
+		assert.False(t, os.IsNotExist(statErr), "volDir should still exist when exports are active")
 	})
 
 	t.Run("subvol_delete_fails", func(t *testing.T) {
@@ -548,8 +542,6 @@ func TestDeleteVolume(t *testing.T) {
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
 		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol"})
-
-		exporter.On("Unexport", mock.Anything, volDir, "").Return(nil)
 
 		err := s.DeleteVolume(ctx, "test", "myvol")
 		require.Error(t, err)
