@@ -2,44 +2,45 @@ package utils
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
-	"syscall"
+	"strings"
 )
 
 // FindMountPoint resolves the mount point for the filesystem containing path
-// by walking up the directory tree until the device number changes.
+// by parsing /proc/self/mountinfo and finding the longest matching mount prefix.
 func FindMountPoint(path string) (string, error) {
-	const maxDepth = 256
-
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
-	var st syscall.Stat_t
-	if err := syscall.Stat(absPath, &st); err != nil {
-		return "", fmt.Errorf("stat %s: %w", absPath, err)
-	}
-	dev := st.Dev
-	current := absPath
-	for range maxDepth {
-		parent := filepath.Dir(current)
-		if parent == current {
-			return current, nil
-		}
-		var pst syscall.Stat_t
-		if err := syscall.Stat(parent, &pst); err != nil {
-			return "", fmt.Errorf("stat %s: %w", parent, err)
-		}
-		if pst.Dev != dev {
-			return current, nil
-		}
-		current = parent
-	}
-	return "", fmt.Errorf("mount point not found within %d levels for %s", maxDepth, path)
-}
 
-// IsMountPoint returns true if path is a mount point (different device than parent).
-func IsMountPoint(path string) bool {
-	mp, err := FindMountPoint(path)
-	return err == nil && mp == path
+	data, err := os.ReadFile("/proc/self/mountinfo")
+	if err != nil {
+		return "", fmt.Errorf("read mountinfo: %w", err)
+	}
+
+	var bestMount string
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+		mountPoint := fields[4]
+		if !strings.HasPrefix(absPath, mountPoint) {
+			continue
+		}
+		// Ensure exact prefix match (not /mnt/btrfs matching /mnt/btr)
+		if len(absPath) > len(mountPoint) && absPath[len(mountPoint)] != '/' {
+			continue
+		}
+		if len(mountPoint) > len(bestMount) {
+			bestMount = mountPoint
+		}
+	}
+
+	if bestMount == "" {
+		return "", fmt.Errorf("no mount found for %s", absPath)
+	}
+	return bestMount, nil
 }

@@ -24,19 +24,10 @@ func TestFindMountPoint(t *testing.T) {
 			"mount point %q should be a prefix of %q", mp, dir)
 	})
 
-	t.Run("nonexistent", func(t *testing.T) {
-		_, err := FindMountPoint("/nonexistent/path/that/does/not/exist")
-		require.Error(t, err)
-	})
-}
-
-func TestIsMountPoint(t *testing.T) {
-	t.Run("root_is_mount_point", func(t *testing.T) {
-		assert.True(t, IsMountPoint("/"))
-	})
-
-	t.Run("tempdir_is_not_mount_point", func(t *testing.T) {
-		dir := t.TempDir()
-		assert.False(t, IsMountPoint(dir))
+	t.Run("nonexistent path still finds mount", func(t *testing.T) {
+		// /tmp exists as a mount, so /tmp/nonexistent should find /tmp or /
+		mp, err := FindMountPoint("/tmp/nonexistent")
+		require.NoError(t, err)
+		assert.NotEmpty(t, mp)
 	})
 }
