@@ -24,9 +24,10 @@ func TestFindMountPoint(t *testing.T) {
 			"mount point %q should be a prefix of %q", mp, dir)
 	})
 
-	t.Run("nonexistent", func(t *testing.T) {
-		_, err := FindMountPoint("/nonexistent/path/that/does/not/exist")
-		require.Error(t, err)
+	t.Run("nonexistent path still finds mount", func(t *testing.T) {
+		mp, err := FindMountPoint("/nonexistent/path/that/does/not/exist")
+		require.NoError(t, err)
+		assert.NotEmpty(t, mp)
 	})
 }
 

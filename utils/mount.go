@@ -30,8 +30,8 @@ func FindMountPoint(path string) (string, error) {
 		if !strings.HasPrefix(absPath, mountPoint) {
 			continue
 		}
-		// Ensure exact prefix match (not /mnt/btrfs matching /mnt/btr)
-		if len(absPath) > len(mountPoint) && absPath[len(mountPoint)] != '/' {
+		// Ensure exact prefix match (not /mnt/btrfs matching /mnt/btr), "/" always matches
+		if mountPoint != "/" && len(absPath) > len(mountPoint) && absPath[len(mountPoint)] != '/' {
 			continue
 		}
 		if len(mountPoint) > len(bestMount) {
