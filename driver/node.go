@@ -33,7 +33,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	stagingPath := req.StagingTargetPath
 
-	if notMnt, _ := mount.IsNotMountPoint(s.mounter, stagingPath); !notMnt {
+	if notMnt, _ := s.mounter.IsLikelyNotMountPoint(stagingPath); !notMnt {
 		log.Debug().Str("path", stagingPath).Msg("already mounted at staging path")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
@@ -94,7 +94,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if notMnt, _ := mount.IsNotMountPoint(s.mounter, req.TargetPath); !notMnt {
+	if notMnt, _ := s.mounter.IsLikelyNotMountPoint(req.TargetPath); !notMnt {
 		log.Info().Str("path", req.TargetPath).Msg("already mounted, skipping publish")
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
