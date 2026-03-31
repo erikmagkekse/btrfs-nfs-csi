@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/mount-utils"
 )
 
 // Mount operations inspired by kubernetes-csi/csi-driver-nfs:
@@ -41,7 +42,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	stagingPath := req.StagingTargetPath
 
-	if isMountPoint(stagingPath) {
+	if notMnt, _ := mount.IsNotMountPoint(s.mounter, stagingPath); !notMnt {
 		log.Debug().Str("path", stagingPath).Msg("already mounted at staging path")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
@@ -91,7 +92,7 @@ func (s *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if err := cleanupMountPoint(ctx, req.StagingTargetPath); err != nil {
+	if err := cleanupMountPoint(ctx, s.mounter, req.StagingTargetPath); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup staging: %v", err)
 	}
 
@@ -106,7 +107,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if isMountPoint(req.TargetPath) {
+	if notMnt, _ := mount.IsNotMountPoint(s.mounter, req.TargetPath); !notMnt {
 		log.Info().Str("path", req.TargetPath).Msg("already mounted, skipping publish")
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
@@ -134,7 +135,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		mountDuration.WithLabelValues("remount_ro").Observe(time.Since(start).Seconds())
 		if err != nil {
 			mountOpsTotal.WithLabelValues("remount_ro", "error").Inc()
-			_ = forceUnmount(ctx, req.TargetPath)
+			_ = cleanupMountPoint(ctx, s.mounter, req.TargetPath)
 			return nil, status.Errorf(codes.Internal, "remount ro: %v", err)
 		}
 		mountOpsTotal.WithLabelValues("remount_ro", "success").Inc()
@@ -151,7 +152,7 @@ func (s *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if err := cleanupMountPoint(ctx, req.TargetPath); err != nil {
+	if err := cleanupMountPoint(ctx, s.mounter, req.TargetPath); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup target: %v", err)
 	}
 
