@@ -140,12 +140,24 @@ func (m *Manager) SubvolumeExists(ctx context.Context, path string) bool {
 	return err == nil
 }
 
-// DeviceErrors runs `btrfs device stats <path>` and parses error counters.
+// Devices returns device info for a btrfs filesystem by parsing
+// the output of `btrfs filesystem show`. Returns kernel device paths
+// (e.g. /dev/dm-0), not mapper symlinks - works inside containers.
+// Devices that are physically absent are marked as Missing.
+func (m *Manager) Devices(ctx context.Context, path string) ([]BTRFSDevice, error) {
+	out, err := m.cmd.Run(ctx, m.bin, "filesystem", "show", "--raw", path)
+	if err != nil {
+		return nil, err
+	}
+	return parseDevices(out)
+}
+
+// DeviceErrors runs `btrfs device stats <path>` and parses per-device error counters.
 // Output format: [/dev/sda].write_io_errs    0
-func (m *Manager) DeviceErrors(ctx context.Context, path string) (DeviceErrors, error) {
+func (m *Manager) DeviceErrors(ctx context.Context, path string) ([]DeviceErrors, error) {
 	out, err := m.cmd.Run(ctx, m.bin, "device", "stats", path)
 	if err != nil {
-		return DeviceErrors{}, err
+		return nil, err
 	}
 	return parseDeviceErrors(out)
 }

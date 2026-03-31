@@ -8,11 +8,6 @@ import (
 	"k8s.io/mount-utils"
 )
 
-// newMounter returns a mount.SafeFormatAndMount with force-unmount support.
-func newMounter() mount.Interface {
-	return mount.New("")
-}
-
 // cleanupMountPoint unmounts the path if mounted and removes the directory.
 // Uses k8s.io/mount-utils which correctly handles stale NFS mounts (ESTALE,
 // EACCES, EIO) via IsCorruptedMnt instead of failing on Lstat.

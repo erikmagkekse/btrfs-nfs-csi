@@ -180,30 +180,42 @@ func (h *Handler) Stats(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error(), Code: "INTERNAL_ERROR"})
 	}
 
+	devices := make([]DeviceStatsResponse, len(ds.Devices))
+	for i, d := range ds.Devices {
+		devices[i] = DeviceStatsResponse{
+			DevID:          d.DevID,
+			Device:         d.Device,
+			Missing:        d.Missing,
+			SizeBytes:      d.SizeBytes,
+			AllocatedBytes: d.AllocatedBytes,
+			IO: DeviceIOStatsResponse{
+				ReadBytesTotal:        d.IO.ReadBytes,
+				ReadIOsTotal:          d.IO.ReadIOs,
+				ReadTimeMsTotal:       d.IO.ReadTimeMs,
+				WriteBytesTotal:       d.IO.WriteBytes,
+				WriteIOsTotal:         d.IO.WriteIOs,
+				WriteTimeMsTotal:      d.IO.WriteTimeMs,
+				IOsInProgress:         d.IO.IOsInProgress,
+				IOTimeMsTotal:         d.IO.IOTimeMs,
+				WeightedIOTimeMsTotal: d.IO.WeightedIOTimeMs,
+			},
+			Errors: DeviceErrorsResponse{
+				ReadErrs:       d.Errors.ReadErrs,
+				WriteErrs:      d.Errors.WriteErrs,
+				FlushErrs:      d.Errors.FlushErrs,
+				CorruptionErrs: d.Errors.CorruptionErrs,
+				GenerationErrs: d.Errors.GenerationErrs,
+			},
+		}
+	}
+
 	return c.JSON(http.StatusOK, StatsResponse{
-		TotalBytes: fs.TotalBytes,
-		UsedBytes:  fs.UsedBytes,
-		FreeBytes:  fs.FreeBytes,
-		Device:     ds.Device,
-		IO: DeviceIOStatsResponse{
-			ReadBytesTotal:        ds.IO.ReadBytes,
-			ReadIOsTotal:          ds.IO.ReadIOs,
-			ReadTimeMsTotal:       ds.IO.ReadTimeMs,
-			WriteBytesTotal:       ds.IO.WriteBytes,
-			WriteIOsTotal:         ds.IO.WriteIOs,
-			WriteTimeMsTotal:      ds.IO.WriteTimeMs,
-			IOsInProgress:         ds.IO.IOsInProgress,
-			IOTimeMsTotal:         ds.IO.IOTimeMs,
-			WeightedIOTimeMsTotal: ds.IO.WeightedIOTimeMs,
+		Statfs: StatfsResponse{
+			TotalBytes: fs.TotalBytes,
+			UsedBytes:  fs.UsedBytes,
+			FreeBytes:  fs.FreeBytes,
 		},
-		Errors: DeviceErrorsResponse{
-			ReadErrs:       ds.Errors.ReadErrs,
-			WriteErrs:      ds.Errors.WriteErrs,
-			FlushErrs:      ds.Errors.FlushErrs,
-			CorruptionErrs: ds.Errors.CorruptionErrs,
-			GenerationErrs: ds.Errors.GenerationErrs,
-		},
-		Filesystem: FilesystemStatsResponse{
+		Btrfs: FilesystemStatsResponse{
 			TotalBytes:         ds.Filesystem.TotalBytes,
 			UsedBytes:          ds.Filesystem.UsedBytes,
 			FreeBytes:          ds.Filesystem.FreeBytes,
@@ -211,6 +223,7 @@ func (h *Handler) Stats(c *echo.Context) error {
 			MetadataUsedBytes:  ds.Filesystem.MetadataUsedBytes,
 			MetadataTotalBytes: ds.Filesystem.MetadataTotalBytes,
 			DataRatio:          ds.Filesystem.DataRatio,
+			Devices:            devices,
 		},
 	})
 }

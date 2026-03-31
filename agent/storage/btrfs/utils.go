@@ -6,8 +6,63 @@ import (
 	"strings"
 )
 
-func parseDeviceErrors(out string) (DeviceErrors, error) {
-	var de DeviceErrors
+// parseDevices extracts device info from `btrfs filesystem show --raw` output.
+// Format: devid    1 size 10737418240 used 1354235904 path /dev/sda
+// Missing (known path): devid    2 size 0 used 0 path /dev/sdc MISSING
+// Missing (never seen): devid    2 size 0 used 0 path <missing disk> MISSING
+// Missing (empty path): devid    2 size 0 used 0 path  MISSING
+func parseDevices(out string) ([]BTRFSDevice, error) {
+	var devices []BTRFSDevice
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "devid") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		devID := fields[1]
+
+		idx := strings.LastIndex(line, " path ")
+		if idx < 0 {
+			continue
+		}
+		pathPart := strings.TrimSpace(line[idx+6:])
+		missing := strings.HasSuffix(pathPart, "MISSING")
+		path := pathPart
+		if missing {
+			path = strings.TrimSpace(strings.TrimSuffix(pathPart, "MISSING"))
+		}
+
+		// format (--raw): devid    1 size 10737418240 used 1354235904 path /dev/sdb
+		var sizeBytes, allocBytes uint64
+		if len(fields) >= 8 {
+			var sizeErr, allocErr error
+			sizeBytes, sizeErr = strconv.ParseUint(fields[3], 10, 64)
+			allocBytes, allocErr = strconv.ParseUint(fields[5], 10, 64)
+			if !missing && (sizeErr != nil || allocErr != nil) {
+				return nil, fmt.Errorf("devid %s: failed to parse size/used fields from %q", devID, line)
+			}
+		}
+
+		devices = append(devices, BTRFSDevice{
+			DevID:          devID,
+			Device:         strings.TrimSpace(path),
+			Missing:        missing,
+			SizeBytes:      sizeBytes,
+			AllocatedBytes: allocBytes,
+		})
+	}
+	if len(devices) == 0 {
+		return nil, fmt.Errorf("no devices found in btrfs filesystem show output")
+	}
+	return devices, nil
+}
+
+func parseDeviceErrors(out string) ([]DeviceErrors, error) {
+	var all []DeviceErrors
+	var cur *DeviceErrors
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -18,8 +73,10 @@ func parseDeviceErrors(out string) (DeviceErrors, error) {
 		if bracket < 0 {
 			continue
 		}
-		if de.Device == "" {
-			de.Device = line[1:bracket]
+		device := line[1:bracket]
+		if cur == nil || cur.Device != device {
+			all = append(all, DeviceErrors{Device: device})
+			cur = &all[len(all)-1]
 		}
 		rest := line[bracket+2:]
 		parts := strings.Fields(rest)
@@ -28,25 +85,25 @@ func parseDeviceErrors(out string) (DeviceErrors, error) {
 		}
 		val, err := strconv.ParseUint(parts[1], 10, 64)
 		if err != nil {
-			return DeviceErrors{}, fmt.Errorf("parse %q value %q: %w", parts[0], parts[1], err)
+			return nil, fmt.Errorf("parse %q value %q: %w", parts[0], parts[1], err)
 		}
 		switch parts[0] {
 		case "write_io_errs":
-			de.WriteErrs = val
+			cur.WriteErrs = val
 		case "read_io_errs":
-			de.ReadErrs = val
+			cur.ReadErrs = val
 		case "flush_io_errs":
-			de.FlushErrs = val
+			cur.FlushErrs = val
 		case "corruption_errs":
-			de.CorruptionErrs = val
+			cur.CorruptionErrs = val
 		case "generation_errs":
-			de.GenerationErrs = val
+			cur.GenerationErrs = val
 		}
 	}
-	if de.Device == "" {
-		return DeviceErrors{}, fmt.Errorf("no device found in btrfs device stats output")
+	if len(all) == 0 {
+		return nil, fmt.Errorf("no device found in btrfs device stats output")
 	}
-	return de, nil
+	return all, nil
 }
 
 func parseFilesystemUsage(out string) (FilesystemUsage, error) {

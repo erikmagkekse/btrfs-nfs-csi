@@ -32,6 +32,7 @@ func testStorageWithRunner(t *testing.T, runner *utils.MockRunner, exporter *nfs
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 	s := &Storage{
 		basePath:        base,
+		mountPoint:      base,
 		btrfs:           mgr,
 		exporter:        exporter,
 		tenants:         []string{tenant},
@@ -91,7 +92,6 @@ func ptrBool(v bool) *bool       { return &v }
 
 // --- unit tests ---
 
-// K8s allows actually 128 chars for PVC / Snapshot names, never have seen that
 func TestValidateName(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -102,12 +102,12 @@ func TestValidateName(t *testing.T) {
 		{"with_hyphen", "vol-1", false},
 		{"with_underscore", "under_score", false},
 		{"single_char", "A", false},
-		{"max_length_64", strings.Repeat("a", 64), false},
+		{"max_length_128", strings.Repeat("a", 128), false},
 		{"pvc_name", "pvc-3f8a9b2c-1234-5678-9abc-def012345678", false},
 		{"snapshot", "snap-vol01", false},
 		{"snapcontent", "snapcontent-3f8a9b2c-1234-5678-9abc-def012345678", false},
 		{"empty", "", true},
-		{"too_long_65", strings.Repeat("a", 65), true},
+		{"too_long_129", strings.Repeat("a", 129), true},
 		{"has_space", "has space", true},
 		{"has_dot", "has.dot", true},
 		{"has_slash", "path/slash", true},
