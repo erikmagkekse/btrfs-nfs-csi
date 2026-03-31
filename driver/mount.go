@@ -2,57 +2,39 @@ package driver
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"os/exec"
 	"time"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/rs/zerolog/log"
+	"k8s.io/mount-utils"
 )
 
-// cleanupMountPoint unmounts the path if it is a mount point and removes the directory.
-// Mirrors the behavior of k8s.io/mount-utils CleanupMountPoint.
-func cleanupMountPoint(ctx context.Context, path string) error {
-	if _, err := os.Lstat(path); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
+// cleanupMountPoint unmounts the path if mounted and removes the directory.
+// Uses k8s.io/mount-utils which correctly handles stale NFS mounts (ESTALE,
+// EACCES, EIO) via IsCorruptedMnt instead of failing on Lstat.
+func cleanupMountPoint(ctx context.Context, mounter mount.Interface, path string) error {
+	start := time.Now()
 
-	if utils.IsMountPoint(path) {
-		log.Info().Str("path", path).Msg("unmounting")
-		if err := forceUnmount(ctx, path); err != nil {
+	forceUnmounter, ok := mounter.(mount.MounterForceUnmounter)
+	if ok {
+		err := mount.CleanupMountWithForce(path, forceUnmounter, true, 30*time.Second)
+		if err != nil {
+			mountOpsTotal.WithLabelValues("umount", "error").Inc()
+			mountDuration.WithLabelValues("umount").Observe(time.Since(start).Seconds())
+			log.Error().Err(err).Str("path", path).Msg("cleanup mount point failed")
+			return err
+		}
+	} else {
+		err := mount.CleanupMountPoint(path, mounter, true)
+		if err != nil {
+			mountOpsTotal.WithLabelValues("umount", "error").Inc()
+			mountDuration.WithLabelValues("umount").Observe(time.Since(start).Seconds())
+			log.Error().Err(err).Str("path", path).Msg("cleanup mount point failed")
 			return err
 		}
 	}
 
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove mount dir: %w", err)
-	}
-	return nil
-}
-
-func forceUnmount(ctx context.Context, path string) error {
-	start := time.Now()
-	if err := exec.CommandContext(ctx, "umount", path).Run(); err == nil {
-		mountOpsTotal.WithLabelValues("umount", "success").Inc()
-		mountDuration.WithLabelValues("umount").Observe(time.Since(start).Seconds())
-		return nil
-	}
-	mountOpsTotal.WithLabelValues("umount", "error").Inc()
+	mountOpsTotal.WithLabelValues("umount", "success").Inc()
 	mountDuration.WithLabelValues("umount").Observe(time.Since(start).Seconds())
-
-	log.Warn().Str("path", path).Msg("umount failed, trying force unmount")
-	start = time.Now()
-	out, err := exec.CommandContext(ctx, "umount", "-f", path).CombinedOutput()
-	if err != nil {
-		mountOpsTotal.WithLabelValues("force_umount", "error").Inc()
-		mountDuration.WithLabelValues("force_umount").Observe(time.Since(start).Seconds())
-		return fmt.Errorf("force umount: %w: %s", err, string(out))
-	}
-	mountOpsTotal.WithLabelValues("force_umount", "success").Inc()
-	mountDuration.WithLabelValues("force_umount").Observe(time.Since(start).Seconds())
+	log.Info().Str("path", path).Msg("unmounted")
 	return nil
 }
