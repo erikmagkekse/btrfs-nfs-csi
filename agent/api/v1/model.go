@@ -19,6 +19,11 @@ type (
 	ExportEntry           = storage.ExportEntry
 )
 
+const (
+	HealthStatusOK       = "ok"
+	HealthStatusDegraded = "degraded"
+)
+
 // request models (HTTP-layer only)
 
 type ExportRequest struct {
@@ -94,13 +99,24 @@ type ExportListResponse struct {
 }
 
 type StatsResponse struct {
-	TotalBytes uint64                  `json:"total_bytes"`
-	UsedBytes  uint64                  `json:"used_bytes"`
-	FreeBytes  uint64                  `json:"free_bytes"`
-	Device     string                  `json:"device"`
-	IO         DeviceIOStatsResponse   `json:"io"`
-	Errors     DeviceErrorsResponse    `json:"errors"`
-	Filesystem FilesystemStatsResponse `json:"filesystem"`
+	Statfs StatfsResponse          `json:"statfs"`
+	Btrfs  FilesystemStatsResponse `json:"btrfs"`
+}
+
+type StatfsResponse struct {
+	TotalBytes uint64 `json:"total_bytes"`
+	UsedBytes  uint64 `json:"used_bytes"`
+	FreeBytes  uint64 `json:"free_bytes"`
+}
+
+type DeviceStatsResponse struct {
+	DevID          string                `json:"devid"`
+	Device         string                `json:"device"`
+	Missing        bool                  `json:"missing"`
+	SizeBytes      uint64                `json:"size_bytes"`
+	AllocatedBytes uint64                `json:"allocated_bytes"`
+	IO             DeviceIOStatsResponse `json:"io"`
+	Errors         DeviceErrorsResponse  `json:"errors"`
 }
 
 type HealthResponse struct {
@@ -132,13 +148,14 @@ type DeviceErrorsResponse struct {
 }
 
 type FilesystemStatsResponse struct {
-	TotalBytes         uint64  `json:"total_bytes"`
-	UsedBytes          uint64  `json:"used_bytes"`
-	FreeBytes          uint64  `json:"free_bytes"`
-	UnallocatedBytes   uint64  `json:"unallocated_bytes"`
-	MetadataUsedBytes  uint64  `json:"metadata_used_bytes"`
-	MetadataTotalBytes uint64  `json:"metadata_total_bytes"`
-	DataRatio          float64 `json:"data_ratio"`
+	TotalBytes         uint64                `json:"total_bytes"`
+	UsedBytes          uint64                `json:"used_bytes"`
+	FreeBytes          uint64                `json:"free_bytes"`
+	UnallocatedBytes   uint64                `json:"unallocated_bytes"`
+	MetadataUsedBytes  uint64                `json:"metadata_used_bytes"`
+	MetadataTotalBytes uint64                `json:"metadata_total_bytes"`
+	DataRatio          float64               `json:"data_ratio"`
+	Devices            []DeviceStatsResponse `json:"devices"`
 }
 
 type ErrorResponse struct {

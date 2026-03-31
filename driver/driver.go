@@ -8,6 +8,7 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"k8s.io/mount-utils"
 )
 
 func Start(ctx context.Context, endpoint, nodeID, nodeIP, metricsAddr, version string) error {
@@ -17,15 +18,16 @@ func Start(ctx context.Context, endpoint, nodeID, nodeIP, metricsAddr, version s
 	if err != nil {
 		return err
 	}
-	csi.RegisterNodeServer(srv.GRPC(), &NodeServer{nodeID: nodeID, nodeIP: nodeIP})
+	csi.RegisterNodeServer(srv.GRPC(), &NodeServer{nodeID: nodeID, nodeIP: nodeIP, mounter: mount.New("")})
 	return srv.Run(ctx, "driver")
 }
 
 type NodeServer struct {
 	csi.UnimplementedNodeServer
-	nodeID string
-	nodeIP string
-	locks  sync.Map
+	nodeID  string
+	nodeIP  string
+	mounter mount.Interface
+	locks   sync.Map
 }
 
 func (s *NodeServer) volumeLock(id string) func() {

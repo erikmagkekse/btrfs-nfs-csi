@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.9.11
+
+This release focuses on reliability and broader hardware support: multi-device btrfs, stale NFS mount recovery via `k8s.io/mount-utils`, and safe volume deletion when NFS exports are active.
+
+### Features
+- BTRFS multi-device support and improved container device resolution (#76)
+- Support 128-character volume and snapshot names (#78)
+- Block volume deletion when NFS exports are still active (#87)
+
+### Improvements
+- Use `/proc/self/mountinfo` for mount point resolution (#86)
+- Use `k8s.io/mount-utils` for stale NFS mount handling and mount operations in driver (#84)
+- Missing device handling, degraded health reporting, and stats API restructure (#82)
+- Remove retry logic from controller publish/unpublish (#75)
+
+### Bug Fixes
+- Fix btrfs startup check for subdirectory base paths (#77)
+- Fix device symlink resolution for LVM/device-mapper sysfs stats (#74)
+
+### Dependencies
+- Bump `github.com/rs/zerolog` from 1.34.0 to 1.35.0 (#79)
+- Bump `azure/setup-helm` from 4 to 5 (#80)
+
 ## v0.9.10
 
 This release adds the Helm chart as the primary deployment method for the CSI driver and controller. It also fixes agent tracking when multiple StorageClasses share the same agent and consolidates health check metrics into `agent_ops_total`.

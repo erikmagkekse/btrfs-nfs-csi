@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
+	"strings"
 	"time"
-
-	"golang.org/x/sys/unix"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
@@ -16,13 +14,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-// Mount operations inspired by kubernetes-csi/csi-driver-nfs:
-// - Volume locks to prevent concurrent mount/unmount races
-// - Mount timeout (2min) for stuck NFS mounts
-// - Force unmount fallback for stuck mounts
-// - Device-based mount point detection (like mount-utils IsLikelyNotMountPoint)
-// See: https://github.com/kubernetes-csi/csi-driver-nfs
 
 func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	if req.VolumeId == "" || req.StagingTargetPath == "" {
@@ -41,7 +32,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	stagingPath := req.StagingTargetPath
 
-	if isMountPoint(stagingPath) {
+	if notMnt, _ := s.mounter.IsLikelyNotMountPoint(stagingPath); !notMnt {
 		log.Debug().Str("path", stagingPath).Msg("already mounted at staging path")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
@@ -52,31 +43,27 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	source := fmt.Sprintf("%s:%s", nfsServer, nfsSharePath)
 
-	args := []string{"-t", "nfs"}
-	mountOpts := "rw"
+	var opts []string
+	opts = append(opts, "rw")
 	if vc := req.GetVolumeCapability(); vc != nil {
 		if am := vc.GetAccessMode(); am != nil &&
 			(am.Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY ||
 				am.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY) {
-			mountOpts = "ro"
+			opts = []string{"ro"}
 		}
 	}
-	if opts := vc[config.ParamNFSMountOptions]; opts != "" {
-		mountOpts = mountOpts + "," + opts
+	if extra := vc[config.ParamNFSMountOptions]; extra != "" {
+		opts = append(opts, strings.Split(extra, ",")...)
 	}
-	args = append(args, "-o", mountOpts)
-	args = append(args, source, stagingPath)
 
 	log.Info().Str("source", source).Str("target", stagingPath).Msg("mounting NFS")
 
-	mountCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
 	start := time.Now()
-	out, err := exec.CommandContext(mountCtx, "mount", args...).CombinedOutput()
+	err := s.mounter.Mount(source, stagingPath, "nfs", opts)
 	mountDuration.WithLabelValues("nfs_mount").Observe(time.Since(start).Seconds())
 	if err != nil {
 		mountOpsTotal.WithLabelValues("nfs_mount", "error").Inc()
-		return nil, status.Errorf(codes.Internal, "mount NFS: %v: %s", err, string(out))
+		return nil, status.Errorf(codes.Internal, "mount NFS: %v", err)
 	}
 	mountOpsTotal.WithLabelValues("nfs_mount", "success").Inc()
 
@@ -91,7 +78,7 @@ func (s *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if err := cleanupMountPoint(ctx, req.StagingTargetPath); err != nil {
+	if err := cleanupMountPoint(ctx, s.mounter, req.StagingTargetPath); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup staging: %v", err)
 	}
 
@@ -106,7 +93,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if isMountPoint(req.TargetPath) {
+	if notMnt, _ := s.mounter.IsLikelyNotMountPoint(req.TargetPath); !notMnt {
 		log.Info().Str("path", req.TargetPath).Msg("already mounted, skipping publish")
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
@@ -115,26 +102,23 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		return nil, status.Errorf(codes.Internal, "mkdir target: %v", err)
 	}
 
-	mountCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
 	dataDir := req.StagingTargetPath + "/" + config.DataDir
 	start := time.Now()
-	out, err := exec.CommandContext(mountCtx, "mount", "--bind", dataDir, req.TargetPath).CombinedOutput()
+	err := s.mounter.Mount(dataDir, req.TargetPath, "", []string{"bind"})
 	mountDuration.WithLabelValues("bind_mount").Observe(time.Since(start).Seconds())
 	if err != nil {
 		mountOpsTotal.WithLabelValues("bind_mount", "error").Inc()
-		return nil, status.Errorf(codes.Internal, "bind mount: %v: %s", err, string(out))
+		return nil, status.Errorf(codes.Internal, "bind mount: %v", err)
 	}
 	mountOpsTotal.WithLabelValues("bind_mount", "success").Inc()
 
 	if req.Readonly {
 		start = time.Now()
-		err = unix.Mount("", req.TargetPath, "", unix.MS_BIND|unix.MS_REMOUNT|unix.MS_RDONLY, "")
+		err = s.mounter.Mount("", req.TargetPath, "", []string{"bind", "remount", "ro"})
 		mountDuration.WithLabelValues("remount_ro").Observe(time.Since(start).Seconds())
 		if err != nil {
 			mountOpsTotal.WithLabelValues("remount_ro", "error").Inc()
-			_ = forceUnmount(ctx, req.TargetPath)
+			_ = cleanupMountPoint(ctx, s.mounter, req.TargetPath)
 			return nil, status.Errorf(codes.Internal, "remount ro: %v", err)
 		}
 		mountOpsTotal.WithLabelValues("remount_ro", "success").Inc()
@@ -151,7 +135,7 @@ func (s *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if err := cleanupMountPoint(ctx, req.TargetPath); err != nil {
+	if err := cleanupMountPoint(ctx, s.mounter, req.TargetPath); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup target: %v", err)
 	}
 

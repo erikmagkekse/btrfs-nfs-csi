@@ -12,6 +12,7 @@ var codeStatus = map[string]int{
 	storage.ErrInvalid:       http.StatusBadRequest,
 	storage.ErrNotFound:      http.StatusNotFound,
 	storage.ErrAlreadyExists: http.StatusConflict,
+	storage.ErrBusy:          http.StatusLocked,
 }
 
 func StorageError(c *echo.Context, err error) error {

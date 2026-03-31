@@ -12,6 +12,7 @@ const (
 	ErrInvalid       = "INVALID"
 	ErrNotFound      = "NOT_FOUND"
 	ErrAlreadyExists = "ALREADY_EXISTS"
+	ErrBusy          = "BUSY"
 )
 
 type StorageError struct {
@@ -23,11 +24,11 @@ func (e *StorageError) Error() string { return e.Message }
 
 // --- Validation ---
 
-var validName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+var validName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 
 func validateName(name string) error {
 	if !validName.MatchString(name) {
-		return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid name: %q (must be 1-64 chars, only a-z A-Z 0-9 _ -)", name)}
+		return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid name: %q (must be 1-128 chars, only a-z A-Z 0-9 _ -)", name)}
 	}
 	return nil
 }

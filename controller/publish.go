@@ -13,6 +13,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// exportTimeout is the context timeout for a single export/unexport call.
+const exportTimeout = 10 * time.Second
+
 func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	if req.VolumeId == "" || req.NodeId == "" {
 		return nil, status.Error(codes.InvalidArgument, "volume ID and node ID required")
@@ -50,24 +53,16 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		}
 	}
 
-	// retry export - block on failure so the node doesn't attempt mounting a non-existent export
-	var exportErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		retryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		start := time.Now()
-		exportErr = client.ExportVolume(retryCtx, name, nodeIP)
+	exportCtx, cancel := context.WithTimeout(ctx, exportTimeout)
+	defer cancel()
+	start := time.Now()
+	if err := client.ExportVolume(exportCtx, name, nodeIP); err != nil {
 		agentDuration.WithLabelValues("export", sc).Observe(time.Since(start).Seconds())
-		cancel()
-		if exportErr == nil {
-			agentOpsTotal.WithLabelValues("export", "success", sc).Inc()
-			break
-		}
 		agentOpsTotal.WithLabelValues("export", "error", sc).Inc()
-		log.Warn().Err(exportErr).Int("attempt", attempt+1).Str("volume", name).Str("nodeIP", nodeIP).Msg("nfs export failed, retrying")
+		return nil, status.Errorf(codes.Internal, "nfs export for node %s: %v", nodeIP, err)
 	}
-	if exportErr != nil {
-		return nil, status.Errorf(codes.Internal, "nfs export for node %s after 3 attempts: %v", nodeIP, exportErr)
-	}
+	agentDuration.WithLabelValues("export", sc).Observe(time.Since(start).Seconds())
+	agentOpsTotal.WithLabelValues("export", "success", sc).Inc()
 
 	log.Info().Str("volume", name).Str("nodeIP", nodeIP).Msg("nfs export added")
 
@@ -94,29 +89,20 @@ func (s *Server) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, err
 	}
 
-	// retry unexport - block on failure to preserve VolumeAttachment so k8s knows
-	// the node still holds the volume and can schedule pods accordingly
-	var unexportErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		retryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		start := time.Now()
-		unexportErr = client.UnexportVolume(retryCtx, name, nodeIP)
-		agentDuration.WithLabelValues("unexport", sc).Observe(time.Since(start).Seconds())
-		cancel()
-		if unexportErr == nil {
-			agentOpsTotal.WithLabelValues("unexport", "success", sc).Inc()
-			break
-		}
+	unexportCtx, cancel2 := context.WithTimeout(ctx, exportTimeout)
+	defer cancel2()
+	start2 := time.Now()
+	unexportErr := client.UnexportVolume(unexportCtx, name, nodeIP)
+	agentDuration.WithLabelValues("unexport", sc).Observe(time.Since(start2).Seconds())
+	if unexportErr != nil {
 		if agentAPI.IsNotFound(unexportErr) {
 			agentOpsTotal.WithLabelValues("unexport", "not_found", sc).Inc()
-			unexportErr = nil
-			break
+		} else {
+			agentOpsTotal.WithLabelValues("unexport", "error", sc).Inc()
+			return nil, status.Errorf(codes.Internal, "nfs unexport for node %s: %v", nodeIP, unexportErr)
 		}
-		agentOpsTotal.WithLabelValues("unexport", "error", sc).Inc()
-		log.Warn().Err(unexportErr).Int("attempt", attempt+1).Str("volume", name).Str("nodeIP", nodeIP).Msg("nfs unexport failed, retrying")
-	}
-	if unexportErr != nil {
-		return nil, status.Errorf(codes.Internal, "nfs unexport for node %s after 3 attempts: %v", nodeIP, unexportErr)
+	} else {
+		agentOpsTotal.WithLabelValues("unexport", "success", sc).Inc()
 	}
 
 	log.Info().Str("volume", name).Str("nodeIP", nodeIP).Msg("nfs export removed")
