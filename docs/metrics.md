@@ -59,6 +59,7 @@ Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERV
 | `create_snapshot` | `success`, `error`, `conflict` |
 | `delete_snapshot` | `success`, `error`, `not_found` |
 | `create_clone` | `success`, `error`, `conflict` |
+| `clone_volume` | `success`, `error`, `conflict` |
 | `export` | `success`, `error` |
 | `unexport` | `success`, `error`, `not_found` |
 | `update_volume` | `success`, `error` |

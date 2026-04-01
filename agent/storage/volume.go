@@ -295,6 +295,82 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	return &updated, nil
 }
 
+func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeCloneRequest) (*VolumeMetadata, error) {
+	bp, err := s.tenantPath(tenant)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateName(req.Name); err != nil {
+		return nil, err
+	}
+
+	src, err := s.GetVolume(tenant, req.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	cloneDir := filepath.Join(bp, req.Name)
+	if _, err := os.Stat(cloneDir); err == nil {
+		var existing VolumeMetadata
+		if err := ReadMetadata(filepath.Join(cloneDir, config.MetadataFile), &existing); err != nil {
+			return nil, fmt.Errorf("volume %q exists but metadata is corrupt: %w", req.Name, err)
+		}
+		return &existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("volume %q already exists", req.Name)}
+	}
+
+	if err := os.MkdirAll(cloneDir, s.defaultDirMode); err != nil {
+		return nil, fmt.Errorf("create clone directory: %w", err)
+	}
+
+	srcData := filepath.Join(bp, req.Source, config.DataDir)
+	cloneData := filepath.Join(cloneDir, config.DataDir)
+
+	cleanup := func() {
+		if err := s.btrfs.SubvolumeDelete(ctx, cloneData); err != nil {
+			log.Warn().Err(err).Str("path", cloneData).Msg("cleanup: failed to delete subvolume")
+		}
+		if err := os.RemoveAll(cloneDir); err != nil {
+			log.Warn().Err(err).Str("path", cloneDir).Msg("cleanup: failed to remove directory")
+		}
+	}
+
+	if err := s.btrfs.SubvolumeSnapshot(ctx, srcData, cloneData, false); err != nil {
+		cleanup()
+		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
+	}
+
+	if s.quotaEnabled {
+		if err := s.btrfs.QgroupLimit(ctx, cloneData, src.QuotaBytes); err != nil {
+			log.Error().Err(err).Str("path", cloneData).Msg("failed to set qgroup limit on clone")
+			cleanup()
+			return nil, fmt.Errorf("qgroup limit failed: %w", err)
+		}
+	}
+
+	now := time.Now().UTC()
+	meta := VolumeMetadata{
+		Name:        req.Name,
+		Path:        cloneDir,
+		SizeBytes:   src.SizeBytes,
+		NoCOW:       src.NoCOW,
+		Compression: src.Compression,
+		QuotaBytes:  src.QuotaBytes,
+		UID:         src.UID,
+		GID:         src.GID,
+		Mode:        src.Mode,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if err := writeMetadataAtomic(filepath.Join(cloneDir, config.MetadataFile), meta); err != nil {
+		cleanup()
+		return nil, fmt.Errorf("failed to write metadata: %w", err)
+	}
+
+	log.Info().Str("tenant", tenant).Str("name", req.Name).Str("source", req.Source).Msg("volume cloned")
+	return &meta, nil
+}
+
 func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 	bp, err := s.tenantPath(tenant)
 	if err != nil {

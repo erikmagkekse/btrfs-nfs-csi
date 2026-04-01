@@ -91,6 +91,7 @@ func (a *Agent) Start(ctx context.Context) {
 	api.DELETE("/snapshots/:name", h.DeleteSnapshot)
 
 	api.POST("/clones", h.CreateClone)
+	api.POST("/volumes/clone", h.CloneVolume)
 
 	a.echo = e
 	a.ready = true

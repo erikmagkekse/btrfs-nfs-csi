@@ -21,7 +21,9 @@ Usage updater tracks `used_bytes` (referenced) and `exclusive_bytes` (unique blo
 
 ## Clones
 
-Writable snapshot from a read-only snapshot. Instant, independent of source.
+### From Snapshot
+
+Writable clone from a read-only VolumeSnapshot. Instant, independent of source.
 
 ```yaml
 apiVersion: v1
@@ -40,7 +42,27 @@ spec:
     apiGroup: snapshot.storage.k8s.io
 ```
 
-Agent: `btrfs subvolume snapshot <src>/data <dst>/data` (writable) → stored at `{basePath}/{tenant}/{name}/`
+### From PVC (PVC-to-PVC)
+
+Direct clone from an existing PVC. No intermediate snapshot needed, a single atomic `btrfs subvolume snapshot` under the hood.
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-clone
+spec:
+  storageClassName: btrfs-nfs
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+  dataSource:
+    name: source-pvc
+    kind: PersistentVolumeClaim
+```
+
+Both clone types are instant (btrfs CoW), independent of the source, and stored at `{basePath}/{tenant}/{name}/`.
 
 ## Expansion
 

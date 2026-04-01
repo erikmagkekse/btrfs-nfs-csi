@@ -231,11 +231,42 @@ Returns a summary list of snapshots for a specific volume. Same response format 
 
 204 No Content. 404 if not found.
 
-## Clones
+## Volume Clone (PVC-to-PVC)
+
+### POST /v1/volumes/clone
+
+Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediate snapshot needed. 409 returns existing volume.
+
+```json
+// Request
+{
+  "source": "my-volume",
+  "name": "my-clone"
+}
+
+// Response 201
+{
+  "name": "my-clone",
+  "path": "/srv/csi/default/my-clone",
+  "size_bytes": 10737418240,
+  "nocow": false,
+  "compression": "zstd",
+  "quota_bytes": 10737418240,
+  "used_bytes": 0,
+  "uid": 0,
+  "gid": 0,
+  "mode": "2770",
+  "clients": [],
+  "created_at": "2025-01-15T12:30:00Z",
+  "updated_at": "2025-01-15T12:30:00Z"
+}
+```
+
+## Clones (from Snapshot)
 
 ### POST /v1/clones
 
-409 returns existing clone.
+Clone from a read-only snapshot. 409 returns existing clone.
 
 ```json
 // Request
