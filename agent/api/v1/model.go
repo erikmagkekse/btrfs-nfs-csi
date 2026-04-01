@@ -13,6 +13,7 @@ type (
 	VolumeUpdateRequest   = storage.VolumeUpdateRequest
 	SnapshotCreateRequest = storage.SnapshotCreateRequest
 	CloneCreateRequest    = storage.CloneCreateRequest
+	VolumeCloneRequest    = storage.VolumeCloneRequest
 	VolumeMetadata        = storage.VolumeMetadata
 	SnapshotMetadata      = storage.SnapshotMetadata
 	CloneMetadata         = storage.CloneMetadata

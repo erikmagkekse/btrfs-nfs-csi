@@ -72,6 +72,11 @@ type CloneCreateRequest struct {
 	Name     string `json:"name"`
 }
 
+type VolumeCloneRequest struct {
+	Source string `json:"source"`
+	Name   string `json:"name"`
+}
+
 type ExportEntry struct {
 	Path   string `json:"path"`
 	Client string `json:"client"`

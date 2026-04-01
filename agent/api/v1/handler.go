@@ -323,6 +323,27 @@ func (h *Handler) DeleteSnapshot(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// --- Volume Clone (PVC-to-PVC) ---
+
+func (h *Handler) CloneVolume(c *echo.Context) error {
+	tenant := c.Get("tenant").(string)
+
+	var req storage.VolumeCloneRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request body", Code: "BAD_REQUEST"})
+	}
+
+	meta, err := h.Store.CloneVolume(c.Request().Context(), tenant, req)
+	if err != nil {
+		if meta != nil {
+			return c.JSON(http.StatusConflict, volumeDetailResponseFrom(meta))
+		}
+		return StorageError(c, err)
+	}
+
+	return c.JSON(http.StatusCreated, volumeDetailResponseFrom(meta))
+}
+
 // --- Clones ---
 
 func (h *Handler) CreateClone(c *echo.Context) error {

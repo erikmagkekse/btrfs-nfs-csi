@@ -99,11 +99,52 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		volCtx[config.PvcNamespaceKey] = ns
 	}
 
-	// Clone from snapshot
+	// Clone from volume or snapshot
 	if req.VolumeContentSource != nil {
+		// PVC-to-PVC clone
+		if srcVol := req.VolumeContentSource.GetVolume(); srcVol != nil {
+			_, srcName, err := utils.ParseVolumeID(srcVol.VolumeId)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
+			}
+
+			start := time.Now()
+			cloneResp, err := client.CloneVolume(ctx, agentAPI.VolumeCloneRequest{
+				Source: srcName,
+				Name:   req.Name,
+			})
+			agentDuration.WithLabelValues("clone_volume", sc).Observe(time.Since(start).Seconds())
+			if err != nil {
+				if agentAPI.IsConflict(err) {
+					agentOpsTotal.WithLabelValues("clone_volume", "conflict", sc).Inc()
+					if cloneResp == nil {
+						return nil, status.Errorf(codes.Internal, "clone conflict but no metadata returned: %v", err)
+					}
+				} else {
+					agentOpsTotal.WithLabelValues("clone_volume", "error", sc).Inc()
+					return nil, status.Errorf(codes.Internal, "clone volume: %v", err)
+				}
+			} else {
+				agentOpsTotal.WithLabelValues("clone_volume", "success", sc).Inc()
+			}
+			volCtx[config.ParamNFSSharePath] = cloneResp.Path
+
+			log.Info().Str("volume", req.Name).Str("source", srcName).Msg("volume cloned from volume")
+
+			return &csi.CreateVolumeResponse{
+				Volume: &csi.Volume{
+					VolumeId:      utils.MakeVolumeID(sc, req.Name),
+					CapacityBytes: int64(sizeBytes),
+					VolumeContext: volCtx,
+					ContentSource: req.VolumeContentSource,
+				},
+			}, nil
+		}
+
+		// Clone from snapshot
 		snap := req.VolumeContentSource.GetSnapshot()
 		if snap == nil {
-			return nil, status.Error(codes.InvalidArgument, "only snapshot content source is supported")
+			return nil, status.Error(codes.InvalidArgument, "unsupported content source")
 		}
 		_, snapName, err := utils.ParseVolumeID(snap.SnapshotId)
 		if err != nil {

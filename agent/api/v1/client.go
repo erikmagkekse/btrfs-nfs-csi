@@ -72,6 +72,17 @@ func (c *Client) CreateClone(ctx context.Context, req CloneCreateRequest) (*Clon
 	return &resp, nil
 }
 
+func (c *Client) CloneVolume(ctx context.Context, req VolumeCloneRequest) (*VolumeDetailResponse, error) {
+	var resp VolumeDetailResponse
+	if err := c.do(ctx, http.MethodPost, "/v1/volumes/clone", req, &resp); err != nil {
+		if IsConflict(err) {
+			return &resp, err
+		}
+		return nil, err
+	}
+	return &resp, nil
+}
+
 func (c *Client) ExportVolume(ctx context.Context, name string, cl string) error {
 	return c.do(ctx, http.MethodPost, "/v1/volumes/"+name+"/export", ExportRequest{Client: cl}, nil)
 }
