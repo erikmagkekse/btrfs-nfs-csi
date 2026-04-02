@@ -15,6 +15,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// awaitStatus polls until a task reaches the expected status or times out.
+func awaitStatus(t *testing.T, tm *Manager, id string, status TaskStatus) *Task {
+	t.Helper()
+	for i := 0; i < 400; i++ {
+		tsk, err := tm.Get(id)
+		if err == nil && tsk.Status == status {
+			return tsk
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	tsk, _ := tm.Get(id)
+	require.Failf(t, "timeout", "task %s: wanted %s, got %s", id, status, tsk.Status)
+	return nil
+}
+
+// awaitDone polls until a task is completed, failed, or cancelled.
+func awaitDone(t *testing.T, tm *Manager, id string) *Task {
+	t.Helper()
+	for i := 0; i < 400; i++ {
+		tsk, err := tm.Get(id)
+		if err == nil && (tsk.Status == TaskCompleted || tsk.Status == TaskFailed || tsk.Status == TaskCancelled) {
+			return tsk
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	tsk, _ := tm.Get(id)
+	require.Failf(t, "timeout", "task %s not done, status: %s", id, tsk.Status)
+	return nil
+}
+
 func TestManager_SubmitAndGet(t *testing.T) {
 	tm := NewManager(t.TempDir(), 0)
 
@@ -28,22 +58,19 @@ func TestManager_SubmitAndGet(t *testing.T) {
 
 	<-started
 
-	task, err := tm.Get(id)
+	tsk, err := tm.Get(id)
 	require.NoError(t, err)
-	assert.Equal(t, TaskRunning, task.Status)
-	assert.Equal(t, "test", task.Type)
-	assert.NotNil(t, task.StartedAt)
-	assert.Nil(t, task.CompletedAt)
+	assert.Equal(t, TaskRunning, tsk.Status)
+	assert.Equal(t, "test", tsk.Type)
+	assert.NotNil(t, tsk.StartedAt)
+	assert.Nil(t, tsk.CompletedAt)
 
 	close(done)
-	time.Sleep(50 * time.Millisecond)
 
-	task, err = tm.Get(id)
-	require.NoError(t, err)
-	assert.Equal(t, TaskCompleted, task.Status)
-	assert.Equal(t, 100, task.Progress)
-	assert.NotNil(t, task.CompletedAt)
-	assert.Empty(t, task.Error)
+	tsk = awaitStatus(t, tm, id, TaskCompleted)
+	assert.Equal(t, 100, tsk.Progress)
+	assert.NotNil(t, tsk.CompletedAt)
+	assert.Empty(t, tsk.Error)
 }
 
 func TestManager_SubmitWithError(t *testing.T) {
@@ -53,13 +80,9 @@ func TestManager_SubmitWithError(t *testing.T) {
 		return fmt.Errorf("something broke")
 	})
 
-	time.Sleep(50 * time.Millisecond)
-
-	task, err := tm.Get(id)
-	require.NoError(t, err)
-	assert.Equal(t, TaskFailed, task.Status)
-	assert.Equal(t, "something broke", task.Error)
-	assert.NotNil(t, task.CompletedAt)
+	tsk := awaitStatus(t, tm, id, TaskFailed)
+	assert.Equal(t, "something broke", tsk.Error)
+	assert.NotNil(t, tsk.CompletedAt)
 }
 
 func TestManager_Cancel(t *testing.T) {
@@ -75,11 +98,8 @@ func TestManager_Cancel(t *testing.T) {
 	<-started
 	require.NoError(t, tm.Cancel(id))
 
-	time.Sleep(50 * time.Millisecond)
-
-	task, err := tm.Get(id)
-	require.NoError(t, err)
-	assert.Equal(t, TaskCancelled, task.Status)
+	tsk := awaitStatus(t, tm, id, TaskCancelled)
+	assert.NotNil(t, tsk.CompletedAt)
 }
 
 func TestManager_CancelFinished(t *testing.T) {
@@ -89,10 +109,8 @@ func TestManager_CancelFinished(t *testing.T) {
 		return nil
 	})
 
-	time.Sleep(50 * time.Millisecond)
-
-	err := tm.Cancel(id)
-	assert.NoError(t, err)
+	awaitStatus(t, tm, id, TaskCompleted)
+	assert.NoError(t, tm.Cancel(id))
 }
 
 func TestManager_CancelUnknown(t *testing.T) {
@@ -112,14 +130,15 @@ func TestManager_GetUnknown(t *testing.T) {
 func TestManager_List(t *testing.T) {
 	tm := NewManager(t.TempDir(), 0)
 
-	tm.Create("scrub", func(ctx context.Context, update *Update) error {
+	id1 := tm.Create("scrub", func(ctx context.Context, update *Update) error {
 		return nil
 	})
-	tm.Create("transfer", func(ctx context.Context, update *Update) error {
+	id2 := tm.Create("transfer", func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
-	time.Sleep(50 * time.Millisecond)
+	awaitDone(t, tm, id1)
+	awaitDone(t, tm, id2)
 
 	all := tm.List("")
 	assert.Len(t, all, 2)
@@ -139,11 +158,11 @@ func TestManager_List(t *testing.T) {
 func TestManager_ListReturnsCopies(t *testing.T) {
 	tm := NewManager(t.TempDir(), 0)
 
-	tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
-	time.Sleep(50 * time.Millisecond)
+	awaitDone(t, tm, id)
 
 	tasks := tm.List("")
 	require.Len(t, tasks, 1)
@@ -168,12 +187,12 @@ func TestManager_ProgressUpdate(t *testing.T) {
 
 	<-checkpoint
 
-	task, err := tm.Get(id)
+	tsk, err := tm.Get(id)
 	require.NoError(t, err)
-	assert.Equal(t, 50, task.Progress)
+	assert.Equal(t, 50, tsk.Progress)
 
 	require.NoError(t, tm.Cancel(id))
-	time.Sleep(50 * time.Millisecond)
+	awaitStatus(t, tm, id, TaskCancelled)
 }
 
 func TestManager_ResultStruct(t *testing.T) {
@@ -188,14 +207,11 @@ func TestManager_ResultStruct(t *testing.T) {
 		return update.SetResult(TestResult{Count: 42, Name: "hello"})
 	})
 
-	time.Sleep(50 * time.Millisecond)
-
-	task, err := tm.Get(id)
-	require.NoError(t, err)
-	require.NotNil(t, task.Result)
+	tsk := awaitStatus(t, tm, id, TaskCompleted)
+	require.NotNil(t, tsk.Result)
 
 	var result TestResult
-	require.NoError(t, json.Unmarshal(task.Result, &result))
+	require.NoError(t, json.Unmarshal(tsk.Result, &result))
 	assert.Equal(t, 42, result.Count)
 	assert.Equal(t, "hello", result.Name)
 }
@@ -207,14 +223,10 @@ func TestManager_Cleanup(t *testing.T) {
 		return nil
 	})
 
-	time.Sleep(50 * time.Millisecond)
-
-	_, err := tm.Get(id)
-	require.NoError(t, err)
-
+	awaitDone(t, tm, id)
 	tm.Cleanup(0)
 
-	_, err = tm.Get(id)
+	_, err := tm.Get(id)
 	assert.Error(t, err)
 }
 
@@ -227,16 +239,15 @@ func TestManager_CleanupKeepsRunning(t *testing.T) {
 		return nil
 	})
 
-	time.Sleep(50 * time.Millisecond)
-
+	awaitStatus(t, tm, id, TaskRunning)
 	tm.Cleanup(0)
 
-	task, err := tm.Get(id)
+	tsk, err := tm.Get(id)
 	require.NoError(t, err)
-	assert.Equal(t, TaskRunning, task.Status)
+	assert.Equal(t, TaskRunning, tsk.Status)
 
 	close(done)
-	time.Sleep(50 * time.Millisecond)
+	awaitDone(t, tm, id)
 }
 
 func TestManager_CorruptTaskFile(t *testing.T) {
@@ -268,54 +279,55 @@ func TestManager_EmptyTaskFile(t *testing.T) {
 func TestManager_ConcurrentSubmit(t *testing.T) {
 	tm := NewManager(t.TempDir(), 0)
 
+	ids := make([]string, 50)
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
-		go func() {
+		go func(idx int) {
 			defer wg.Done()
-			tm.Create("test", func(ctx context.Context, update *Update) error {
+			ids[idx] = tm.Create("test", func(ctx context.Context, update *Update) error {
 				return nil
 			})
-		}()
+		}(i)
 	}
 	wg.Wait()
 
-	time.Sleep(100 * time.Millisecond)
+	for _, id := range ids {
+		awaitDone(t, tm, id)
+	}
 
 	tasks := tm.List("")
 	assert.Len(t, tasks, 50)
-	for _, task := range tasks {
-		assert.Equal(t, TaskCompleted, task.Status)
+	for _, tsk := range tasks {
+		assert.Equal(t, TaskCompleted, tsk.Status)
 	}
 }
 
 func TestManager_WorkerPoolBlocksSecondTask(t *testing.T) {
 	tm := NewManager(t.TempDir(), 1)
 
+	started := make(chan struct{})
 	blocker := make(chan struct{})
 	first := tm.Create("test", func(ctx context.Context, update *Update) error {
+		close(started)
 		<-blocker
 		return nil
 	})
-	time.Sleep(50 * time.Millisecond)
+	<-started
 
 	second := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return nil
 	})
-	time.Sleep(50 * time.Millisecond)
 
-	t1, _ := tm.Get(first)
-	t2, _ := tm.Get(second)
-	assert.Equal(t, TaskRunning, t1.Status)
-	assert.Equal(t, TaskPending, t2.Status)
+	// First running, second must be pending (pool full)
+	awaitStatus(t, tm, first, TaskRunning)
+	tsk, _ := tm.Get(second)
+	assert.Equal(t, TaskPending, tsk.Status)
 
 	close(blocker)
-	time.Sleep(100 * time.Millisecond)
 
-	t1, _ = tm.Get(first)
-	t2, _ = tm.Get(second)
-	assert.Equal(t, TaskCompleted, t1.Status)
-	assert.Equal(t, TaskCompleted, t2.Status)
+	awaitStatus(t, tm, first, TaskCompleted)
+	awaitStatus(t, tm, second, TaskCompleted)
 }
 
 func TestManager_WorkerPoolMaxTwo(t *testing.T) {
@@ -336,80 +348,81 @@ func TestManager_WorkerPoolMaxTwo(t *testing.T) {
 		return nil
 	})
 
-	// Wait until both are confirmed running
 	<-started1
 	<-started2
 
 	id3 := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return nil
 	})
-	time.Sleep(50 * time.Millisecond)
 
-	t1, _ := tm.Get(id1)
-	t2, _ := tm.Get(id2)
-	t3, _ := tm.Get(id3)
-	assert.Equal(t, TaskRunning, t1.Status, "first should run")
-	assert.Equal(t, TaskRunning, t2.Status, "second should run")
-	assert.Equal(t, TaskPending, t3.Status, "third should wait")
+	// Both slots taken, third must be pending
+	tsk, _ := tm.Get(id3)
+	assert.Equal(t, TaskPending, tsk.Status, "third should wait")
 
 	close(blocker)
-	time.Sleep(100 * time.Millisecond)
 
-	t3, _ = tm.Get(id3)
-	assert.Equal(t, TaskCompleted, t3.Status, "third should complete after slots free")
+	awaitStatus(t, tm, id1, TaskCompleted)
+	awaitStatus(t, tm, id2, TaskCompleted)
+	awaitStatus(t, tm, id3, TaskCompleted)
 }
 
 func TestManager_WorkerPoolUnlimited(t *testing.T) {
 	tm := NewManager(t.TempDir(), 0)
 
+	started := make(chan struct{}, 10)
 	blocker := make(chan struct{})
 	var ids []string
 	for i := 0; i < 10; i++ {
 		id := tm.Create("test", func(ctx context.Context, update *Update) error {
+			started <- struct{}{}
 			<-blocker
 			return nil
 		})
 		ids = append(ids, id)
 	}
-	time.Sleep(50 * time.Millisecond)
 
-	// All 10 should be running simultaneously
+	// Wait for all 10 to confirm running
+	for i := 0; i < 10; i++ {
+		<-started
+	}
+
 	for _, id := range ids {
 		tsk, _ := tm.Get(id)
 		assert.Equal(t, TaskRunning, tsk.Status, "all should run with unlimited concurrency")
 	}
 
 	close(blocker)
-	time.Sleep(100 * time.Millisecond)
+	for _, id := range ids {
+		awaitDone(t, tm, id)
+	}
 }
 
 func TestManager_CancelPending(t *testing.T) {
 	tm := NewManager(t.TempDir(), 1)
 
+	started := make(chan struct{})
 	blocker := make(chan struct{})
 	tm.Create("test", func(ctx context.Context, update *Update) error {
+		close(started)
 		<-blocker
 		return nil
 	})
-	time.Sleep(50 * time.Millisecond)
+	<-started
 
 	second := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return nil
 	})
-	time.Sleep(50 * time.Millisecond)
 
-	t2, _ := tm.Get(second)
-	assert.Equal(t, TaskPending, t2.Status)
+	// Confirm pending
+	tsk, _ := tm.Get(second)
+	assert.Equal(t, TaskPending, tsk.Status)
 
 	require.NoError(t, tm.Cancel(second))
-	time.Sleep(50 * time.Millisecond)
 
-	t2, _ = tm.Get(second)
-	assert.Equal(t, TaskCancelled, t2.Status)
-	assert.NotNil(t, t2.CompletedAt, "cancelled pending should have CompletedAt")
+	tsk = awaitStatus(t, tm, second, TaskCancelled)
+	assert.NotNil(t, tsk.CompletedAt, "cancelled pending should have CompletedAt")
 
 	close(blocker)
-	time.Sleep(50 * time.Millisecond)
 }
 
 func TestManager_PendingTaskRunsAfterSlotFreed(t *testing.T) {
@@ -424,23 +437,24 @@ func TestManager_PendingTaskRunsAfterSlotFreed(t *testing.T) {
 		mu.Unlock()
 	}
 
+	started := make(chan struct{})
 	blocker := make(chan struct{})
 	tm.Create("test", func(ctx context.Context, update *Update) error {
 		record("first-start")
+		close(started)
 		<-blocker
 		record("first-end")
 		return nil
 	})
-	time.Sleep(50 * time.Millisecond)
+	<-started
 
-	tm.Create("test", func(ctx context.Context, update *Update) error {
+	second := tm.Create("test", func(ctx context.Context, update *Update) error {
 		record("second-start")
 		return nil
 	})
-	time.Sleep(50 * time.Millisecond)
 
 	close(blocker)
-	time.Sleep(150 * time.Millisecond)
+	awaitDone(t, tm, second)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -453,23 +467,17 @@ func TestManager_PendingTaskRunsAfterSlotFreed(t *testing.T) {
 func TestManager_WorkerPoolTaskError(t *testing.T) {
 	tm := NewManager(t.TempDir(), 1)
 
-	// First task fails, slot should still be freed
 	id1 := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return fmt.Errorf("boom")
 	})
-	time.Sleep(50 * time.Millisecond)
 
-	t1, _ := tm.Get(id1)
-	assert.Equal(t, TaskFailed, t1.Status)
+	awaitStatus(t, tm, id1, TaskFailed)
 
-	// Second task should still run (slot freed after failure)
 	id2 := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return nil
 	})
-	time.Sleep(50 * time.Millisecond)
 
-	t2, _ := tm.Get(id2)
-	assert.Equal(t, TaskCompleted, t2.Status)
+	awaitStatus(t, tm, id2, TaskCompleted)
 }
 
 func TestManager_Stress(t *testing.T) {
@@ -479,14 +487,14 @@ func TestManager_Stress(t *testing.T) {
 	var running atomic.Int32
 	var maxRunning atomic.Int32
 
+	ids := make([]string, total)
 	var wg sync.WaitGroup
 	for i := 0; i < total; i++ {
 		wg.Add(1)
-		go func() {
+		go func(idx int) {
 			defer wg.Done()
-			tm.Create("test", func(ctx context.Context, update *Update) error {
+			ids[idx] = tm.Create("test", func(ctx context.Context, update *Update) error {
 				cur := running.Add(1)
-				// Track peak concurrency
 				for {
 					old := maxRunning.Load()
 					if cur <= old || maxRunning.CompareAndSwap(old, cur) {
@@ -497,23 +505,12 @@ func TestManager_Stress(t *testing.T) {
 				running.Add(-1)
 				return update.SetResult(map[string]string{"ok": "true"})
 			})
-		}()
+		}(i)
 	}
 	wg.Wait()
 
-	// Wait for all tasks to finish
-	for i := 0; i < 300; i++ {
-		tasks := tm.List("")
-		done := 0
-		for _, tsk := range tasks {
-			if tsk.Status == TaskCompleted || tsk.Status == TaskFailed {
-				done++
-			}
-		}
-		if done == total {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	for _, id := range ids {
+		awaitDone(t, tm, id)
 	}
 
 	tasks := tm.List("")

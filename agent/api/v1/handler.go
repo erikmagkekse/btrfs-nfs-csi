@@ -417,7 +417,9 @@ func (h *Handler) StartScrub(c *echo.Context) error {
 
 func (h *Handler) StartTestTask(c *echo.Context) error {
 	var opts storage.TestTaskOpts
-	_ = c.Bind(&opts)
+	if err := c.Bind(&opts); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request body: " + err.Error(), Code: storage.ErrInvalid})
+	}
 	taskID, err := h.Store.StartTestTask(c.Request().Context(), opts)
 	if err != nil {
 		return StorageError(c, err)
