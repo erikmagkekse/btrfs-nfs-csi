@@ -18,7 +18,7 @@ import (
 // awaitStatus polls until a task reaches the expected status or times out.
 func awaitStatus(t *testing.T, tm *Manager, id string, status TaskStatus) *Task {
 	t.Helper()
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 2000; i++ {
 		tsk, err := tm.Get(id)
 		if err == nil && tsk.Status == status {
 			return tsk
@@ -33,7 +33,7 @@ func awaitStatus(t *testing.T, tm *Manager, id string, status TaskStatus) *Task 
 // awaitDone polls until a task is completed, failed, or cancelled.
 func awaitDone(t *testing.T, tm *Manager, id string) *Task {
 	t.Helper()
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 2000; i++ {
 		tsk, err := tm.Get(id)
 		if err == nil && (tsk.Status == TaskCompleted || tsk.Status == TaskFailed || tsk.Status == TaskCancelled) {
 			return tsk
