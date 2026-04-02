@@ -12,6 +12,7 @@ import (
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/stretchr/testify/mock"
@@ -94,7 +95,7 @@ func (s *StorageIntegrationSuite) SetupSuite() {
 		tenants:         []string{"test"},
 		defaultDirMode:  0o755,
 		defaultDataMode: "2770",
-		tasks:           NewTaskManager(taskDir),
+		tasks:           task.NewManager(taskDir),
 	}
 }
 
@@ -400,25 +401,25 @@ func (s *StorageIntegrationSuite) TestStartScrub() {
 	s.Assert().NotEmpty(taskID)
 
 	// wait for completion
-	var task *Task
+	var tsk *task.Task
 	for i := 0; i < 30; i++ {
-		task, err = s.storage.Tasks().Get(taskID)
+		tsk, err = s.storage.Tasks().Get(taskID)
 		s.Require().NoError(err)
-		if task.Status == TaskCompleted || task.Status == TaskFailed {
+		if tsk.Status == task.TaskCompleted || tsk.Status == task.TaskFailed {
 			break
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	s.Assert().Equal(TaskCompleted, task.Status)
-	s.Assert().Equal(100, task.Progress)
-	s.Assert().NotNil(task.Result, "should have scrub result")
+	s.Assert().Equal(task.TaskCompleted, tsk.Status)
+	s.Assert().Equal(100, tsk.Progress)
+	s.Assert().NotNil(tsk.Result, "should have scrub result")
 }
 
 func (s *StorageIntegrationSuite) TestStartScrubDuplicate() {
 	// start a blocking scrub in background
 	started := make(chan struct{})
-	s.storage.Tasks().Submit(TaskTypeScrub, func(ctx context.Context, update *TaskUpdate) error {
+	s.storage.Tasks().Create(string(task.TypeScrub), func(ctx context.Context, update *task.Update) error {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
@@ -437,7 +438,7 @@ func (s *StorageIntegrationSuite) TestTaskPersistence() {
 	taskDir := filepath.Join(s.mnt, config.TasksDir)
 
 	// submit a task that completes
-	id := s.storage.Tasks().Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := s.storage.Tasks().Create("test", func(ctx context.Context, update *task.Update) error {
 		return update.SetResult(map[string]string{"key": "value"})
 	})
 	time.Sleep(100 * time.Millisecond)
@@ -448,10 +449,10 @@ func (s *StorageIntegrationSuite) TestTaskPersistence() {
 	s.Assert().NoError(err, "task file should exist on disk")
 
 	// read the file and verify
-	var persisted Task
+	var persisted task.Task
 	s.Require().NoError(ReadMetadata(taskFile, &persisted))
 	s.Assert().Equal(id, persisted.ID)
-	s.Assert().Equal(TaskCompleted, persisted.Status)
+	s.Assert().Equal(task.TaskCompleted, persisted.Status)
 	s.Assert().NotNil(persisted.Result)
 }
 
@@ -459,28 +460,28 @@ func (s *StorageIntegrationSuite) TestTaskLoadFromDisk() {
 	taskDir := filepath.Join(s.mnt, config.TasksDir)
 
 	// write a "running" task file (simulates agent crash)
-	staleTask := Task{
+	staleTask := task.Task{
 		ID:     "stale-task-123",
 		Type:   "test",
-		Status: TaskRunning,
+		Status: task.TaskRunning,
 	}
 	s.Require().NoError(writeMetadataAtomic(filepath.Join(taskDir, "stale-task-123.json"), &staleTask))
 
 	// create new TaskManager (triggers loadFromDisk)
-	tm := NewTaskManager(taskDir)
+	tm := task.NewManager(taskDir)
 
 	// stale task should be marked failed
-	task, err := tm.Get("stale-task-123")
+	tsk, err := tm.Get("stale-task-123")
 	s.Require().NoError(err)
-	s.Assert().Equal(TaskFailed, task.Status)
-	s.Assert().Equal("agent restarted", task.Error)
-	s.Assert().NotNil(task.CompletedAt)
+	s.Assert().Equal(task.TaskFailed, tsk.Status)
+	s.Assert().Equal("agent restarted", tsk.Error)
+	s.Assert().NotNil(tsk.CompletedAt)
 }
 
 func (s *StorageIntegrationSuite) TestTaskCleanupRemovesFiles() {
 	taskDir := filepath.Join(s.mnt, config.TasksDir)
 
-	id := s.storage.Tasks().Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := s.storage.Tasks().Create("test", func(ctx context.Context, update *task.Update) error {
 		return nil
 	})
 	time.Sleep(100 * time.Millisecond)
@@ -491,7 +492,7 @@ func (s *StorageIntegrationSuite) TestTaskCleanupRemovesFiles() {
 	s.Assert().NoError(err)
 
 	// cleanup with 0 maxAge
-	s.storage.Tasks().cleanup(0)
+	s.storage.Tasks().Cleanup(0)
 
 	// file should be gone
 	_, err = os.Stat(taskFile)
@@ -499,7 +500,7 @@ func (s *StorageIntegrationSuite) TestTaskCleanupRemovesFiles() {
 
 	// task should be gone from memory too
 	_, err = s.storage.Tasks().Get(id)
-	requireStorageError(s.T(), err, ErrNotFound)
+	s.Assert().ErrorIs(err, task.ErrNotFound)
 }
 
 func (s *StorageIntegrationSuite) TestScrubOnEmptyFilesystem() {
@@ -508,10 +509,10 @@ func (s *StorageIntegrationSuite) TestScrubOnEmptyFilesystem() {
 	s.Require().NoError(err)
 
 	for i := 0; i < 30; i++ {
-		task, err := s.storage.Tasks().Get(taskID)
+		tsk, err := s.storage.Tasks().Get(taskID)
 		s.Require().NoError(err)
-		if task.Status == TaskCompleted || task.Status == TaskFailed {
-			s.Assert().Equal(TaskCompleted, task.Status)
+		if tsk.Status == task.TaskCompleted || tsk.Status == task.TaskFailed {
+			s.Assert().Equal(task.TaskCompleted, tsk.Status)
 			break
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -522,21 +523,21 @@ func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
 	taskDir := filepath.Join(s.mnt, config.TasksDir)
 
 	// simulate a scrub that was running when agent crashed
-	staleTask := Task{
+	staleTask := task.Task{
 		ID:     "stale-scrub",
-		Type:   TaskTypeScrub,
-		Status: TaskRunning,
+		Type:   string(task.TypeScrub),
+		Status: task.TaskRunning,
 	}
 	s.Require().NoError(writeMetadataAtomic(filepath.Join(taskDir, "stale-scrub.json"), &staleTask))
 
 	// create new TaskManager (simulates agent restart)
-	tm := NewTaskManager(taskDir)
+	tm := task.NewManager(taskDir)
 
 	// stale scrub should be failed
-	task, err := tm.Get("stale-scrub")
+	tsk, err := tm.Get("stale-scrub")
 	s.Require().NoError(err)
-	s.Assert().Equal(TaskFailed, task.Status)
-	s.Assert().Equal("agent restarted", task.Error)
+	s.Assert().Equal(task.TaskFailed, tsk.Status)
+	s.Assert().Equal("agent restarted", tsk.Error)
 
 	// should be able to start a new scrub (stale one doesn't block)
 	s.storage.tasks = tm
@@ -546,7 +547,7 @@ func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
 
 	for i := 0; i < 30; i++ {
 		t, _ := tm.Get(newID)
-		if t.Status == TaskCompleted || t.Status == TaskFailed {
+		if t.Status == task.TaskCompleted || t.Status == task.TaskFailed {
 			break
 		}
 		time.Sleep(500 * time.Millisecond)

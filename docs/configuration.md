@@ -25,6 +25,15 @@
 | `AGENT_TASK_CLEANUP_INTERVAL` | `24h` | Remove completed/failed tasks after this duration |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
+## CLI Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `AGENT_URL` | - | Agent API URL |
+| `AGENT_TOKEN` | - | Tenant token |
+
+Also configurable via `--agent-url` and `--agent-token` flags.
+
 ## Controller Environment Variables
 
 | Variable | Default | Description |

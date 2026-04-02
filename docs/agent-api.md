@@ -71,7 +71,7 @@ curl -X POST http://10.0.0.5:8080/v1/volumes \
 
 ### GET /v1/volumes
 
-Returns a summary list. Use `GET /v1/volumes/:name` for full details.
+Returns a summary list. Use `GET /v1/volumes/:name` for full details, or append `?detail=true` to get full details for all volumes in a single call.
 
 ```json
 {
@@ -87,6 +87,8 @@ Returns a summary list. Use `GET /v1/volumes/:name` for full details.
   "total": 1
 }
 ```
+
+With `?detail=true`, each volume includes the full detail fields (same as `GET /v1/volumes/:name`): `path`, `quota_bytes`, `compression`, `nocow`, `uid`, `gid`, `mode`, `clients` (as array), `updated_at`, `last_attach_at`.
 
 ### GET /v1/volumes/:name
 
@@ -190,7 +192,7 @@ All fields optional. `size_bytes` must be larger than current.
 
 ### GET /v1/snapshots
 
-Returns a summary list of all snapshots. Use `GET /v1/snapshots/:name` for full details.
+Returns a summary list of all snapshots. Use `GET /v1/snapshots/:name` for full details, or append `?detail=true` to get full details for all snapshots in a single call.
 
 ```json
 {
@@ -207,9 +209,11 @@ Returns a summary list of all snapshots. Use `GET /v1/snapshots/:name` for full 
 }
 ```
 
+With `?detail=true`, each snapshot includes the full detail fields (same as `GET /v1/snapshots/:name`): `path`, `exclusive_bytes`, `readonly`, `updated_at`.
+
 ### GET /v1/volumes/:name/snapshots
 
-Returns a summary list of snapshots for a specific volume. Same response format as `GET /v1/snapshots`.
+Returns a summary list of snapshots for a specific volume. Same response format as `GET /v1/snapshots`. Also supports `?detail=true`.
 
 ### GET /v1/snapshots/:name
 
@@ -359,7 +363,7 @@ curl -X POST http://10.0.0.5:8080/v1/tasks/scrub \
 
 ### GET /v1/tasks
 
-List all tasks. Optional `?type=scrub` filter.
+List all tasks. Optional `?type=scrub` filter. Returns a summary without the `result` field. Append `?detail=true` to include `result`.
 
 ```json
 {
@@ -369,17 +373,6 @@ List all tasks. Optional `?type=scrub` filter.
       "type": "scrub",
       "status": "completed",
       "progress": 100,
-      "result": {
-        "data_bytes_scrubbed": 3145728000,
-        "tree_bytes_scrubbed": 6979584,
-        "read_errors": 0,
-        "csum_errors": 0,
-        "verify_errors": 0,
-        "super_errors": 0,
-        "uncorrectable_errors": 0,
-        "corrected_errors": 0,
-        "running": false
-      },
       "created_at": "2025-01-15T02:00:00Z",
       "started_at": "2025-01-15T02:00:00Z",
       "completed_at": "2025-01-15T02:00:05Z"
@@ -389,9 +382,33 @@ List all tasks. Optional `?type=scrub` filter.
 }
 ```
 
+With `?detail=true`, each task includes the `result` field containing task-type-specific data (e.g. scrub statistics).
+
 ### GET /v1/tasks/:id
 
-Returns a single task. 404 if not found.
+Returns a single task with full details including `result`. 404 if not found.
+
+```json
+{
+  "id": "bba30993dee31318f016f5350718cffa",
+  "type": "scrub",
+  "status": "completed",
+  "progress": 100,
+  "result": {
+    "data_bytes_scrubbed": 3145728000,
+    "tree_bytes_scrubbed": 6979584,
+    "read_errors": 0,
+    "csum_errors": 0,
+    "verify_errors": 0,
+    "super_errors": 0,
+    "uncorrectable_errors": 0,
+    "corrected_errors": 0,
+    "running": false
+  },
+  "created_at": "2025-01-15T02:00:00Z",
+  "started_at": "2025-01-15T02:00:00Z",
+  "completed_at": "2025-01-15T02:00:05Z"
+}
 
 ### DELETE /v1/tasks/:id
 

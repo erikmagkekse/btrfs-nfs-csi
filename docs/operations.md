@@ -172,3 +172,51 @@ curl -X DELETE http://10.0.0.5:8080/v1/tasks/abc123 \
 Only one scrub can run at a time per filesystem. The agent detects externally started scrubs (e.g. via `btrfs scrub start` on the host) and rejects duplicates.
 
 Completed tasks include a result with bytes scrubbed and error counts. Tasks are persisted to disk and cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h).
+
+## CLI
+
+The `btrfs-nfs-csi` binary doubles as a CLI tool. Any command that isn't `agent`, `controller`, or `driver` is treated as a CLI command.
+
+```bash
+export AGENT_URL=http://10.0.0.5:8080
+export AGENT_TOKEN=changeme
+
+btrfs-nfs-csi volume list
+btrfs-nfs-csi volume list -o wide
+btrfs-nfs-csi volume list -o json
+btrfs-nfs-csi volume get my-vol
+btrfs-nfs-csi volume create my-vol 10Gi --compression zstd
+btrfs-nfs-csi volume expand my-vol 20Gi
+btrfs-nfs-csi volume clone source-vol new-vol
+btrfs-nfs-csi volume delete my-vol --confirm --yes
+
+btrfs-nfs-csi snapshot list
+btrfs-nfs-csi snapshot list my-vol          # filter by volume
+btrfs-nfs-csi snapshot create my-vol snap-1
+btrfs-nfs-csi snapshot delete snap-1 --confirm --yes
+
+btrfs-nfs-csi clone create snap-1 new-vol   # clone from snapshot
+
+btrfs-nfs-csi export list
+btrfs-nfs-csi export add my-vol 10.1.0.50
+btrfs-nfs-csi export remove my-vol 10.1.0.50
+
+btrfs-nfs-csi task list
+btrfs-nfs-csi task list --type scrub
+btrfs-nfs-csi task get <id>
+btrfs-nfs-csi task cancel <id>
+btrfs-nfs-csi task create scrub
+btrfs-nfs-csi task create scrub --wait
+btrfs-nfs-csi stats
+btrfs-nfs-csi stats -o wide                 # per-device IO and error details
+btrfs-nfs-csi health
+btrfs-nfs-csi version
+```
+
+**Global flags:** `--agent-url`, `--agent-token`, `--output` / `-o` (table, wide, json).
+
+**Output formats:** `table` (default), `wide` (extra columns), `json` (raw API response). Combine with `-o json,wide` for detailed JSON.
+
+**Sorting:** `--sort` / `-s` with `--asc` (default descending). Volume default: `used%`. Snapshot default: `created`.
+
+**Size values:** Supports `Ki`, `Mi`, `Gi` (binary) and `K`, `M`, `G` (decimal).

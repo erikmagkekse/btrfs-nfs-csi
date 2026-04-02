@@ -7,6 +7,7 @@
 | **Agent** | HTTP server (`:8080`) | Manages btrfs subvolumes, NFS exports, quota. Runs on storage host. |
 | **Controller** | gRPC server (CSI) | Translates CSI calls to agent HTTP API. K8s Deployment. |
 | **Node Driver** | gRPC server (CSI) | NFS mount + bind mount. Privileged DaemonSet. |
+| **CLI** | - | Manage volumes, snapshots, exports, tasks. Set `AGENT_URL` and `AGENT_TOKEN`. |
 
 ## Volume Lifecycle
 

@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	TaskTypeScrub     = "scrub"
-	scrubPollInterval = 5 * time.Second
+	scrubPollInterval = 2 * time.Second
 )
 
 // StartScrub starts a btrfs scrub as a background task and returns the task ID.
 func (s *Storage) StartScrub(ctx context.Context) (string, error) {
-	for _, t := range s.tasks.List(TaskTypeScrub) {
-		if t.Status == TaskRunning || t.Status == TaskPending {
+	for _, t := range s.tasks.List(string(task.TypeScrub)) {
+		if t.Status == task.TaskRunning || t.Status == task.TaskPending {
 			return "", &StorageError{Code: ErrBusy, Message: "scrub already running"}
 		}
 	}
@@ -25,7 +25,7 @@ func (s *Storage) StartScrub(ctx context.Context) (string, error) {
 		return "", &StorageError{Code: ErrBusy, Message: "scrub already running on filesystem"}
 	}
 
-	id := s.tasks.Submit(TaskTypeScrub, func(ctx context.Context, update *TaskUpdate) error {
+	id := s.tasks.Create(string(task.TypeScrub), func(ctx context.Context, update *task.Update) error {
 		return s.runScrub(ctx, update)
 	})
 
@@ -33,7 +33,7 @@ func (s *Storage) StartScrub(ctx context.Context) (string, error) {
 	return id, nil
 }
 
-func (s *Storage) runScrub(ctx context.Context, update *TaskUpdate) error {
+func (s *Storage) runScrub(ctx context.Context, update *task.Update) error {
 	stopProgress := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(scrubPollInterval)
@@ -57,6 +57,7 @@ func (s *Storage) runScrub(ctx context.Context, update *TaskUpdate) error {
 					}
 					update.SetProgress(pct)
 				}
+				update.SetResult(status)
 			}
 		}
 	}()

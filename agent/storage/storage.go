@@ -12,6 +12,7 @@ import (
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
@@ -28,7 +29,7 @@ type Storage struct {
 	tenants         []string
 	defaultDirMode  os.FileMode
 	defaultDataMode string
-	tasks           *TaskManager
+	tasks           *task.Manager
 
 	// cachedDevices is written by both the IO poller (5s) and btrfs stats poller (1m).
 	// Each poller loads the current state, updates its own fields (IO or Errors),
@@ -111,7 +112,7 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 		initialStates[i] = DeviceState{BTRFSDevice: d}
 	}
 	taskDir := filepath.Join(basePath, config.TasksDir)
-	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, tasks: NewTaskManager(taskDir)}
+	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, tasks: task.NewManager(taskDir)}
 	s.cachedDevices.Store(&initialStates)
 	return s
 }
@@ -134,7 +135,7 @@ func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInte
 func (s *Storage) BasePath() string       { return s.basePath }
 func (s *Storage) QuotaEnabled() bool     { return s.quotaEnabled }
 func (s *Storage) Exporter() nfs.Exporter { return s.exporter }
-func (s *Storage) Tasks() *TaskManager    { return s.tasks }
+func (s *Storage) Tasks() *task.Manager   { return s.tasks }
 
 func (s *Storage) tenantPath(tenant string) (string, error) {
 	if err := validateName(tenant); err != nil {
