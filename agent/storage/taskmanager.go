@@ -42,10 +42,11 @@ type Task struct {
 
 // TaskUpdate is passed to TaskFunc for safe progress/result updates.
 type TaskUpdate struct {
-	rt *runningTask
+	rt      *runningTask
+	persist func(*Task)
 }
 
-// SetProgress atomically updates the task's progress (0-100). In-memory only.
+// SetProgress atomically updates the task's progress (0-100) and persists to disk.
 func (u *TaskUpdate) SetProgress(pct int) {
 	for {
 		old := u.rt.state.Load()
@@ -55,6 +56,7 @@ func (u *TaskUpdate) SetProgress(pct int) {
 		cp := *old
 		cp.Progress = pct
 		if u.rt.state.CompareAndSwap(old, &cp) {
+			u.persist(&cp)
 			return
 		}
 	}
@@ -138,7 +140,7 @@ func (tm *TaskManager) Submit(taskType string, fn TaskFunc) string {
 		rt.state.Store(&running)
 		tm.persist(&running) // first persist: running (skip transient pending)
 
-		err := fn(ctx, &TaskUpdate{rt: rt})
+		err := fn(ctx, &TaskUpdate{rt: rt, persist: tm.persist})
 
 		now := time.Now().UTC()
 		final := *rt.state.Load()
