@@ -158,11 +158,15 @@ func (tm *TaskManager) Submit(taskType string, fn TaskFunc) string {
 		rt.state.Store(&final)
 		tm.persist(&final)
 
+		elapsed := time.Since(start)
+		TasksTotal.WithLabelValues(taskType, string(final.Status)).Inc()
+		TaskDuration.WithLabelValues(taskType).Observe(elapsed.Seconds())
+
 		log.Info().
 			Str("task", id).
 			Str("type", taskType).
 			Str("status", string(final.Status)).
-			Dur("duration", time.Since(start)).
+			Dur("duration", elapsed).
 			Msg("task finished")
 	}()
 
