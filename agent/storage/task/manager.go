@@ -90,7 +90,7 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 			Str("task", id).
 			Str("type", taskType).
 			Str("status", string(final.Status)).
-			Dur("duration", elapsed).
+			Dur("took", elapsed).
 			Msg("task finished")
 	}()
 

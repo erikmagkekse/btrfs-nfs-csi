@@ -13,6 +13,7 @@ const (
 	ErrNotFound      = "NOT_FOUND"
 	ErrAlreadyExists = "ALREADY_EXISTS"
 	ErrBusy          = "BUSY"
+	ErrMetadata      = "METADATA_ERROR"
 )
 
 type StorageError struct {

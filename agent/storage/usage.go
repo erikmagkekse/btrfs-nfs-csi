@@ -174,7 +174,5 @@ func updateAll(ctx context.Context, mgr *btrfs.Manager, basePath string, tenant 
 		snapUpdated++
 	}
 
-	if snapUpdated > 0 || snapFailed > 0 {
-		log.Info().Str("tenant", tenant).Int("updated", snapUpdated).Int("failed", snapFailed).Msg("usage updater: snapshot scan complete")
-	}
+	log.Debug().Str("tenant", tenant).Int("snapshots", len(snapEntries)).Int("updated", snapUpdated).Int("failed", snapFailed).Msg("usage updater: snapshot scan complete")
 }

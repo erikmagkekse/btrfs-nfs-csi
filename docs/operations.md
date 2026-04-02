@@ -107,7 +107,7 @@ Enabled by default (`AGENT_FEATURE_QUOTA_ENABLED=true`).
 
 - Create: `btrfs qgroup limit <bytes> <path>`
 - Usage updater: polls `btrfs qgroup show` at `AGENT_FEATURE_QUOTA_UPDATE_INTERVAL`
-- `NodeGetVolumeStats` reads `metadata.json` for quota-aware reporting
+- `NodeGetVolumeStats` reads `metadata.json` for quota-aware reporting. Falls back to `statfs` when quota is disabled.
 
 ## fsGroup
 

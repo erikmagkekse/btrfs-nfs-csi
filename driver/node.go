@@ -32,13 +32,15 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	stagingPath := req.StagingTargetPath
 
-	if notMnt, _ := s.mounter.IsLikelyNotMountPoint(stagingPath); !notMnt {
-		log.Debug().Str("path", stagingPath).Msg("already mounted at staging path")
+	if notMnt, err := s.mounter.IsLikelyNotMountPoint(stagingPath); err != nil {
+		log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", stagingPath).Msg("failed to check mount point")
+	} else if !notMnt {
+		log.Info().Str("volume", req.VolumeId).Str("path", stagingPath).Msg("already mounted at staging path")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
 	if err := os.MkdirAll(stagingPath, 0755); err != nil {
-		return nil, status.Errorf(codes.Internal, "mkdir staging: %v", err)
+		return nil, status.Errorf(codes.Internal, "mkdir staging for volume %s: %v", req.VolumeId, err)
 	}
 
 	source := fmt.Sprintf("%s:%s", nfsServer, nfsSharePath)
@@ -56,17 +58,19 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		opts = append(opts, strings.Split(extra, ",")...)
 	}
 
-	log.Info().Str("source", source).Str("target", stagingPath).Msg("mounting NFS")
+	log.Debug().Str("volume", req.VolumeId).Str("source", source).Str("target", stagingPath).Strs("opts", opts).Msg("mounting NFS")
 
 	start := time.Now()
 	err := s.mounter.Mount(source, stagingPath, "nfs", opts)
-	mountDuration.WithLabelValues("nfs_mount").Observe(time.Since(start).Seconds())
+	elapsed := time.Since(start)
+	mountDuration.WithLabelValues("nfs_mount").Observe(elapsed.Seconds())
 	if err != nil {
 		mountOpsTotal.WithLabelValues("nfs_mount", "error").Inc()
-		return nil, status.Errorf(codes.Internal, "mount NFS: %v", err)
+		return nil, status.Errorf(codes.Internal, "mount NFS for volume %s: %v", req.VolumeId, err)
 	}
 	mountOpsTotal.WithLabelValues("nfs_mount", "success").Inc()
 
+	log.Info().Str("volume", req.VolumeId).Str("node", s.nodeID).Str("source", source).Str("target", stagingPath).Dur("took", elapsed).Msg("stage complete")
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
@@ -78,10 +82,13 @@ func (s *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
+	log.Debug().Str("volume", req.VolumeId).Str("node", s.nodeID).Str("path", req.StagingTargetPath).Msg("unstaging volume")
+
 	if err := cleanupMountPoint(ctx, s.mounter, req.StagingTargetPath); err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup staging: %v", err)
+		return nil, status.Errorf(codes.Internal, "cleanup staging for volume %s at %s: %v", req.VolumeId, req.StagingTargetPath, err)
 	}
 
+	log.Info().Str("volume", req.VolumeId).Str("node", s.nodeID).Str("path", req.StagingTargetPath).Msg("unstage complete")
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
@@ -93,22 +100,27 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if notMnt, _ := s.mounter.IsLikelyNotMountPoint(req.TargetPath); !notMnt {
-		log.Info().Str("path", req.TargetPath).Msg("already mounted, skipping publish")
+	if notMnt, err := s.mounter.IsLikelyNotMountPoint(req.TargetPath); err != nil {
+		log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", req.TargetPath).Msg("failed to check mount point")
+	} else if !notMnt {
+		log.Info().Str("volume", req.VolumeId).Str("path", req.TargetPath).Msg("already mounted, skipping publish")
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
 	if err := os.MkdirAll(req.TargetPath, 0755); err != nil {
-		return nil, status.Errorf(codes.Internal, "mkdir target: %v", err)
+		return nil, status.Errorf(codes.Internal, "mkdir target for volume %s: %v", req.VolumeId, err)
 	}
 
 	dataDir := req.StagingTargetPath + "/" + config.DataDir
+	log.Debug().Str("volume", req.VolumeId).Str("source", dataDir).Str("target", req.TargetPath).Bool("readonly", req.Readonly).Msg("bind mounting")
+
 	start := time.Now()
 	err := s.mounter.Mount(dataDir, req.TargetPath, "", []string{"bind"})
-	mountDuration.WithLabelValues("bind_mount").Observe(time.Since(start).Seconds())
+	elapsed := time.Since(start)
+	mountDuration.WithLabelValues("bind_mount").Observe(elapsed.Seconds())
 	if err != nil {
 		mountOpsTotal.WithLabelValues("bind_mount", "error").Inc()
-		return nil, status.Errorf(codes.Internal, "bind mount: %v", err)
+		return nil, status.Errorf(codes.Internal, "bind mount for volume %s: %v", req.VolumeId, err)
 	}
 	mountOpsTotal.WithLabelValues("bind_mount", "success").Inc()
 
@@ -118,12 +130,15 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		mountDuration.WithLabelValues("remount_ro").Observe(time.Since(start).Seconds())
 		if err != nil {
 			mountOpsTotal.WithLabelValues("remount_ro", "error").Inc()
-			_ = cleanupMountPoint(ctx, s.mounter, req.TargetPath)
-			return nil, status.Errorf(codes.Internal, "remount ro: %v", err)
+			if cleanErr := cleanupMountPoint(ctx, s.mounter, req.TargetPath); cleanErr != nil {
+				log.Error().Err(cleanErr).Str("volume", req.VolumeId).Str("path", req.TargetPath).Msg("cleanup after remount-ro failure also failed")
+			}
+			return nil, status.Errorf(codes.Internal, "remount ro for volume %s: %v", req.VolumeId, err)
 		}
 		mountOpsTotal.WithLabelValues("remount_ro", "success").Inc()
 	}
 
+	log.Info().Str("volume", req.VolumeId).Str("node", s.nodeID).Str("target", req.TargetPath).Bool("readonly", req.Readonly).Dur("took", elapsed).Msg("publish complete")
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -135,9 +150,12 @@ func (s *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
+	log.Debug().Str("volume", req.VolumeId).Str("node", s.nodeID).Str("path", req.TargetPath).Msg("unpublishing volume")
+
 	if err := cleanupMountPoint(ctx, s.mounter, req.TargetPath); err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup target: %v", err)
+		return nil, status.Errorf(codes.Internal, "cleanup target for volume %s at %s: %v", req.VolumeId, req.TargetPath, err)
 	}
 
+	log.Info().Str("volume", req.VolumeId).Str("node", s.nodeID).Str("path", req.TargetPath).Msg("unpublish complete")
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

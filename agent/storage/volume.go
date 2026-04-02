@@ -172,7 +172,10 @@ func (s *Storage) GetVolume(tenant, name string) (*VolumeMetadata, error) {
 	metaPath := filepath.Join(bp, name, config.MetadataFile)
 	var meta VolumeMetadata
 	if err := ReadMetadata(metaPath, &meta); err != nil {
-		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
+		if os.IsNotExist(err) {
+			return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
+		}
+		return nil, &StorageError{Code: ErrMetadata, Message: fmt.Sprintf("volume %q: failed to read metadata: %v", name, err)}
 	}
 	return &meta, nil
 }
@@ -192,7 +195,10 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 
 	var cur VolumeMetadata
 	if err := ReadMetadata(metaPath, &cur); err != nil {
-		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
+		if os.IsNotExist(err) {
+			return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
+		}
+		return nil, &StorageError{Code: ErrMetadata, Message: fmt.Sprintf("volume %q: failed to read metadata: %v", name, err)}
 	}
 
 	// validation

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"net/http"
 	"strings"
 
@@ -99,28 +100,35 @@ func (a *Agent) Start(ctx context.Context) {
 	api.DELETE("/tasks/:id", h.CancelTask)
 
 	a.echo = e
-	a.ready = true
 
 	store.StartWorkers(ctx, a.cfg.UsageInterval, a.cfg.NFSReconcileInterval, a.cfg.DeviceIOInterval, a.cfg.DeviceStatsInterval, a.cfg.TaskCleanupInterval)
 
+	// Verify the listen address is available before going to background
+	ln, err := net.Listen("tcp", a.cfg.ListenAddr)
+	if err != nil {
+		log.Fatal().Err(err).Str("addr", a.cfg.ListenAddr).Msg("failed to bind listen address")
+	}
+
+	a.ready = true
+
 	go func() {
-		var err error
+		var srvErr error
 		if a.cfg.TLSCert != "" && a.cfg.TLSKey != "" {
 			s := &http.Server{
-				Addr:    a.cfg.ListenAddr,
 				Handler: e,
 				TLSConfig: &tls.Config{
 					MinVersion: tls.VersionTLS12,
 				},
 			}
 			log.Info().Str("addr", a.cfg.ListenAddr).Msg("starting agent with TLS")
-			err = s.ListenAndServeTLS(a.cfg.TLSCert, a.cfg.TLSKey)
+			srvErr = s.ServeTLS(ln, a.cfg.TLSCert, a.cfg.TLSKey)
 		} else {
 			log.Warn().Str("addr", a.cfg.ListenAddr).Msg("starting agent without TLS - set AGENT_TLS_CERT and AGENT_TLS_KEY for production")
-			err = e.Start(a.cfg.ListenAddr)
+			s := &http.Server{Handler: e}
+			srvErr = s.Serve(ln)
 		}
-		if err != nil && err != http.ErrServerClosed {
-			log.Fatal().Err(err).Msg("agent server failed")
+		if srvErr != nil && srvErr != http.ErrServerClosed {
+			log.Fatal().Err(srvErr).Msg("agent server failed")
 		}
 	}()
 }

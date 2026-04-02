@@ -109,8 +109,11 @@ func (s *Server) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 
 	client, err := agentClientFromStorageClass(s.agents, sc, req.Secrets)
 	if err != nil {
+		log.Error().Err(err).Str("snapshot", req.Name).Str("volume", volName).Str("sc", sc).Msg("failed to create agent client for snapshot")
 		return nil, err
 	}
+
+	log.Debug().Str("snapshot", req.Name).Str("volume", volName).Str("sc", sc).Msg("creating snapshot")
 
 	start := time.Now()
 	snapResp, err := client.CreateSnapshot(ctx, agentAPI.SnapshotCreateRequest{
@@ -131,11 +134,11 @@ func (s *Server) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 			}, nil
 		}
 		agentOpsTotal.WithLabelValues("create_snapshot", "error", sc).Inc()
-		return nil, status.Errorf(codes.Internal, "create snapshot: %v", err)
+		return nil, status.Errorf(codes.Internal, "create snapshot %s from volume %s via %s: %v", req.Name, volName, sc, err)
 	}
 	agentOpsTotal.WithLabelValues("create_snapshot", "success", sc).Inc()
 
-	log.Info().Str("snapshot", req.Name).Str("volume", volName).Msg("snapshot created")
+	log.Info().Str("snapshot", req.Name).Str("volume", volName).Str("sc", sc).Msg("snapshot created")
 
 	return &csi.CreateSnapshotResponse{
 		Snapshot: &csi.Snapshot{
@@ -160,8 +163,11 @@ func (s *Server) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 
 	client, err := agentClientFromStorageClass(s.agents, sc, req.Secrets)
 	if err != nil {
+		log.Error().Err(err).Str("snapshot", name).Str("sc", sc).Msg("failed to create agent client for snapshot delete")
 		return nil, err
 	}
+
+	log.Debug().Str("snapshot", name).Str("sc", sc).Msg("deleting snapshot")
 
 	start := time.Now()
 	deleteErr := client.DeleteSnapshot(ctx, name)
@@ -169,14 +175,15 @@ func (s *Server) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 	if deleteErr != nil {
 		if agentAPI.IsNotFound(deleteErr) {
 			agentOpsTotal.WithLabelValues("delete_snapshot", "not_found", sc).Inc()
+			log.Info().Str("snapshot", name).Str("sc", sc).Msg("snapshot already deleted")
 			return &csi.DeleteSnapshotResponse{}, nil
 		}
 		agentOpsTotal.WithLabelValues("delete_snapshot", "error", sc).Inc()
-		return nil, status.Errorf(codes.Internal, "delete snapshot: %v", deleteErr)
+		return nil, status.Errorf(codes.Internal, "delete snapshot %s via %s: %v", name, sc, deleteErr)
 	}
 	agentOpsTotal.WithLabelValues("delete_snapshot", "success", sc).Inc()
 
-	log.Info().Str("snapshot", name).Msg("snapshot deleted")
+	log.Info().Str("snapshot", name).Str("sc", sc).Msg("snapshot deleted")
 
 	return &csi.DeleteSnapshotResponse{}, nil
 }

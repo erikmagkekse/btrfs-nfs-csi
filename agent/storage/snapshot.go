@@ -124,7 +124,10 @@ func (s *Storage) GetSnapshot(tenant, name string) (*SnapshotMetadata, error) {
 	metaPath := filepath.Join(bp, config.SnapshotsDir, name, config.MetadataFile)
 	var meta SnapshotMetadata
 	if err := ReadMetadata(metaPath, &meta); err != nil {
-		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("snapshot %q not found", name)}
+		if os.IsNotExist(err) {
+			return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("snapshot %q not found", name)}
+		}
+		return nil, &StorageError{Code: ErrMetadata, Message: fmt.Sprintf("snapshot %q: failed to read metadata: %v", name, err)}
 	}
 	return &meta, nil
 }

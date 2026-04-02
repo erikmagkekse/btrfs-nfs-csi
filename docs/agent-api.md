@@ -22,6 +22,8 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
 | `UNAUTHORIZED` | 401 | Bad/missing token |
 | `NOT_FOUND` | 404 | Resource missing |
 | `ALREADY_EXISTS` | 409 | Conflict (returns existing record) |
+| `BUSY` | 423 | Resource locked (e.g. active NFS exports, scrub running) |
+| `METADATA_ERROR` | 500 | Volume/snapshot metadata corrupt or unreadable |
 | `INTERNAL_ERROR` | 500 | Server error |
 
 ## Volumes

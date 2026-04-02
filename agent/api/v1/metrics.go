@@ -57,13 +57,21 @@ func MetricsMiddleware() echo.MiddlewareFunc {
 			httpRequestsTotal.WithLabelValues(method, path, code).Inc()
 			httpRequestDuration.WithLabelValues(method, path).Observe(duration)
 
-			log.Debug().
+			tenant, _ := c.Get("tenant").(string)
+			l := log.Debug().
 				Str("method", method).
-				Str("path", path).
+				Str("path", c.Request().URL.Path).
 				Str("code", code).
 				Str("client", c.RealIP()).
-				Dur("duration", time.Since(start)).
-				Msg("request")
+				Dur("took", time.Since(start))
+			if tenant != "" {
+				l = l.Str("tenant", tenant)
+			}
+			if resp.Status >= 400 {
+				l.Msg("request error")
+			} else {
+				l.Msg("request")
+			}
 
 			return err
 		}
