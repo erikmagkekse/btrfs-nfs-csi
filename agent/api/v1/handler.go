@@ -10,6 +10,7 @@ import (
 
 type Handler struct {
 	Store *storage.Storage
+	Tasks *storage.TaskManager
 }
 
 // --- Volumes ---
@@ -373,4 +374,39 @@ func (h *Handler) CreateClone(c *echo.Context) error {
 		Path:           meta.Path,
 		CreatedAt:      meta.CreatedAt,
 	})
+}
+
+// --- Scrub ---
+
+func (h *Handler) StartScrub(c *echo.Context) error {
+	taskID, err := h.Store.StartScrub(c.Request().Context())
+	if err != nil {
+		return StorageError(c, err)
+	}
+	return c.JSON(http.StatusAccepted, map[string]any{
+		"task_id": taskID,
+		"status":  storage.TaskPending,
+	})
+}
+
+// --- Tasks ---
+
+func (h *Handler) ListTasks(c *echo.Context) error {
+	tasks := h.Tasks.List(c.QueryParam("type"))
+	return c.JSON(http.StatusOK, TaskListResponse{Tasks: tasks, Total: len(tasks)})
+}
+
+func (h *Handler) GetTask(c *echo.Context) error {
+	task, err := h.Tasks.Get(c.Param("id"))
+	if err != nil {
+		return StorageError(c, err)
+	}
+	return c.JSON(http.StatusOK, task)
+}
+
+func (h *Handler) CancelTask(c *echo.Context) error {
+	if err := h.Tasks.Cancel(c.Param("id")); err != nil {
+		return StorageError(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
 }

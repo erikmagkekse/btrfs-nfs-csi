@@ -64,7 +64,7 @@ func (a *Agent) Start(ctx context.Context) {
 		a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames,
 		a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin,
 	)
-	h := &v1.Handler{Store: store}
+	h := &v1.Handler{Store: store, Tasks: store.Tasks()}
 
 	// unauthenticated endpoints
 	e.GET("/healthz", v1.Healthz(a.version, a.commit, features, store))
@@ -93,10 +93,15 @@ func (a *Agent) Start(ctx context.Context) {
 	api.POST("/clones", h.CreateClone)
 	api.POST("/volumes/clone", h.CloneVolume)
 
+	api.GET("/tasks", h.ListTasks)
+	api.POST("/tasks/scrub", h.StartScrub)
+	api.GET("/tasks/:id", h.GetTask)
+	api.DELETE("/tasks/:id", h.CancelTask)
+
 	a.echo = e
 	a.ready = true
 
-	store.StartWorkers(ctx, a.cfg.UsageInterval, a.cfg.NFSReconcileInterval, a.cfg.DeviceIOInterval, a.cfg.DeviceStatsInterval)
+	store.StartWorkers(ctx, a.cfg.UsageInterval, a.cfg.NFSReconcileInterval, a.cfg.DeviceIOInterval, a.cfg.DeviceStatsInterval, a.cfg.TaskCleanupInterval)
 
 	go func() {
 		var err error

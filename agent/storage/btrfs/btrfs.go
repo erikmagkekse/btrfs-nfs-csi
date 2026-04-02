@@ -171,6 +171,21 @@ func (m *Manager) FilesystemUsage(ctx context.Context, path string) (FilesystemU
 	return parseFilesystemUsage(out)
 }
 
+// ScrubStart runs a btrfs scrub in foreground mode (-B).
+// Blocks until the scrub completes or the context is cancelled.
+func (m *Manager) ScrubStart(ctx context.Context, path string) error {
+	return m.run(ctx, "scrub", "start", "-B", path)
+}
+
+// ScrubStatus returns the status of the last/current scrub on the filesystem at path.
+func (m *Manager) ScrubStatus(ctx context.Context, path string) (*ScrubStatus, error) {
+	out, err := m.cmd.Run(ctx, m.bin, "scrub", "status", "-R", path)
+	if err != nil {
+		return nil, err
+	}
+	return parseScrubStatus(out)
+}
+
 func (m *Manager) SubvolumeList(ctx context.Context, path string) ([]SubvolumeInfo, error) {
 	out, err := m.cmd.Run(ctx, m.bin, "subvolume", "list", "-o", path)
 	if err != nil {

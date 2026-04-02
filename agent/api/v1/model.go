@@ -159,6 +159,11 @@ type FilesystemStatsResponse struct {
 	Devices            []DeviceStatsResponse `json:"devices"`
 }
 
+type TaskListResponse struct {
+	Tasks []storage.Task `json:"tasks"`
+	Total int            `json:"total"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 	Code  string `json:"code"`

@@ -251,3 +251,48 @@ func (s *BtrfsIntegrationSuite) TestConcurrentSnapshot() {
 	}
 	s.Assert().Equal(31, snapCount, "expected 31 cs-snap-* snapshots")
 }
+
+func (s *BtrfsIntegrationSuite) TestScrubStartAndStatus() {
+	// write some data so scrub has something to check
+	subPath := filepath.Join(s.mnt, "scrubvol")
+	err := s.mgr.SubvolumeCreate(s.ctx, subPath)
+	s.Require().NoError(err, "SubvolumeCreate")
+
+	data := make([]byte, 256*1024)
+	err = os.WriteFile(filepath.Join(subPath, "testfile"), data, 0o644)
+	s.Require().NoError(err, "WriteFile")
+
+	_, err = s.cmd.Run(s.ctx, "sync")
+	s.Require().NoError(err, "sync")
+
+	// run scrub in foreground (-B)
+	err = s.mgr.ScrubStart(s.ctx, s.mnt)
+	s.Require().NoError(err, "ScrubStart")
+
+	// check result
+	status, err := s.mgr.ScrubStatus(s.ctx, s.mnt)
+	s.Require().NoError(err, "ScrubStatus")
+	s.Assert().False(status.Running, "scrub should be finished")
+	s.Assert().NotZero(status.DataBytesScrubbed, "should have scrubbed some data bytes")
+	s.Assert().Equal(uint64(0), status.ReadErrors, "no read errors expected")
+	s.Assert().Equal(uint64(0), status.CSumErrors, "no csum errors expected")
+	s.Assert().Equal(uint64(0), status.UncorrectableErrs, "no uncorrectable errors expected")
+}
+
+func (s *BtrfsIntegrationSuite) TestScrubCancelViaContext() {
+	ctx, cancel := context.WithCancel(s.ctx)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- s.mgr.ScrubStart(ctx, s.mnt)
+	}()
+
+	// cancel immediately
+	cancel()
+
+	err := <-done
+	// either the scrub finished before cancel (small filesystem) or was killed
+	if err != nil {
+		s.Assert().ErrorIs(err, context.Canceled, "should be context.Canceled or wrapped")
+	}
+}

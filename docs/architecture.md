@@ -32,17 +32,30 @@ DeleteVolume   → DELETE /v1/volumes/:name (subvolume delete)
 ## Directory Structure
 
 ```
-{AGENT_BASE_PATH}/{tenant}/
-├── {volume}/
-│   ├── data/              ← btrfs subvolume
-│   └── metadata.json
-├── snapshots/{name}/
-│   ├── data/              ← read-only btrfs snapshot
-│   └── metadata.json
-└── {clone}/
-    ├── data/              ← writable btrfs snapshot
-    └── metadata.json
+{AGENT_BASE_PATH}/
+├── tasks/
+│   └── {id}.json          ← persisted task state
+└── {tenant}/
+    ├── {volume}/
+    │   ├── data/           ← btrfs subvolume
+    │   └── metadata.json
+    ├── snapshots/{name}/
+    │   ├── data/           ← read-only btrfs snapshot
+    │   └── metadata.json
+    └── {clone}/
+        ├── data/           ← writable btrfs snapshot
+        └── metadata.json
 ```
+
+## Task System
+
+Long-running operations (scrub, future: cross-agent transfers) run as background tasks with progress tracking.
+
+- Tasks are persisted as JSON files under `{AGENT_BASE_PATH}/tasks/`
+- Progress is tracked in-memory via atomic pointers (no disk IO per update)
+- Status transitions (pending, running, completed, failed, cancelled) are persisted to disk
+- On agent restart, interrupted running/pending tasks are marked as `failed`
+- Completed tasks are cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h)
 
 ## CSI Capabilities
 

@@ -496,3 +496,110 @@ func TestDevices(t *testing.T) {
 		assert.ErrorContains(t, err, "no devices found")
 	})
 }
+
+func TestScrubStatus(t *testing.T) {
+	t.Run("finished", func(t *testing.T) {
+		out := strings.Join([]string{
+			"UUID:             a8172da2-5e15-4125-bb09-23169dafd6da",
+			"Scrub started:    Wed Apr  1 10:00:00 2026",
+			"Status:           finished",
+			"Duration:         0:05:23",
+			"Total to scrub:   40.00GiB",
+			"Rate:             127.45MiB/s",
+			"data_extents_scrubbed: 524288",
+			"tree_extents_scrubbed: 16384",
+			"data_bytes_scrubbed: 536870912",
+			"tree_bytes_scrubbed: 268435456",
+			"read_errors: 0",
+			"csum_errors: 0",
+			"verify_errors: 0",
+			"no_csum: 0",
+			"csum_discards: 0",
+			"super_errors: 0",
+			"malloc_errors: 0",
+			"uncorrectable_errors: 0",
+			"unverified_errors: 0",
+			"corrected_errors: 0",
+			"last_physical: 536870912",
+		}, "\n")
+
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		s, err := mgr.ScrubStatus(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.False(t, s.Running)
+		assert.Equal(t, uint64(536870912), s.DataBytesScrubbed)
+		assert.Equal(t, uint64(268435456), s.TreeBytesScrubbed)
+		assert.Equal(t, uint64(0), s.ReadErrors)
+		assert.Equal(t, uint64(0), s.CSumErrors)
+		assert.Equal(t, uint64(0), s.VerifyErrors)
+		assert.Equal(t, uint64(0), s.SuperErrors)
+		assert.Equal(t, uint64(0), s.UncorrectableErrs)
+		assert.Equal(t, uint64(0), s.CorrectedErrs)
+	})
+
+	t.Run("running", func(t *testing.T) {
+		out := strings.Join([]string{
+			"UUID:             a8172da2-5e15-4125-bb09-23169dafd6da",
+			"Scrub started:    Wed Apr  1 10:00:00 2026",
+			"Status:           running",
+			"data_bytes_scrubbed: 100000000",
+			"tree_bytes_scrubbed: 50000000",
+			"read_errors: 0",
+			"csum_errors: 0",
+		}, "\n")
+
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		s, err := mgr.ScrubStatus(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.True(t, s.Running)
+		assert.Equal(t, uint64(100000000), s.DataBytesScrubbed)
+		assert.Equal(t, uint64(50000000), s.TreeBytesScrubbed)
+	})
+
+	t.Run("with errors", func(t *testing.T) {
+		out := strings.Join([]string{
+			"Status:           finished",
+			"data_bytes_scrubbed: 536870912",
+			"tree_bytes_scrubbed: 268435456",
+			"read_errors: 3",
+			"csum_errors: 2",
+			"verify_errors: 1",
+			"super_errors: 0",
+			"uncorrectable_errors: 5",
+			"corrected_errors: 1",
+		}, "\n")
+
+		m := &utils.MockRunner{Out: out}
+		mgr := newTestManager(m)
+
+		s, err := mgr.ScrubStatus(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, uint64(3), s.ReadErrors)
+		assert.Equal(t, uint64(2), s.CSumErrors)
+		assert.Equal(t, uint64(1), s.VerifyErrors)
+		assert.Equal(t, uint64(5), s.UncorrectableErrs)
+		assert.Equal(t, uint64(1), s.CorrectedErrs)
+	})
+
+	t.Run("command error", func(t *testing.T) {
+		m := &utils.MockRunner{Err: fmt.Errorf("scrub status failed")}
+		mgr := newTestManager(m)
+
+		_, err := mgr.ScrubStatus(context.Background(), "/mnt/data")
+		require.Error(t, err)
+	})
+
+	t.Run("scrub start uses foreground mode", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.ScrubStart(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"scrub", "start", "-B", "/mnt/data"}, m.Calls[0])
+	})
+}

@@ -33,6 +33,7 @@ const (
 	DataDir      = "data"
 	MetadataFile = "metadata.json"
 	SnapshotsDir = "snapshots"
+	TasksDir     = "tasks"
 )
 
 type AgentConfig struct {
@@ -54,6 +55,7 @@ type AgentConfig struct {
 	DashboardRefresh     int           `env:"AGENT_DASHBOARD_REFRESH_SECONDS" envDefault:"5"`
 	DefaultDirMode       string        `env:"AGENT_DEFAULT_DIR_MODE" envDefault:"0700"`
 	DefaultDataMode      string        `env:"AGENT_DEFAULT_DATA_MODE" envDefault:"2770"`
+	TaskCleanupInterval  time.Duration `env:"AGENT_TASK_CLEANUP_INTERVAL" envDefault:"24h"`
 }
 
 type ControllerConfig struct {
