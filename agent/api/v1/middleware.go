@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog/log"
 )
 
 // AuthMiddleware validates Bearer or Basic auth and resolves the token to a tenant name.
@@ -14,16 +15,12 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 		return func(c *echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")
 			if auth == "" {
-				c.Response().Header().Set("WWW-Authenticate", `Basic realm="agent"`)
-				return c.JSON(http.StatusUnauthorized, ErrorResponse{
-					Error: "missing authorization header",
-					Code:  "UNAUTHORIZED",
-				})
+				return authFailed(c, "missing authorization header")
 			}
 
 			parts := strings.SplitN(auth, " ", 2)
 			if len(parts) != 2 {
-				return unauthorized(c)
+				return authFailed(c, "malformed authorization header")
 			}
 
 			var providedToken string
@@ -33,20 +30,20 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 			case "Basic":
 				decoded, err := base64.StdEncoding.DecodeString(parts[1])
 				if err != nil {
-					return unauthorized(c)
+					return authFailed(c, "invalid basic auth encoding")
 				}
 				_, pass, ok := strings.Cut(string(decoded), ":")
 				if !ok {
-					return unauthorized(c)
+					return authFailed(c, "invalid basic auth format")
 				}
 				providedToken = pass
 			default:
-				return unauthorized(c)
+				return authFailed(c, "unsupported auth scheme: "+parts[0])
 			}
 
 			tenant, ok := tenants[providedToken]
 			if !ok {
-				return unauthorized(c)
+				return authFailed(c, "invalid token")
 			}
 			c.Set("tenant", tenant)
 
@@ -55,7 +52,9 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 	}
 }
 
-func unauthorized(c *echo.Context) error {
+func authFailed(c *echo.Context, reason string) error {
+	log.Warn().Str("client", c.RealIP()).Str("path", c.Request().URL.Path).Str("reason", reason).Msg("auth failed")
+	log.Debug().Str("client", c.RealIP()).Str("authorization", c.Request().Header.Get("Authorization")).Msg("auth failed detail")
 	c.Response().Header().Set("WWW-Authenticate", `Basic realm="agent"`)
 	return c.JSON(http.StatusUnauthorized, ErrorResponse{
 		Error: "invalid auth token",

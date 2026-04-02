@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"syscall"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -34,47 +36,60 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 		stagingPath = findStagingPath(req.VolumeId)
 	}
 
+	log.Debug().Str("volume", req.VolumeId).Str("volumePath", req.VolumePath).Str("stagingPath", stagingPath).Msg("looking up volume stats")
+
 	if stagingPath != "" {
 		metaPath := stagingPath + "/" + config.MetadataFile
-		if data, err := os.ReadFile(metaPath); err == nil {
+		data, err := os.ReadFile(metaPath)
+		if err != nil {
+			log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", metaPath).Msg("failed to read metadata")
+		} else {
 			var vs volumeStats
-			if err := json.Unmarshal(data, &vs); err == nil && vs.QuotaBytes > 0 {
-				used := int64(vs.UsedBytes)
-				total := int64(vs.QuotaBytes)
-				avail := total - used
-				if avail < 0 {
-					avail = 0
+			if err := json.Unmarshal(data, &vs); err != nil {
+				log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", metaPath).Msg("metadata JSON corrupt")
+			} else {
+				if vs.QuotaBytes > 0 {
+					used := int64(vs.UsedBytes)
+					total := int64(vs.QuotaBytes)
+					avail := total - used
+					if avail < 0 {
+						avail = 0
+					}
+					volumeStatsOpsTotal.WithLabelValues("success").Inc()
+					return &csi.NodeGetVolumeStatsResponse{
+						Usage: []*csi.VolumeUsage{{
+							Available: avail,
+							Total:     total,
+							Used:      used,
+							Unit:      csi.VolumeUsage_BYTES,
+						}},
+					}, nil
 				}
-				volumeStatsOpsTotal.WithLabelValues("success").Inc()
-				return &csi.NodeGetVolumeStatsResponse{
-					Usage: []*csi.VolumeUsage{{
-						Available: avail,
-						Total:     total,
-						Used:      used,
-						Unit:      csi.VolumeUsage_BYTES,
-					}},
-				}, nil
+				// Quota disabled: fallback to statfs
+				log.Debug().Str("volume", req.VolumeId).Msg("quota not configured, falling back to statfs")
+				return statfsResponse(req.VolumePath)
 			}
 		}
 	}
 
-	// No statfs fallback - returns NFS-level data which doesn't reflect per-volume quota.
-	// Better to return an error so kubelet retries than to report misleading capacity.
 	volumeStatsOpsTotal.WithLabelValues("error").Inc()
-	return nil, status.Errorf(codes.Unavailable, "%s not available, agent may be down", config.MetadataFile)
+	if stagingPath == "" {
+		return nil, status.Errorf(codes.NotFound, "staging path not found for volume %s", req.VolumeId)
+	}
+	return nil, status.Errorf(codes.Internal, "failed to read %s for volume %s from %s", config.MetadataFile, req.VolumeId, stagingPath)
 }
 
 // findStagingPath parses /proc/self/mountinfo to find the globalmount staging path for a volume.
-// It extracts the volume name from the volumeId (format "storageClass|pvcName") and matches it
-// against NFS mount sources whose mountpoint contains "globalmount".
 func findStagingPath(volumeId string) string {
 	_, volName, err := utils.ParseVolumeID(volumeId)
 	if err != nil {
+		log.Debug().Err(err).Str("volume", volumeId).Msg("failed to parse volume ID for staging path lookup")
 		return ""
 	}
 
 	f, err := os.Open("/proc/self/mountinfo")
 	if err != nil {
+		log.Warn().Err(err).Msg("failed to open /proc/self/mountinfo")
 		return ""
 	}
 	defer func() { _ = f.Close() }()
@@ -105,5 +120,28 @@ func findStagingPath(volumeId string) string {
 			return mountpoint
 		}
 	}
+	if err := sc.Err(); err != nil {
+		log.Warn().Err(err).Msg("error reading /proc/self/mountinfo")
+	}
+	log.Debug().Str("volume", volumeId).Msg("no staging path found in mountinfo")
 	return ""
+}
+
+func statfsResponse(path string) (*csi.NodeGetVolumeStatsResponse, error) {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(path, &st); err != nil {
+		volumeStatsOpsTotal.WithLabelValues("error").Inc()
+		return nil, status.Errorf(codes.Internal, "statfs failed on %s: %v", path, err)
+	}
+	total := int64(st.Blocks) * int64(st.Bsize)
+	free := int64(st.Bavail) * int64(st.Bsize)
+	volumeStatsOpsTotal.WithLabelValues("success").Inc()
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{{
+			Available: free,
+			Total:     total,
+			Used:      total - free,
+			Unit:      csi.VolumeUsage_BYTES,
+		}},
+	}, nil
 }

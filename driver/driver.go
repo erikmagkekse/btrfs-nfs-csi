@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -16,7 +17,7 @@ func Start(ctx context.Context, endpoint, nodeID, nodeIP, metricsAddr, version s
 
 	srv, err := csiserver.New(endpoint, version, metricsInterceptor)
 	if err != nil {
-		return err
+		return fmt.Errorf("create CSI server on %s: %w", endpoint, err)
 	}
 	csi.RegisterNodeServer(srv.GRPC(), &NodeServer{nodeID: nodeID, nodeIP: nodeIP, mounter: mount.New("")})
 	return srv.Run(ctx, "driver")

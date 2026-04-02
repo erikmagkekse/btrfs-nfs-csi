@@ -15,6 +15,7 @@ var codeStatus = map[string]int{
 	storage.ErrNotFound:      http.StatusNotFound,
 	storage.ErrAlreadyExists: http.StatusConflict,
 	storage.ErrBusy:          http.StatusLocked,
+	storage.ErrMetadata:      http.StatusInternalServerError,
 }
 
 func StorageError(c *echo.Context, err error) error {

@@ -101,5 +101,7 @@ func (s *Storage) reconcileExports(ctx context.Context, basePath string, tenant 
 
 	if removed > 0 || restored > 0 {
 		log.Info().Str("tenant", tenant).Int("removed", removed).Int("restored", restored).Msg("nfs reconciler: reconciliation complete")
+	} else {
+		log.Debug().Str("tenant", tenant).Msg("nfs reconciler: in sync")
 	}
 }

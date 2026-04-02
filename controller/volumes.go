@@ -65,6 +65,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 	client, err := agentClientFromSecrets(agentURL, req.Secrets)
 	if err != nil {
+		log.Error().Err(err).Str("volume", req.Name).Str("agent", agentURL).Msg("failed to create agent client")
 		return nil, err
 	}
 
@@ -73,7 +74,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	vp := resolveVolumeParams(ctx, params)
 	sc := vp.StorageClass
 	if sc == "" {
-		return nil, status.Error(codes.Internal, "failed to resolve StorageClass name from PVC")
+		return nil, status.Errorf(codes.Internal, "failed to resolve StorageClass name for volume %s", req.Name)
 	}
 
 	var sizeBytes uint64 = 1 << 30 // 1 GiB default
@@ -108,6 +109,8 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 				return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
 			}
 
+			log.Debug().Str("volume", req.Name).Str("source", srcName).Str("sc", sc).Str("agent", agentURL).Msg("cloning volume from volume")
+
 			start := time.Now()
 			cloneResp, err := client.CloneVolume(ctx, agentAPI.VolumeCloneRequest{
 				Source: srcName,
@@ -118,18 +121,18 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 				if agentAPI.IsConflict(err) {
 					agentOpsTotal.WithLabelValues("clone_volume", "conflict", sc).Inc()
 					if cloneResp == nil {
-						return nil, status.Errorf(codes.Internal, "clone conflict but no metadata returned: %v", err)
+						return nil, status.Errorf(codes.Internal, "clone conflict for volume %s but no metadata returned: %v", req.Name, err)
 					}
 				} else {
 					agentOpsTotal.WithLabelValues("clone_volume", "error", sc).Inc()
-					return nil, status.Errorf(codes.Internal, "clone volume: %v", err)
+					return nil, status.Errorf(codes.Internal, "clone volume %s from %s via %s: %v", req.Name, srcName, agentURL, err)
 				}
 			} else {
 				agentOpsTotal.WithLabelValues("clone_volume", "success", sc).Inc()
 			}
 			volCtx[config.ParamNFSSharePath] = cloneResp.Path
 
-			log.Info().Str("volume", req.Name).Str("source", srcName).Msg("volume cloned from volume")
+			log.Info().Str("volume", req.Name).Str("source", srcName).Str("sc", sc).Str("agent", agentURL).Msg("volume cloned from volume")
 
 			return &csi.CreateVolumeResponse{
 				Volume: &csi.Volume{
@@ -151,6 +154,8 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
 		}
 
+		log.Debug().Str("volume", req.Name).Str("snapshot", snapName).Str("sc", sc).Str("agent", agentURL).Msg("cloning volume from snapshot")
+
 		start := time.Now()
 		cloneResp, err := client.CreateClone(ctx, agentAPI.CloneCreateRequest{
 			Snapshot: snapName,
@@ -161,18 +166,18 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			if agentAPI.IsConflict(err) {
 				agentOpsTotal.WithLabelValues("create_clone", "conflict", sc).Inc()
 				if cloneResp == nil {
-					return nil, status.Errorf(codes.Internal, "clone conflict but no metadata returned: %v", err)
+					return nil, status.Errorf(codes.Internal, "clone conflict for volume %s but no metadata returned: %v", req.Name, err)
 				}
 			} else {
 				agentOpsTotal.WithLabelValues("create_clone", "error", sc).Inc()
-				return nil, status.Errorf(codes.Internal, "create clone: %v", err)
+				return nil, status.Errorf(codes.Internal, "clone volume %s from snapshot %s via %s: %v", req.Name, snapName, agentURL, err)
 			}
 		} else {
 			agentOpsTotal.WithLabelValues("create_clone", "success", sc).Inc()
 		}
 		volCtx[config.ParamNFSSharePath] = cloneResp.Path
 
-		log.Info().Str("volume", req.Name).Str("snapshot", snapName).Msg("volume cloned from snapshot")
+		log.Info().Str("volume", req.Name).Str("snapshot", snapName).Str("sc", sc).Str("agent", agentURL).Msg("volume cloned from snapshot")
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
@@ -191,6 +196,8 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	uid, _ := strconv.Atoi(vp.UID)
 	gid, _ := strconv.Atoi(vp.GID)
 
+	log.Debug().Str("volume", req.Name).Uint64("size", sizeBytes).Str("sc", sc).Str("agent", agentURL).Str("compression", vp.Compression).Msg("creating volume")
+
 	start := time.Now()
 	volResp, err := client.CreateVolume(ctx, agentAPI.VolumeCreateRequest{
 		Name:        req.Name,
@@ -208,19 +215,19 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			if volResp == nil {
 				volResp, err = client.GetVolume(ctx, req.Name)
 				if err != nil {
-					return nil, status.Errorf(codes.Internal, "volume conflict but failed to retrieve: %v", err)
+					return nil, status.Errorf(codes.Internal, "volume %s conflict but failed to retrieve from %s: %v", req.Name, agentURL, err)
 				}
 			}
 		} else {
 			agentOpsTotal.WithLabelValues("create_volume", "error", sc).Inc()
-			return nil, status.Errorf(codes.Internal, "create volume: %v", err)
+			return nil, status.Errorf(codes.Internal, "create volume %s via %s: %v", req.Name, agentURL, err)
 		}
 	} else {
 		agentOpsTotal.WithLabelValues("create_volume", "success", sc).Inc()
 	}
 	volCtx[config.ParamNFSSharePath] = volResp.Path
 
-	log.Info().Str("volume", req.Name).Uint64("size", sizeBytes).Msg("volume created")
+	log.Info().Str("volume", req.Name).Uint64("size", sizeBytes).Str("sc", sc).Str("agent", agentURL).Msg("volume created")
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
@@ -243,8 +250,11 @@ func (s *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 
 	client, err := agentClientFromStorageClass(s.agents, sc, req.Secrets)
 	if err != nil {
+		log.Error().Err(err).Str("volume", name).Str("sc", sc).Msg("failed to create agent client for delete")
 		return nil, err
 	}
+
+	log.Debug().Str("volume", name).Str("sc", sc).Msg("deleting volume")
 
 	start := time.Now()
 	deleteErr := client.DeleteVolume(ctx, name)
@@ -252,18 +262,19 @@ func (s *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 	if deleteErr != nil {
 		if agentAPI.IsNotFound(deleteErr) {
 			agentOpsTotal.WithLabelValues("delete_volume", "not_found", sc).Inc()
+			log.Info().Str("volume", name).Str("sc", sc).Msg("volume already deleted")
 			return &csi.DeleteVolumeResponse{}, nil
 		}
 		if agentAPI.IsLocked(deleteErr) {
 			agentOpsTotal.WithLabelValues("delete_volume", "busy", sc).Inc()
-			return nil, status.Errorf(codes.FailedPrecondition, "delete volume: %v", deleteErr)
+			return nil, status.Errorf(codes.FailedPrecondition, "delete volume %s: %v", name, deleteErr)
 		}
 		agentOpsTotal.WithLabelValues("delete_volume", "error", sc).Inc()
-		return nil, status.Errorf(codes.Internal, "delete volume: %v", deleteErr)
+		return nil, status.Errorf(codes.Internal, "delete volume %s via %s: %v", name, sc, deleteErr)
 	}
 	agentOpsTotal.WithLabelValues("delete_volume", "success", sc).Inc()
 
-	log.Info().Str("volume", name).Msg("volume deleted")
+	log.Info().Str("volume", name).Str("sc", sc).Msg("volume deleted")
 
 	return &csi.DeleteVolumeResponse{}, nil
 }
@@ -280,6 +291,7 @@ func (s *Server) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 
 	client, err := agentClientFromStorageClass(s.agents, sc, req.Secrets)
 	if err != nil {
+		log.Error().Err(err).Str("volume", name).Str("sc", sc).Msg("failed to create agent client for expand")
 		return nil, err
 	}
 
@@ -295,6 +307,8 @@ func (s *Server) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return nil, status.Error(codes.InvalidArgument, "capacity range required")
 	}
 
+	log.Debug().Str("volume", name).Uint64("size", sizeBytes).Str("sc", sc).Msg("expanding volume")
+
 	update := agentAPI.VolumeUpdateRequest{SizeBytes: &sizeBytes}
 
 	start := time.Now()
@@ -302,11 +316,11 @@ func (s *Server) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 	agentDuration.WithLabelValues("update_volume", sc).Observe(time.Since(start).Seconds())
 	if updateErr != nil {
 		agentOpsTotal.WithLabelValues("update_volume", "error", sc).Inc()
-		return nil, status.Errorf(codes.Internal, "update volume: %v", updateErr)
+		return nil, status.Errorf(codes.Internal, "expand volume %s via %s: %v", name, sc, updateErr)
 	}
 	agentOpsTotal.WithLabelValues("update_volume", "success", sc).Inc()
 
-	log.Info().Str("volume", name).Uint64("size", sizeBytes).Msg("volume expanded")
+	log.Info().Str("volume", name).Uint64("size", sizeBytes).Str("sc", sc).Msg("volume expanded")
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         int64(sizeBytes),

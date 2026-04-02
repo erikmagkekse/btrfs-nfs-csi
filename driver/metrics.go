@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -63,7 +64,7 @@ func metricsInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo
 	}
 
 	start := time.Now()
-	log.Debug().Str("method", info.FullMethod).Msg("gRPC call")
+	log.Debug().Str("method", info.FullMethod).Str("req", fmt.Sprintf("%+v", req)).Msg("gRPC call")
 
 	resp, err := handler(ctx, req)
 
@@ -73,7 +74,9 @@ func metricsInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo
 	grpcRequestDuration.WithLabelValues(info.FullMethod).Observe(duration)
 
 	if err != nil {
-		log.Error().Err(err).Str("method", info.FullMethod).Msg("gRPC error")
+		log.Error().Err(err).Str("method", info.FullMethod).Str("code", code).Dur("took", time.Since(start)).Msg("gRPC error")
+	} else {
+		log.Debug().Str("method", info.FullMethod).Str("code", code).Dur("took", time.Since(start)).Msg("gRPC ok")
 	}
 
 	return resp, err

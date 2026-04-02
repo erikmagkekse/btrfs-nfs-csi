@@ -292,7 +292,7 @@ func TestGetVolume(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(corrupt, config.MetadataFile), []byte("{bad"), 0o644))
 
 		_, err := s.GetVolume("test", "corrupt")
-		requireStorageError(t, err, ErrNotFound)
+		requireStorageError(t, err, ErrMetadata)
 	})
 }
 

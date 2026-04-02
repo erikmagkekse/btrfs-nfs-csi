@@ -33,25 +33,29 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 
 	client, err := agentClientFromStorageClass(s.agents, sc, req.Secrets)
 	if err != nil {
+		log.Error().Err(err).Str("volume", name).Str("sc", sc).Msg("failed to create agent client for publish")
 		return nil, err
 	}
 
 	// apply PVC annotation changes to agent
 	vp := resolveVolumeParams(ctx, req.VolumeContext)
 	if err := vp.validate(); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "volume %s: %v", name, err)
 	}
 	if update, changed := vp.toUpdateRequest(); changed {
+		log.Debug().Str("volume", name).Str("sc", sc).Msg("applying annotation updates")
 		start := time.Now()
 		_, updateErr := client.UpdateVolume(ctx, name, update)
 		agentDuration.WithLabelValues("update_volume", sc).Observe(time.Since(start).Seconds())
 		if updateErr != nil {
 			agentOpsTotal.WithLabelValues("update_volume", "error", sc).Inc()
-			log.Warn().Err(updateErr).Str("volume", name).Msg("failed to apply annotation updates")
+			log.Warn().Err(updateErr).Str("volume", name).Str("sc", sc).Msg("failed to apply annotation updates")
 		} else {
 			agentOpsTotal.WithLabelValues("update_volume", "success", sc).Inc()
 		}
 	}
+
+	log.Debug().Str("volume", name).Str("nodeIP", nodeIP).Str("sc", sc).Msg("exporting volume")
 
 	exportCtx, cancel := context.WithTimeout(ctx, exportTimeout)
 	defer cancel()
@@ -59,12 +63,12 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	if err := client.ExportVolume(exportCtx, name, nodeIP); err != nil {
 		agentDuration.WithLabelValues("export", sc).Observe(time.Since(start).Seconds())
 		agentOpsTotal.WithLabelValues("export", "error", sc).Inc()
-		return nil, status.Errorf(codes.Internal, "nfs export for node %s: %v", nodeIP, err)
+		return nil, status.Errorf(codes.Internal, "export volume %s to node %s via %s: %v", name, nodeIP, sc, err)
 	}
 	agentDuration.WithLabelValues("export", sc).Observe(time.Since(start).Seconds())
 	agentOpsTotal.WithLabelValues("export", "success", sc).Inc()
 
-	log.Info().Str("volume", name).Str("nodeIP", nodeIP).Msg("nfs export added")
+	log.Info().Str("volume", name).Str("nodeIP", nodeIP).Str("sc", sc).Msg("publish complete")
 
 	return &csi.ControllerPublishVolumeResponse{}, nil
 }
@@ -86,8 +90,11 @@ func (s *Server) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 
 	client, err := agentClientFromStorageClass(s.agents, sc, req.Secrets)
 	if err != nil {
+		log.Error().Err(err).Str("volume", name).Str("sc", sc).Msg("failed to create agent client for unpublish")
 		return nil, err
 	}
+
+	log.Debug().Str("volume", name).Str("nodeIP", nodeIP).Str("sc", sc).Msg("unexporting volume")
 
 	unexportCtx, cancel2 := context.WithTimeout(ctx, exportTimeout)
 	defer cancel2()
@@ -97,15 +104,16 @@ func (s *Server) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 	if unexportErr != nil {
 		if agentAPI.IsNotFound(unexportErr) {
 			agentOpsTotal.WithLabelValues("unexport", "not_found", sc).Inc()
+			log.Info().Str("volume", name).Str("nodeIP", nodeIP).Str("sc", sc).Msg("export already removed")
 		} else {
 			agentOpsTotal.WithLabelValues("unexport", "error", sc).Inc()
-			return nil, status.Errorf(codes.Internal, "nfs unexport for node %s: %v", nodeIP, unexportErr)
+			return nil, status.Errorf(codes.Internal, "unexport volume %s from node %s via %s: %v", name, nodeIP, sc, unexportErr)
 		}
 	} else {
 		agentOpsTotal.WithLabelValues("unexport", "success", sc).Inc()
 	}
 
-	log.Info().Str("volume", name).Str("nodeIP", nodeIP).Msg("nfs export removed")
+	log.Info().Str("volume", name).Str("nodeIP", nodeIP).Str("sc", sc).Msg("unpublish complete")
 
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
 }
