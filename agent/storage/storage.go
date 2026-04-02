@@ -134,7 +134,7 @@ func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInte
 func (s *Storage) BasePath() string       { return s.basePath }
 func (s *Storage) QuotaEnabled() bool     { return s.quotaEnabled }
 func (s *Storage) Exporter() nfs.Exporter { return s.exporter }
-func (s *Storage) Tasks() *TaskManager { return s.tasks }
+func (s *Storage) Tasks() *TaskManager    { return s.tasks }
 
 func (s *Storage) tenantPath(tenant string) (string, error) {
 	if err := validateName(tenant); err != nil {

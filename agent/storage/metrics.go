@@ -195,7 +195,6 @@ var (
 		Name:      "filesystem_data_ratio",
 		Help:      "Data RAID profile ratio (1.0 for single, 2.0 for RAID1/DUP).",
 	}, []string{"path"})
-
 )
 
 func init() {
