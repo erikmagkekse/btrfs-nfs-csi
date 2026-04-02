@@ -45,13 +45,13 @@ func snapshotCmd() *cli.Command {
 						sortSnapshotsDetail(resp.Snapshots, sortBy, rev)
 						return output(cmd, resp, func() {
 							w := tab()
-							fmt.Fprintln(w, "NAME\tVOLUME\tSIZE\tUSED\tEXCLUSIVE\tREADONLY\tCREATED")
+							_, _ = fmt.Fprintln(w, "NAME\tVOLUME\tSIZE\tUSED\tEXCLUSIVE\tREADONLY\tCREATED")
 							for _, s := range resp.Snapshots {
-								fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\t%s\n",
+								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\t%s\n",
 									s.Name, s.Volume, utils.FormatBytes(s.SizeBytes), utils.FormatBytes(s.UsedBytes),
 									utils.FormatBytes(s.ExclusiveBytes), s.ReadOnly, s.CreatedAt.Format(timeFmt))
 							}
-							w.Flush()
+							_ = w.Flush()
 						})
 					}
 					var resp *v1.SnapshotListResponse
@@ -67,12 +67,12 @@ func snapshotCmd() *cli.Command {
 					sortSnapshots(resp.Snapshots, sortBy, rev)
 					return output(cmd, resp, func() {
 						w := tab()
-						fmt.Fprintln(w, "NAME\tVOLUME\tSIZE\tUSED\tCREATED")
+						_, _ = fmt.Fprintln(w, "NAME\tVOLUME\tSIZE\tUSED\tCREATED")
 						for _, s := range resp.Snapshots {
-							fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+							_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 								s.Name, s.Volume, utils.FormatBytes(s.SizeBytes), utils.FormatBytes(s.UsedBytes), s.CreatedAt.Format(timeFmt))
 						}
-						w.Flush()
+						_ = w.Flush()
 					})
 				},
 			},
@@ -132,11 +132,11 @@ func snapshotCmd() *cli.Command {
 					}
 					force := os.Getenv("BTRFS_NFS_CSI_FORCE") == "true"
 					if !force && !cmd.Bool("confirm") {
-						fmt.Fprintf(os.Stderr, "to delete, run:\n  btrfs-nfs-csi snapshot delete %s --confirm\n", strings.Join(names, " "))
+						_, _ = fmt.Fprintf(os.Stderr, "to delete, run:\n  btrfs-nfs-csi snapshot delete %s --confirm\n", strings.Join(names, " "))
 						return nil
 					}
 					if !force && !cmd.Bool("yes") {
-						fmt.Fprintf(os.Stderr, "this will permanently destroy all snapshots.\nto proceed, run:\n  btrfs-nfs-csi snapshot delete %s --confirm --yes\n", strings.Join(names, " "))
+						_, _ = fmt.Fprintf(os.Stderr, "this will permanently destroy all snapshots.\nto proceed, run:\n  btrfs-nfs-csi snapshot delete %s --confirm --yes\n", strings.Join(names, " "))
 						return nil
 					}
 					c := clientFrom(cmd)

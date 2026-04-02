@@ -57,7 +57,7 @@ func (s *Storage) runScrub(ctx context.Context, update *task.Update) error {
 					}
 					update.SetProgress(pct)
 				}
-				update.SetResult(status)
+				_ = update.SetResult(status)
 			}
 		}
 	}()

@@ -36,7 +36,7 @@ func taskCmd() *cli.Command {
 						})
 						return output(cmd, resp, func() {
 							w := tab()
-							fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTOOK\tCREATED\tINFO")
+							_, _ = fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTOOK\tCREATED\tINFO")
 							for _, t := range resp.Tasks {
 								took := "-"
 								if t.CompletedAt != nil {
@@ -48,10 +48,10 @@ func taskCmd() *cli.Command {
 								if info == "" {
 									info = "-"
 								}
-								fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\t%s\n",
+								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\t%s\n",
 									t.ID, t.Type, t.Status, t.Progress, took, t.CreatedAt.Format(timeFmt), info)
 							}
-							w.Flush()
+							_ = w.Flush()
 						})
 					}
 					resp, err := c.ListTasks(ctx, taskType)
@@ -63,7 +63,7 @@ func taskCmd() *cli.Command {
 					})
 					return output(cmd, resp, func() {
 						w := tab()
-						fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTOOK\tCREATED")
+						_, _ = fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTOOK\tCREATED")
 						for _, t := range resp.Tasks {
 							took := "-"
 							if t.CompletedAt != nil {
@@ -71,10 +71,10 @@ func taskCmd() *cli.Command {
 							} else if t.StartedAt != nil {
 								took = fmtDuration(time.Since(*t.StartedAt))
 							}
-							fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\n",
+							_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\n",
 								t.ID, t.Type, t.Status, t.Progress, took, t.CreatedAt.Format(timeFmt))
 						}
-						w.Flush()
+						_ = w.Flush()
 					})
 				},
 			},

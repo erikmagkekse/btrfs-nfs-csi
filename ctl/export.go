@@ -59,11 +59,11 @@ func exportCmd() *cli.Command {
 					}
 					return output(cmd, resp, func() {
 						w := tab()
-						fmt.Fprintln(w, "PATH\tCLIENT")
+						_, _ = fmt.Fprintln(w, "PATH\tCLIENT")
 						for _, e := range resp.Exports {
-							fmt.Fprintf(w, "%s\t%s\n", e.Path, e.Client)
+							_, _ = fmt.Fprintf(w, "%s\t%s\n", e.Path, e.Client)
 						}
-						w.Flush()
+						_ = w.Flush()
 					})
 				},
 			},

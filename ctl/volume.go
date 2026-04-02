@@ -41,14 +41,14 @@ func volumeCmd() *cli.Command {
 						sortVolumesDetail(resp.Volumes, sortBy, rev)
 						return output(cmd, resp, func() {
 							w := tab()
-							fmt.Fprintln(w, "NAME\tSIZE\tUSED\tQUOTA\tCOMPRESSION\tNOCOW\tUID\tGID\tMODE\tCLIENTS\tCREATED")
+							_, _ = fmt.Fprintln(w, "NAME\tSIZE\tUSED\tQUOTA\tCOMPRESSION\tNOCOW\tUID\tGID\tMODE\tCLIENTS\tCREATED")
 							for _, v := range resp.Volumes {
-								fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\t%d\t%d\t%s\t%d\t%s\n",
+								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\t%d\t%d\t%s\t%d\t%s\n",
 									v.Name, utils.FormatBytes(v.SizeBytes), utils.FormatBytes(v.UsedBytes), utils.FormatBytes(v.QuotaBytes),
 									v.Compression, v.NoCOW, v.UID, v.GID, v.Mode,
 									len(v.Clients), v.CreatedAt.Format(timeFmt))
 							}
-							w.Flush()
+							_ = w.Flush()
 						})
 					}
 
@@ -59,13 +59,13 @@ func volumeCmd() *cli.Command {
 					sortVolumes(resp.Volumes, sortBy, rev)
 					return output(cmd, resp, func() {
 						w := tab()
-						fmt.Fprintln(w, "NAME\tSIZE\tUSED\tUSED%\tCLIENTS\tCREATED")
+						_, _ = fmt.Fprintln(w, "NAME\tSIZE\tUSED\tUSED%\tCLIENTS\tCREATED")
 						for _, v := range resp.Volumes {
-							fmt.Fprintf(w, "%s\t%s\t%s\t%.0f%%\t%d\t%s\n",
+							_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%.0f%%\t%d\t%s\n",
 								v.Name, utils.FormatBytes(v.SizeBytes), utils.FormatBytes(v.UsedBytes),
 								usedPct(v.UsedBytes, v.SizeBytes), v.Clients, v.CreatedAt.Format(timeFmt))
 						}
-						w.Flush()
+						_ = w.Flush()
 					})
 				},
 			},
@@ -175,11 +175,11 @@ func volumeCmd() *cli.Command {
 
 					force := os.Getenv("BTRFS_NFS_CSI_FORCE") == "true"
 					if !force && !cmd.Bool("confirm") {
-						fmt.Fprintf(os.Stderr, "to delete, run:\n  btrfs-nfs-csi volume delete %s --confirm\n", strings.Join(names, " "))
+						_, _ = fmt.Fprintf(os.Stderr, "to delete, run:\n  btrfs-nfs-csi volume delete %s --confirm\n", strings.Join(names, " "))
 						return nil
 					}
 					if !force && !cmd.Bool("yes") {
-						fmt.Fprintf(os.Stderr, "this will permanently destroy all data.\nto proceed, run:\n  btrfs-nfs-csi volume delete %s --confirm --yes\n", strings.Join(names, " "))
+						_, _ = fmt.Fprintf(os.Stderr, "this will permanently destroy all data.\nto proceed, run:\n  btrfs-nfs-csi volume delete %s --confirm --yes\n", strings.Join(names, " "))
 						return nil
 					}
 

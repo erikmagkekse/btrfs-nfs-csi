@@ -162,7 +162,7 @@ func tab() *tabwriter.Writer {
 func printJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	_ = enc.Encode(v)
 }
 
 func fmtDuration(d time.Duration) string {

@@ -62,7 +62,7 @@ func Run(args []string) {
 						fmt.Println("devices:")
 						w := tab()
 						if isWide(cmd) {
-							fmt.Fprintln(w, "  DEVICE\tSIZE\tALLOCATED\tREAD\tWRITTEN\tREAD_IOS\tWRITE_IOS\tREAD_ERR\tWRITE_ERR\tFLUSH_ERR\tCSUM_ERR\tGEN_ERR\tSTATUS")
+							_, _ = fmt.Fprintln(w, "  DEVICE\tSIZE\tALLOCATED\tREAD\tWRITTEN\tREAD_IOS\tWRITE_IOS\tREAD_ERR\tWRITE_ERR\tFLUSH_ERR\tCSUM_ERR\tGEN_ERR\tSTATUS")
 							for _, d := range resp.Btrfs.Devices {
 								status := "ok"
 								if d.Missing {
@@ -70,7 +70,7 @@ func Run(args []string) {
 								} else if d.Errors.ReadErrs+d.Errors.WriteErrs+d.Errors.FlushErrs+d.Errors.CorruptionErrs+d.Errors.GenerationErrs > 0 {
 									status = "ERRORS"
 								}
-								fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\n",
+								_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\n",
 									d.Device, utils.FormatBytes(d.SizeBytes), utils.FormatBytes(d.AllocatedBytes),
 									utils.FormatBytes(d.IO.ReadBytesTotal), utils.FormatBytes(d.IO.WriteBytesTotal),
 									d.IO.ReadIOsTotal, d.IO.WriteIOsTotal,
@@ -78,7 +78,7 @@ func Run(args []string) {
 									d.Errors.CorruptionErrs, d.Errors.GenerationErrs, status)
 							}
 						} else {
-							fmt.Fprintln(w, "  DEVICE\tSIZE\tALLOCATED\tREAD\tWRITTEN\tERRORS\tSTATUS")
+							_, _ = fmt.Fprintln(w, "  DEVICE\tSIZE\tALLOCATED\tREAD\tWRITTEN\tERRORS\tSTATUS")
 							for _, d := range resp.Btrfs.Devices {
 								errs := d.Errors.ReadErrs + d.Errors.WriteErrs + d.Errors.FlushErrs + d.Errors.CorruptionErrs + d.Errors.GenerationErrs
 								status := "ok"
@@ -87,13 +87,13 @@ func Run(args []string) {
 								} else if errs > 0 {
 									status = "ERRORS"
 								}
-								fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%d\t%s\n",
+								_, _ = fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%d\t%s\n",
 									d.Device, utils.FormatBytes(d.SizeBytes), utils.FormatBytes(d.AllocatedBytes),
 									utils.FormatBytes(d.IO.ReadBytesTotal), utils.FormatBytes(d.IO.WriteBytesTotal),
 									errs, status)
 							}
 						}
-						w.Flush()
+						_ = w.Flush()
 					})
 				},
 			},
@@ -115,7 +115,7 @@ func Run(args []string) {
 	}
 
 	if err := app.Run(context.Background(), append([]string{"btrfs-nfs-csi"}, args...)); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
