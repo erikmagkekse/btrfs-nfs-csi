@@ -4,13 +4,13 @@ import (
 	"net/http"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
 
 	"github.com/labstack/echo/v5"
 )
 
 type Handler struct {
 	Store *storage.Storage
-	Tasks *storage.TaskManager
 }
 
 // --- Volumes ---
@@ -50,6 +50,14 @@ func (h *Handler) ListVolumes(c *echo.Context) error {
 	vols, err := h.Store.ListVolumes(tenant)
 	if err != nil {
 		return StorageError(c, err)
+	}
+
+	if c.QueryParam("detail") == "true" {
+		resp := make([]VolumeDetailResponse, len(vols))
+		for i := range vols {
+			resp[i] = volumeDetailResponseFrom(&vols[i])
+		}
+		return c.JSON(http.StatusOK, VolumeDetailListResponse{Volumes: resp, Total: len(resp)})
 	}
 
 	resp := make([]VolumeResponse, len(vols))
@@ -265,6 +273,14 @@ func (h *Handler) ListSnapshots(c *echo.Context) error {
 		return StorageError(c, err)
 	}
 
+	if c.QueryParam("detail") == "true" {
+		resp := make([]SnapshotDetailResponse, len(snaps))
+		for i := range snaps {
+			resp[i] = snapshotDetailResponseFrom(&snaps[i])
+		}
+		return c.JSON(http.StatusOK, SnapshotDetailListResponse{Snapshots: resp, Total: len(resp)})
+	}
+
 	resp := make([]SnapshotResponse, len(snaps))
 	for i := range snaps {
 		resp[i] = snapshotResponseFrom(&snaps[i])
@@ -279,6 +295,14 @@ func (h *Handler) ListVolumeSnapshots(c *echo.Context) error {
 	snaps, err := h.Store.ListSnapshots(tenant, c.Param("name"))
 	if err != nil {
 		return StorageError(c, err)
+	}
+
+	if c.QueryParam("detail") == "true" {
+		resp := make([]SnapshotDetailResponse, len(snaps))
+		for i := range snaps {
+			resp[i] = snapshotDetailResponseFrom(&snaps[i])
+		}
+		return c.JSON(http.StatusOK, SnapshotDetailListResponse{Snapshots: resp, Total: len(resp)})
 	}
 
 	resp := make([]SnapshotResponse, len(snaps))
@@ -385,27 +409,40 @@ func (h *Handler) StartScrub(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusAccepted, map[string]any{
 		"task_id": taskID,
-		"status":  storage.TaskPending,
+		"status":  string(task.TaskPending),
 	})
 }
 
 // --- Tasks ---
 
 func (h *Handler) ListTasks(c *echo.Context) error {
-	tasks := h.Tasks.List(c.QueryParam("type"))
-	return c.JSON(http.StatusOK, TaskListResponse{Tasks: tasks, Total: len(tasks)})
+	tasks := h.Store.Tasks().List(c.QueryParam("type"))
+
+	if c.QueryParam("detail") == "true" {
+		detail := make([]TaskDetailResponse, len(tasks))
+		for i, t := range tasks {
+			detail[i] = taskDetailResponseFrom(&t)
+		}
+		return c.JSON(http.StatusOK, TaskDetailListResponse{Tasks: detail, Total: len(detail)})
+	}
+
+	resp := make([]TaskResponse, len(tasks))
+	for i, t := range tasks {
+		resp[i] = taskResponseFrom(&t)
+	}
+	return c.JSON(http.StatusOK, TaskListResponse{Tasks: resp, Total: len(resp)})
 }
 
 func (h *Handler) GetTask(c *echo.Context) error {
-	task, err := h.Tasks.Get(c.Param("id"))
+	task, err := h.Store.Tasks().Get(c.Param("id"))
 	if err != nil {
 		return StorageError(c, err)
 	}
-	return c.JSON(http.StatusOK, task)
+	return c.JSON(http.StatusOK, taskDetailResponseFrom(task))
 }
 
 func (h *Handler) CancelTask(c *echo.Context) error {
-	if err := h.Tasks.Cancel(c.Param("id")); err != nil {
+	if err := h.Store.Tasks().Cancel(c.Param("id")); err != nil {
 		return StorageError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)

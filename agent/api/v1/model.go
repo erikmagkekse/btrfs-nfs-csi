@@ -1,9 +1,11 @@
 package v1
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
 )
 
 // Type aliases - canonical definitions live in the storage package,
@@ -23,6 +25,14 @@ type (
 const (
 	HealthStatusOK       = "ok"
 	HealthStatusDegraded = "degraded"
+
+	TaskStatusPending   = string(task.TaskPending)
+	TaskStatusRunning   = string(task.TaskRunning)
+	TaskStatusCompleted = string(task.TaskCompleted)
+	TaskStatusFailed    = string(task.TaskFailed)
+	TaskStatusCancelled = string(task.TaskCancelled)
+
+	TaskTypeScrub = string(task.TypeScrub)
 )
 
 // request models (HTTP-layer only)
@@ -63,6 +73,11 @@ type VolumeListResponse struct {
 	Total   int              `json:"total"`
 }
 
+type VolumeDetailListResponse struct {
+	Volumes []VolumeDetailResponse `json:"volumes"`
+	Total   int                    `json:"total"`
+}
+
 type SnapshotResponse struct {
 	Name      string    `json:"name"`
 	Volume    string    `json:"volume"`
@@ -86,6 +101,11 @@ type SnapshotDetailResponse struct {
 type SnapshotListResponse struct {
 	Snapshots []SnapshotResponse `json:"snapshots"`
 	Total     int                `json:"total"`
+}
+
+type SnapshotDetailListResponse struct {
+	Snapshots []SnapshotDetailResponse `json:"snapshots"`
+	Total     int                      `json:"total"`
 }
 
 type CloneResponse struct {
@@ -159,9 +179,43 @@ type FilesystemStatsResponse struct {
 	Devices            []DeviceStatsResponse `json:"devices"`
 }
 
+type TaskStartResponse struct {
+	TaskID string `json:"task_id"`
+	Status string `json:"status"`
+}
+
+type TaskResponse struct {
+	ID          string     `json:"id"`
+	Type        string     `json:"type"`
+	Status      string     `json:"status"`
+	Progress    int        `json:"progress"`
+	Error       string     `json:"error,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+}
+
+type TaskDetailResponse struct {
+	ID          string          `json:"id"`
+	Type        string          `json:"type"`
+	Status      string          `json:"status"`
+	Progress    int             `json:"progress"`
+	Result      json.RawMessage `json:"result,omitempty"`
+	Info        string          `json:"info,omitempty"`
+	Error       string          `json:"error,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	StartedAt   *time.Time      `json:"started_at,omitempty"`
+	CompletedAt *time.Time      `json:"completed_at,omitempty"`
+}
+
 type TaskListResponse struct {
-	Tasks []storage.Task `json:"tasks"`
+	Tasks []TaskResponse `json:"tasks"`
 	Total int            `json:"total"`
+}
+
+type TaskDetailListResponse struct {
+	Tasks []TaskDetailResponse `json:"tasks"`
+	Total int                  `json:"total"`
 }
 
 type ErrorResponse struct {

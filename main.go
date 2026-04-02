@@ -11,6 +11,7 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/controller"
+	"github.com/erikmagkekse/btrfs-nfs-csi/ctl"
 	"github.com/erikmagkekse/btrfs-nfs-csi/driver"
 
 	"github.com/caarlos0/env/v11"
@@ -49,18 +50,29 @@ func main() {
 	case "driver":
 		runDriver()
 	default:
-		usage()
-		os.Exit(1)
+		// anything else is a ctl command: btrfs-nfs-csi volume list, etc.
+		ctl.Version = version
+		ctl.Commit = commit
+		ctl.Run(os.Args[1:])
 	}
 }
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: %s <command>
 
-Commands:
+Server commands:
   agent        Start the btrfs-nfs-csi agent
   controller   Start the CSI controller
   driver       Start the CSI node driver
+
+CLI commands:
+  volume       Manage volumes
+  snapshot     Manage snapshots
+  clone        Create clone from snapshot
+  export       Manage NFS exports
+  task         Manage background tasks
+  stats        Show filesystem stats
+  health       Show agent health
 `, os.Args[0])
 }
 

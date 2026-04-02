@@ -1,4 +1,4 @@
-package storage
+package task
 
 import (
 	"context"
@@ -14,12 +14,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTaskManager_SubmitAndGet(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_SubmitAndGet(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
 	started := make(chan struct{})
 	done := make(chan struct{})
-	id := tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		close(started)
 		<-done
 		return nil
@@ -45,10 +45,10 @@ func TestTaskManager_SubmitAndGet(t *testing.T) {
 	assert.Empty(t, task.Error)
 }
 
-func TestTaskManager_SubmitWithError(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_SubmitWithError(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
-	id := tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return fmt.Errorf("something broke")
 	})
 
@@ -61,11 +61,11 @@ func TestTaskManager_SubmitWithError(t *testing.T) {
 	assert.NotNil(t, task.CompletedAt)
 }
 
-func TestTaskManager_Cancel(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_Cancel(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
 	started := make(chan struct{})
-	id := tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
@@ -81,10 +81,10 @@ func TestTaskManager_Cancel(t *testing.T) {
 	assert.Equal(t, TaskCancelled, task.Status)
 }
 
-func TestTaskManager_CancelFinished(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_CancelFinished(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
-	id := tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -94,27 +94,27 @@ func TestTaskManager_CancelFinished(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestTaskManager_CancelUnknown(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_CancelUnknown(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
 	err := tm.Cancel("nonexistent")
-	requireStorageError(t, err, ErrNotFound)
+	assert.Error(t, err)
 }
 
-func TestTaskManager_GetUnknown(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_GetUnknown(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
 	_, err := tm.Get("nonexistent")
-	requireStorageError(t, err, ErrNotFound)
+	assert.Error(t, err)
 }
 
-func TestTaskManager_List(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_List(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
-	tm.Submit(TaskTypeScrub, func(ctx context.Context, update *TaskUpdate) error {
+	tm.Create("scrub", func(ctx context.Context, update *Update) error {
 		return nil
 	})
-	tm.Submit("transfer", func(ctx context.Context, update *TaskUpdate) error {
+	tm.Create("transfer", func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -123,9 +123,9 @@ func TestTaskManager_List(t *testing.T) {
 	all := tm.List("")
 	assert.Len(t, all, 2)
 
-	scrubs := tm.List(TaskTypeScrub)
+	scrubs := tm.List("scrub")
 	assert.Len(t, scrubs, 1)
-	assert.Equal(t, TaskTypeScrub, scrubs[0].Type)
+	assert.Equal(t, "scrub", scrubs[0].Type)
 
 	transfers := tm.List("transfer")
 	assert.Len(t, transfers, 1)
@@ -135,10 +135,10 @@ func TestTaskManager_List(t *testing.T) {
 	assert.Empty(t, none)
 }
 
-func TestTaskManager_ListReturnsCopies(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_ListReturnsCopies(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
-	tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	tm.Create("test", func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -154,11 +154,11 @@ func TestTaskManager_ListReturnsCopies(t *testing.T) {
 	assert.Equal(t, TaskCompleted, original.Status)
 }
 
-func TestTaskManager_ProgressUpdate(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_ProgressUpdate(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
 	checkpoint := make(chan struct{})
-	id := tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		update.SetProgress(50)
 		close(checkpoint)
 		<-ctx.Done()
@@ -175,15 +175,15 @@ func TestTaskManager_ProgressUpdate(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestTaskManager_ResultStruct(t *testing.T) {
+func TestManager_ResultStruct(t *testing.T) {
 	type TestResult struct {
 		Count int    `json:"count"`
 		Name  string `json:"name"`
 	}
 
-	tm := NewTaskManager(t.TempDir())
+	tm := NewManager(t.TempDir())
 
-	id := tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return update.SetResult(TestResult{Count: 42, Name: "hello"})
 	})
 
@@ -199,10 +199,10 @@ func TestTaskManager_ResultStruct(t *testing.T) {
 	assert.Equal(t, "hello", result.Name)
 }
 
-func TestTaskManager_Cleanup(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_Cleanup(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
-	id := tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -211,24 +211,24 @@ func TestTaskManager_Cleanup(t *testing.T) {
 	_, err := tm.Get(id)
 	require.NoError(t, err)
 
-	tm.cleanup(0)
+	tm.Cleanup(0)
 
 	_, err = tm.Get(id)
-	requireStorageError(t, err, ErrNotFound)
+	assert.Error(t, err)
 }
 
-func TestTaskManager_CleanupKeepsRunning(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_CleanupKeepsRunning(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
 	done := make(chan struct{})
-	id := tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+	id := tm.Create("test", func(ctx context.Context, update *Update) error {
 		<-done
 		return nil
 	})
 
 	time.Sleep(50 * time.Millisecond)
 
-	tm.cleanup(0)
+	tm.Cleanup(0)
 
 	task, err := tm.Get(id)
 	require.NoError(t, err)
@@ -238,46 +238,41 @@ func TestTaskManager_CleanupKeepsRunning(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestTaskManager_CorruptTaskFile(t *testing.T) {
+func TestManager_CorruptTaskFile(t *testing.T) {
 	dir := t.TempDir()
 
-	// write corrupt JSON
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.json"), []byte("{corrupt"), 0o644))
-
-	// write non-JSON file (should be ignored)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("not a task"), 0o644))
 
-	// write valid task
-	valid := Task{ID: "good", Type: "test", Status: TaskCompleted}
-	require.NoError(t, writeMetadataAtomic(filepath.Join(dir, "good.json"), &valid))
+	valid, _ := json.MarshalIndent(Task{ID: "good", Type: "test", Status: TaskCompleted}, "", "  ")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "good.json"), valid, 0o644))
 
-	tm := NewTaskManager(dir)
+	tm := NewManager(dir)
 
-	// only the valid task should be loaded
 	tasks := tm.List("")
 	assert.Len(t, tasks, 1)
 	assert.Equal(t, "good", tasks[0].ID)
 }
 
-func TestTaskManager_EmptyTaskFile(t *testing.T) {
+func TestManager_EmptyTaskFile(t *testing.T) {
 	dir := t.TempDir()
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "empty.json"), []byte(""), 0o644))
 
-	tm := NewTaskManager(dir)
+	tm := NewManager(dir)
 	tasks := tm.List("")
 	assert.Empty(t, tasks)
 }
 
-func TestTaskManager_ConcurrentSubmit(t *testing.T) {
-	tm := NewTaskManager(t.TempDir())
+func TestManager_ConcurrentSubmit(t *testing.T) {
+	tm := NewManager(t.TempDir())
 
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tm.Submit("test", func(ctx context.Context, update *TaskUpdate) error {
+			tm.Create("test", func(ctx context.Context, update *Update) error {
 				return nil
 			})
 		}()

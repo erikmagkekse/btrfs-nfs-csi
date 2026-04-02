@@ -64,7 +64,7 @@ func (a *Agent) Start(ctx context.Context) {
 		a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames,
 		a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin,
 	)
-	h := &v1.Handler{Store: store, Tasks: store.Tasks()}
+	h := &v1.Handler{Store: store}
 
 	// unauthenticated endpoints
 	e.GET("/healthz", v1.Healthz(a.version, a.commit, features, store))

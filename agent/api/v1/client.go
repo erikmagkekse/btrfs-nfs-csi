@@ -99,6 +99,14 @@ func (c *Client) ListVolumes(ctx context.Context) (*VolumeListResponse, error) {
 	return &resp, nil
 }
 
+func (c *Client) ListVolumesDetail(ctx context.Context) (*VolumeDetailListResponse, error) {
+	var resp VolumeDetailListResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes?detail=true", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 func (c *Client) GetVolume(ctx context.Context, name string) (*VolumeDetailResponse, error) {
 	var resp VolumeDetailResponse
 	if err := c.do(ctx, http.MethodGet, "/v1/volumes/"+name, nil, &resp); err != nil {
@@ -123,12 +131,80 @@ func (c *Client) ListVolumeSnapshots(ctx context.Context, volume string) (*Snaps
 	return &resp, nil
 }
 
+func (c *Client) ListVolumeSnapshotsDetail(ctx context.Context, volume string) (*SnapshotDetailListResponse, error) {
+	var resp SnapshotDetailListResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes/"+volume+"/snapshots?detail=true", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) ListSnapshotsDetail(ctx context.Context) (*SnapshotDetailListResponse, error) {
+	var resp SnapshotDetailListResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/snapshots?detail=true", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 func (c *Client) GetSnapshot(ctx context.Context, name string) (*SnapshotDetailResponse, error) {
 	var resp SnapshotDetailResponse
 	if err := c.do(ctx, http.MethodGet, "/v1/snapshots/"+name, nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
+}
+
+func (c *Client) ListExports(ctx context.Context) (*ExportListResponse, error) {
+	var resp ExportListResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/exports", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) CreateTask(ctx context.Context, taskType string, opts any) (*TaskStartResponse, error) {
+	var resp TaskStartResponse
+	if err := c.do(ctx, http.MethodPost, "/v1/tasks/"+taskType, opts, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) ListTasks(ctx context.Context, taskType string) (*TaskListResponse, error) {
+	var resp TaskListResponse
+	path := "/v1/tasks"
+	if taskType != "" {
+		path += "?type=" + taskType
+	}
+	if err := c.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) ListTasksDetail(ctx context.Context, taskType string) (*TaskDetailListResponse, error) {
+	var resp TaskDetailListResponse
+	path := "/v1/tasks?detail=true"
+	if taskType != "" {
+		path += "&type=" + taskType
+	}
+	if err := c.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) GetTask(ctx context.Context, id string) (*TaskDetailResponse, error) {
+	var resp TaskDetailResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/tasks/"+id, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) CancelTask(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/v1/tasks/"+id, nil, nil)
 }
 
 func (c *Client) Stats(ctx context.Context) (*StatsResponse, error) {
