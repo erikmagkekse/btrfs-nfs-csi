@@ -40,3 +40,15 @@ type QgroupInfo struct {
 	Referenced uint64
 	Exclusive  uint64
 }
+
+type ScrubStatus struct {
+	DataBytesScrubbed uint64 `json:"data_bytes_scrubbed"`
+	TreeBytesScrubbed uint64 `json:"tree_bytes_scrubbed"`
+	ReadErrors        uint64 `json:"read_errors"`
+	CSumErrors        uint64 `json:"csum_errors"`
+	VerifyErrors      uint64 `json:"verify_errors"`
+	SuperErrors       uint64 `json:"super_errors"`
+	UncorrectableErrs uint64 `json:"uncorrectable_errors"`
+	CorrectedErrs     uint64 `json:"corrected_errors"`
+	Running           bool   `json:"running"`
+}

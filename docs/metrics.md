@@ -1,8 +1,8 @@
 # Metrics
 
-38 metrics across 3 components.
+40 metrics across 3 components.
 
-## Agent (29) - port 9090
+## Agent (31) - port 9090
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -35,6 +35,8 @@
 | `btrfs_nfs_csi_agent_filesystem_metadata_used_bytes` | Gauge | `path` |
 | `btrfs_nfs_csi_agent_filesystem_metadata_total_bytes` | Gauge | `path` |
 | `btrfs_nfs_csi_agent_filesystem_data_ratio` | Gauge | `path` |
+| `btrfs_nfs_csi_agent_tasks_total` | Counter | `type`, `status` |
+| `btrfs_nfs_csi_agent_task_duration_seconds` | Histogram | `type` |
 
 **Buckets (http_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]`
 

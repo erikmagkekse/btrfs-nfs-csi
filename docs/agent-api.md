@@ -336,6 +336,69 @@ Filesystem space usage, per-device IO counters (from sysfs), per-device btrfs er
 }
 ```
 
+## Tasks
+
+Background task system for long-running operations (scrub, future: transfers). Tasks are persisted to disk and survive agent restarts. Running tasks that were interrupted by an agent restart are marked as `failed`.
+
+### POST /v1/tasks/scrub
+
+Starts a btrfs scrub on the filesystem. Returns 423 if a scrub is already running.
+
+```json
+// Response 202
+{
+  "task_id": "bba30993dee31318f016f5350718cffa",
+  "status": "pending"
+}
+```
+
+```bash
+curl -X POST http://10.0.0.5:8080/v1/tasks/scrub \
+  -H "Authorization: Bearer changeme"
+```
+
+### GET /v1/tasks
+
+List all tasks. Optional `?type=scrub` filter.
+
+```json
+{
+  "tasks": [
+    {
+      "id": "bba30993dee31318f016f5350718cffa",
+      "type": "scrub",
+      "status": "completed",
+      "progress": 100,
+      "result": {
+        "data_bytes_scrubbed": 3145728000,
+        "tree_bytes_scrubbed": 6979584,
+        "read_errors": 0,
+        "csum_errors": 0,
+        "verify_errors": 0,
+        "super_errors": 0,
+        "uncorrectable_errors": 0,
+        "corrected_errors": 0,
+        "running": false
+      },
+      "created_at": "2025-01-15T02:00:00Z",
+      "started_at": "2025-01-15T02:00:00Z",
+      "completed_at": "2025-01-15T02:00:05Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+### GET /v1/tasks/:id
+
+Returns a single task. 404 if not found.
+
+### DELETE /v1/tasks/:id
+
+Cancels a running task. 204 No Content. 404 if not found. Cancelling a finished task is a no-op.
+
+Task statuses: `pending`, `running`, `completed`, `failed`, `cancelled`.
+
 ## Dashboard
 
 ### GET /v1/dashboard

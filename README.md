@@ -46,11 +46,13 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - Dynamic device discovery with live stats, hot-added devices are picked up automatically
 - Prometheus `/metrics` on all components
 - Web dashboard (`/v1/dashboard`)
+- Background task system with progress tracking and persistence
+- Filesystem scrub via API (`POST /v1/tasks/scrub`)
 - TLS support
 - HA via DRBD + Pacemaker (active/passive failover)
 
 **Roadmap:**
-NFS-Ganesha support, `VOLUME_CONDITION` health reporting
+NFS-Ganesha support, cross-agent snapshot transfers, `VOLUME_CONDITION` health reporting
 
 ## Quick Start
 

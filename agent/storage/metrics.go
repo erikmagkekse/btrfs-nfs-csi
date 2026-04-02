@@ -195,6 +195,22 @@ var (
 		Name:      "filesystem_data_ratio",
 		Help:      "Data RAID profile ratio (1.0 for single, 2.0 for RAID1/DUP).",
 	}, []string{"path"})
+
+	// Task metrics
+	TasksTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "agent",
+		Name:      "tasks_total",
+		Help:      "Total number of completed tasks by type and status.",
+	}, []string{"type", "status"})
+
+	TaskDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "agent",
+		Name:      "task_duration_seconds",
+		Help:      "Duration of tasks in seconds.",
+		Buckets:   prometheus.ExponentialBuckets(1, 2, 15),
+	}, []string{"type"})
 )
 
 func init() {
@@ -229,5 +245,8 @@ func init() {
 		FilesystemMetadataUsedBytes,
 		FilesystemMetadataTotalBytes,
 		FilesystemDataRatio,
+		// Tasks
+		TasksTotal,
+		TaskDuration,
 	)
 }

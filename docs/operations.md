@@ -148,3 +148,27 @@ nfsvers=4.2,hard,noatime,rsize=1048576,wsize=1048576,nconnect=8
 ```
 
 **Mount timeouts:** NFS/bind mount 2min, unmount falls back to `umount -f`.
+
+## Scrub
+
+btrfs scrub verifies data integrity by reading all blocks and checking checksums. Runs as a background task via the task system.
+
+```bash
+# Start scrub
+curl -X POST http://10.0.0.5:8080/v1/tasks/scrub \
+  -H "Authorization: Bearer changeme"
+# {"task_id": "abc123", "status": "pending"}
+
+# Poll progress
+curl http://10.0.0.5:8080/v1/tasks/abc123 \
+  -H "Authorization: Bearer changeme"
+# {"status": "running", "progress": 42, ...}
+
+# Cancel
+curl -X DELETE http://10.0.0.5:8080/v1/tasks/abc123 \
+  -H "Authorization: Bearer changeme"
+```
+
+Only one scrub can run at a time per filesystem. The agent detects externally started scrubs (e.g. via `btrfs scrub start` on the host) and rejects duplicates.
+
+Completed tasks include a result with bytes scrubbed and error counts. Tasks are persisted to disk and cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h).

@@ -179,6 +179,47 @@ func parseKVBytes(line string) (key string, val uint64, ok bool) {
 	return key, v, true
 }
 
+// parseScrubStatus parses `btrfs scrub status -R` output.
+// Key lines: "Status: running/finished/aborted/no stats available"
+// and "key: value" pairs for counters.
+func parseScrubStatus(out string) (*ScrubStatus, error) {
+	s := &ScrubStatus{}
+	for _, line := range strings.Split(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "Status":
+			s.Running = val == "running"
+		case "data_bytes_scrubbed":
+			s.DataBytesScrubbed, _ = strconv.ParseUint(val, 10, 64)
+		case "tree_bytes_scrubbed":
+			s.TreeBytesScrubbed, _ = strconv.ParseUint(val, 10, 64)
+		case "read_errors":
+			s.ReadErrors, _ = strconv.ParseUint(val, 10, 64)
+		case "csum_errors":
+			s.CSumErrors, _ = strconv.ParseUint(val, 10, 64)
+		case "verify_errors":
+			s.VerifyErrors, _ = strconv.ParseUint(val, 10, 64)
+		case "super_errors":
+			s.SuperErrors, _ = strconv.ParseUint(val, 10, 64)
+		case "uncorrectable_errors":
+			s.UncorrectableErrs, _ = strconv.ParseUint(val, 10, 64)
+		case "corrected_errors":
+			s.CorrectedErrs, _ = strconv.ParseUint(val, 10, 64)
+		}
+	}
+	return s, nil
+}
+
 // parseProfileSizeUsed parses "Metadata,DUP: Size:1073741824, Used:536870912".
 func parseProfileSizeUsed(line string) (size, used uint64) {
 	if idx := strings.Index(line, "Size:"); idx >= 0 {
