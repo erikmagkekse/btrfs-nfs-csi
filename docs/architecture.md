@@ -52,6 +52,8 @@ DeleteVolume   → DELETE /v1/volumes/:name (subvolume delete)
 
 Long-running operations (scrub, future: cross-agent transfers) run as background tasks with progress tracking.
 
+- Worker pool limits concurrent tasks (`AGENT_TASK_MAX_CONCURRENT`, default 2, 0 = unlimited)
+- Tasks that exceed the limit queue as `pending` until a slot frees up
 - Tasks are persisted as JSON files under `{AGENT_BASE_PATH}/tasks/`
 - Progress is tracked in-memory via atomic pointers (no disk IO per update)
 - Status transitions (pending, running, completed, failed, cancelled) are persisted to disk

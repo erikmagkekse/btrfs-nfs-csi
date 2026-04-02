@@ -153,6 +153,32 @@ func taskCmd() *cli.Command {
 							return waitForTask(ctx, c, resp.TaskID)
 						},
 					},
+					{
+						Name:  v1.TaskTypeTest,
+						Usage: "start a test task",
+						Flags: []cli.Flag{
+							&cli.DurationFlag{Name: "sleep", Aliases: []string{"s"}, Usage: "sleep duration (e.g. 10s, 1m)"},
+							&cli.BoolFlag{Name: "wait", Aliases: []string{"w"}, Usage: "wait for completion"},
+						},
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+							c := clientFrom(cmd)
+							var opts any
+							if s := cmd.Duration("sleep"); s > 0 {
+								opts = map[string]string{"sleep": s.String()}
+							}
+							resp, err := c.CreateTask(ctx, v1.TaskTypeTest, opts)
+							if err != nil {
+								return err
+							}
+							if !cmd.Bool("wait") {
+								return output(cmd, resp, func() {
+									fmt.Printf("test task started (task %s)\n", resp.TaskID)
+								})
+							}
+							fmt.Printf("test task started (task %s)\n", resp.TaskID)
+							return waitForTask(ctx, c, resp.TaskID)
+						},
+					},
 				},
 			},
 		},

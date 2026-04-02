@@ -24,6 +24,7 @@ type TaskType string
 
 const (
 	TypeScrub TaskType = "scrub"
+	TypeTest  TaskType = "test"
 )
 
 // ErrNotFound is returned when a task ID doesn't exist.

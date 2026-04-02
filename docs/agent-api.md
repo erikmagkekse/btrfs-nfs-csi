@@ -363,9 +363,26 @@ curl -X POST http://10.0.0.5:8080/v1/tasks/scrub \
   -H "Authorization: Bearer changeme"
 ```
 
+### POST /v1/tasks/test
+
+Starts a test task for debugging. Optional `sleep` parameter. Result is always `{"message": "Hallo Welt"}`.
+
+```json
+// Request (optional)
+{
+  "sleep": "10s"
+}
+
+// Response 202
+{
+  "task_id": "abc123",
+  "status": "pending"
+}
+```
+
 ### GET /v1/tasks
 
-List all tasks. Optional `?type=scrub` filter. Returns a summary without the `result` field. Append `?detail=true` to include `result`.
+List all tasks. Optional `?type=` filter (e.g. `scrub`, `test`). Returns a summary without the `result` field. Append `?detail=true` to include `result`.
 
 ```json
 {

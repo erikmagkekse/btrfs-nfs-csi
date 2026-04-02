@@ -64,6 +64,7 @@ func (a *Agent) Start(ctx context.Context) {
 	store := storage.New(
 		a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames,
 		a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin,
+		a.cfg.TaskMaxConcurrent,
 	)
 	h := &v1.Handler{Store: store}
 
@@ -96,6 +97,7 @@ func (a *Agent) Start(ctx context.Context) {
 
 	api.GET("/tasks", h.ListTasks)
 	api.POST("/tasks/scrub", h.StartScrub)
+	api.POST("/tasks/test", h.StartTestTask)
 	api.GET("/tasks/:id", h.GetTask)
 	api.DELETE("/tasks/:id", h.CancelTask)
 

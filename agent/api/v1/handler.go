@@ -413,6 +413,21 @@ func (h *Handler) StartScrub(c *echo.Context) error {
 	})
 }
 
+// --- Test Task ---
+
+func (h *Handler) StartTestTask(c *echo.Context) error {
+	var opts storage.TestTaskOpts
+	_ = c.Bind(&opts)
+	taskID, err := h.Store.StartTestTask(c.Request().Context(), opts)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	return c.JSON(http.StatusAccepted, map[string]any{
+		"task_id": taskID,
+		"status":  string(task.TaskPending),
+	})
+}
+
 // --- Tasks ---
 
 func (h *Handler) ListTasks(c *echo.Context) error {

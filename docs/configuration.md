@@ -23,6 +23,7 @@
 | `AGENT_DEFAULT_DIR_MODE` | `0700` | Default mode for volume/snapshot/clone directories |
 | `AGENT_DEFAULT_DATA_MODE` | `2770` | Default mode for data subvolumes (setgid + group rwx) |
 | `AGENT_TASK_CLEANUP_INTERVAL` | `24h` | Remove completed/failed tasks after this duration |
+| `AGENT_TASK_MAX_CONCURRENT` | `2` | Max concurrent tasks (`0` = unlimited) |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 
 ## CLI Environment Variables

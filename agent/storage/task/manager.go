@@ -16,17 +16,26 @@ type Manager struct {
 	mu      sync.Mutex
 	tasks   map[string]*runningTask
 	taskDir string
+	sem     chan struct{}
 }
 
 // NewManager creates a new Manager with persistence under taskDir.
-func NewManager(taskDir string) *Manager {
+// maxConcurrent limits the number of tasks running simultaneously.
+func NewManager(taskDir string, maxConcurrent int) *Manager {
 	if err := os.MkdirAll(taskDir, 0o755); err != nil {
 		log.Fatal().Err(err).Str("path", taskDir).Msg("failed to create tasks directory")
 	}
-
 	tm := &Manager{
 		tasks:   make(map[string]*runningTask),
 		taskDir: taskDir,
+	}
+	if maxConcurrent > 0 {
+		tm.sem = make(chan struct{}, maxConcurrent)
+		tasksWorkers.Set(float64(maxConcurrent))
+		log.Info().Int("workers", maxConcurrent).Msg("task manager initialized")
+	} else {
+		tasksWorkers.Set(0)
+		log.Warn().Msg("task manager initialized with unlimited concurrency")
 	}
 	tm.loadFromDisk()
 	return tm
@@ -52,13 +61,40 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 	tm.tasks[id] = rt
 	tm.mu.Unlock()
 
+	tm.persist(t)
 	log.Info().Str("task", id).Str("type", taskType).Msg("task submitted")
 
 	go func() {
+		// Wait for a worker slot (nil sem = unlimited)
+		if tm.sem != nil {
+			tasksQueued.WithLabelValues(taskType).Inc()
+			select {
+			case tm.sem <- struct{}{}:
+				tasksQueued.WithLabelValues(taskType).Dec()
+				defer func() {
+					<-tm.sem
+					tasksRunning.WithLabelValues(taskType).Dec()
+				}()
+			case <-ctx.Done():
+				tasksQueued.WithLabelValues(taskType).Dec()
+				now := time.Now().UTC()
+				final := *rt.state.Load()
+				final.Status = TaskCancelled
+				final.CompletedAt = &now
+				rt.state.Store(&final)
+				tm.persist(&final)
+				tasksTotal.WithLabelValues(taskType, string(TaskCancelled)).Inc()
+				log.Info().Str("task", id).Str("type", taskType).Msg("task cancelled while pending")
+				return
+			}
+		}
+
+		tasksRunning.WithLabelValues(taskType).Inc()
+
 		start := time.Now()
 		startUTC := start.UTC()
 
-		running := *t
+		running := *rt.state.Load()
 		running.Status = TaskRunning
 		running.StartedAt = &startUTC
 		rt.state.Store(&running)
