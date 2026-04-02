@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -234,6 +236,37 @@ func TestTaskManager_CleanupKeepsRunning(t *testing.T) {
 
 	close(done)
 	time.Sleep(50 * time.Millisecond)
+}
+
+func TestTaskManager_CorruptTaskFile(t *testing.T) {
+	dir := t.TempDir()
+
+	// write corrupt JSON
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.json"), []byte("{corrupt"), 0o644))
+
+	// write non-JSON file (should be ignored)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("not a task"), 0o644))
+
+	// write valid task
+	valid := Task{ID: "good", Type: "test", Status: TaskCompleted}
+	require.NoError(t, writeMetadataAtomic(filepath.Join(dir, "good.json"), &valid))
+
+	tm := NewTaskManager(dir)
+
+	// only the valid task should be loaded
+	tasks := tm.List("")
+	assert.Len(t, tasks, 1)
+	assert.Equal(t, "good", tasks[0].ID)
+}
+
+func TestTaskManager_EmptyTaskFile(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "empty.json"), []byte(""), 0o644))
+
+	tm := NewTaskManager(dir)
+	tasks := tm.List("")
+	assert.Empty(t, tasks)
 }
 
 func TestTaskManager_ConcurrentSubmit(t *testing.T) {

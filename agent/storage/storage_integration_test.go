@@ -501,3 +501,54 @@ func (s *StorageIntegrationSuite) TestTaskCleanupRemovesFiles() {
 	_, err = s.storage.Tasks().Get(id)
 	requireStorageError(s.T(), err, ErrNotFound)
 }
+
+func (s *StorageIntegrationSuite) TestScrubOnEmptyFilesystem() {
+	// no volumes, no data -- scrub should still work
+	taskID, err := s.storage.StartScrub(s.ctx)
+	s.Require().NoError(err)
+
+	for i := 0; i < 30; i++ {
+		task, err := s.storage.Tasks().Get(taskID)
+		s.Require().NoError(err)
+		if task.Status == TaskCompleted || task.Status == TaskFailed {
+			s.Assert().Equal(TaskCompleted, task.Status)
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
+	taskDir := filepath.Join(s.mnt, config.TasksDir)
+
+	// simulate a scrub that was running when agent crashed
+	staleTask := Task{
+		ID:     "stale-scrub",
+		Type:   TaskTypeScrub,
+		Status: TaskRunning,
+	}
+	s.Require().NoError(writeMetadataAtomic(filepath.Join(taskDir, "stale-scrub.json"), &staleTask))
+
+	// create new TaskManager (simulates agent restart)
+	tm := NewTaskManager(taskDir)
+
+	// stale scrub should be failed
+	task, err := tm.Get("stale-scrub")
+	s.Require().NoError(err)
+	s.Assert().Equal(TaskFailed, task.Status)
+	s.Assert().Equal("agent restarted", task.Error)
+
+	// should be able to start a new scrub (stale one doesn't block)
+	s.storage.tasks = tm
+	newID, err := s.storage.StartScrub(s.ctx)
+	s.Require().NoError(err)
+	s.Assert().NotEmpty(newID)
+
+	for i := 0; i < 30; i++ {
+		t, _ := tm.Get(newID)
+		if t.Status == TaskCompleted || t.Status == TaskFailed {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
