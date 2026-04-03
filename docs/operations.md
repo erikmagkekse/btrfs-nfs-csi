@@ -220,9 +220,8 @@ btrfs-nfs-csi volume delete my-vol --confirm --yes
 btrfs-nfs-csi snapshot list
 btrfs-nfs-csi snapshot list my-vol          # filter by volume
 btrfs-nfs-csi snapshot create my-vol snap-1
+btrfs-nfs-csi snapshot clone snap-1 new-vol # clone from snapshot
 btrfs-nfs-csi snapshot delete snap-1 --confirm --yes
-
-btrfs-nfs-csi clone create snap-1 new-vol   # clone from snapshot
 
 btrfs-nfs-csi export list
 btrfs-nfs-csi export add my-vol 10.1.0.50

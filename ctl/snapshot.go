@@ -11,6 +11,24 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+func snapshotCloneCmd() *cli.Command {
+	return &cli.Command{
+		Name:      "clone",
+		Usage:     "create writable clone from snapshot",
+		ArgsUsage: "<snapshot> <name>",
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if cmd.NArg() < 2 {
+				return fmt.Errorf("usage: snapshot clone <snapshot> <name>")
+			}
+			resp, err := clientFrom(cmd).CreateClone(ctx, v1.CloneCreateRequest{Snapshot: cmd.Args().Get(0), Name: cmd.Args().Get(1)})
+			if err != nil {
+				return wrapErr(err, "clone", cmd.Args().Get(1))
+			}
+			return output(cmd, resp, func() { fmt.Printf("clone %q created from snapshot %q\n", resp.Name, resp.SourceSnapshot) })
+		},
+	}
+}
+
 func snapshotCmd() *cli.Command {
 	return &cli.Command{
 		Name:    "snapshot",
@@ -154,6 +172,7 @@ func snapshotCmd() *cli.Command {
 					})
 				},
 			},
+			snapshotCloneCmd(),
 		},
 	}
 }
