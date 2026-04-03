@@ -4,31 +4,48 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/rs/zerolog/log"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/mount-utils"
 )
 
-func Start(ctx context.Context, endpoint, nodeID, nodeIP, metricsAddr, version string) error {
+func Start(ctx context.Context, endpoint, nodeID, nodeIP, metricsAddr, version string, healthCheckInterval time.Duration) error {
 	startMetricsServer(metricsAddr)
 
 	srv, err := csiserver.New(endpoint, version, metricsInterceptor)
 	if err != nil {
 		return fmt.Errorf("create CSI server on %s: %w", endpoint, err)
 	}
-	csi.RegisterNodeServer(srv.GRPC(), &NodeServer{nodeID: nodeID, nodeIP: nodeIP, mounter: mount.New("")})
+	ns := &NodeServer{nodeID: nodeID, nodeIP: nodeIP, mounter: mount.New("")}
+	if healthCheckInterval > 0 {
+		cfg, err := rest.InClusterConfig()
+		if err != nil {
+			log.Warn().Err(err).Msg("k8s in-cluster config unavailable, health checker events disabled")
+		} else {
+			ns.kubeClient = kubernetes.NewForConfigOrDie(cfg)
+			log.Debug().Str("host", cfg.Host).Msg("health checker: k8s API endpoint")
+		}
+		go ns.startHealthChecker(ctx, healthCheckInterval)
+	}
+	csi.RegisterNodeServer(srv.GRPC(), ns)
 	return srv.Run(ctx, "driver")
 }
 
 type NodeServer struct {
 	csi.UnimplementedNodeServer
-	nodeID  string
-	nodeIP  string
-	mounter mount.Interface
-	locks   sync.Map
+	nodeID      string
+	nodeIP      string
+	mounter     mount.Interface
+	kubeClient  kubernetes.Interface
+	locks       sync.Map
+	healthState sync.Map
 }
 
 func (s *NodeServer) volumeLock(id string) func() {
@@ -52,6 +69,13 @@ func (s *NodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabi
 				Type: &csi.NodeServiceCapability_Rpc{
 					Rpc: &csi.NodeServiceCapability_RPC{
 						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+					},
+				},
+			},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
 					},
 				},
 			},

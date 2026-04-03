@@ -52,6 +52,7 @@ Also configurable via `--agent-url` and `--agent-token` flags.
 | `DRIVER_STORAGE_CIDR` | - | Storage subnet CIDR (priority 2) |
 | `DRIVER_ENDPOINT` | `unix:///csi/csi.sock` | gRPC socket |
 | `DRIVER_METRICS_ADDR` | `:9090` | Metrics address |
+| `DRIVER_HEALTH_CHECK_INTERVAL` | `30s` | NFS mount health check interval. Set to `0` to disable. |
 
 **IP resolution order:** `DRIVER_STORAGE_INTERFACE` > `DRIVER_STORAGE_CIDR` > `DRIVER_NODE_IP`. At least one required.
 

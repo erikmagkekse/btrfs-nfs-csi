@@ -15,7 +15,20 @@ import (
 	"strings"
 )
 
-const base = "https://kubernetes.default.svc"
+// apiBase returns the k8s API server URL.
+// Uses KUBERNETES_SERVICE_HOST/PORT env vars (works with hostNetwork pods)
+// and falls back to the DNS name (works with pod network).
+func apiBase() string {
+	if host := os.Getenv("KUBERNETES_SERVICE_HOST"); host != "" {
+		port := os.Getenv("KUBERNETES_SERVICE_PORT")
+		if port == "" {
+			port = "443"
+		}
+		return "https://" + host + ":" + port
+	}
+	return "https://kubernetes.default.svc"
+}
+
 const saPath = "/var/run/secrets/kubernetes.io/serviceaccount/"
 
 var httpClient *http.Client
@@ -54,7 +67,7 @@ func Do(ctx context.Context, method, path, contentType string, body io.Reader) (
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, base+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, apiBase()+path, body)
 	if err != nil {
 		return nil, err
 	}

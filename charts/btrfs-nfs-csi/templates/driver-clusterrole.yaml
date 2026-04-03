@@ -9,6 +9,17 @@ rules:
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "patch"]
+  {{- if gt (include "btrfs-nfs-csi.healthCheckEnabled" . | int) 0 }}
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+  {{- end }}
   {{- with .Values.rbac.driverExtraRules }}
   {{- toYaml . | nindent 2 }}
   {{- end }}

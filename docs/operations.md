@@ -149,6 +149,33 @@ nfsvers=4.2,hard,noatime,rsize=1048576,wsize=1048576,nconnect=8
 
 **Mount timeouts:** NFS/bind mount 2min, unmount falls back to `umount -f`.
 
+## NFS Mount Health
+
+The node driver runs a background health checker that detects and auto-heals stale NFS mounts. This handles the case where an NFS server goes down while pods are running, causing mounts to hang indefinitely on hard-mount NFS.
+
+**How it works:**
+
+1. Every `DRIVER_HEALTH_CHECK_INTERVAL` (default 30s), the health checker scans active mounts for NFS staging mounts
+2. Each mount is tested with a 5s stat timeout. A stale mount causes stat to hang or return ESTALE/EIO
+3. On stale detection: fresh NFS remount over the stale mount at the same staging path
+4. All existing bind mounts (running pods) heal automatically because they share the same VFS path
+5. A k8s Warning event is written on the PVC (`MountAutoHealed` or `MountRemountFailed`)
+6. `VOLUME_CONDITION` is reported via `NodeGetVolumeStats` for kubelet visibility
+
+**No pod restarts required.** The remount at the staging path restores I/O for all pods using that volume.
+
+**Monitoring:**
+
+```promql
+# Stale mounts detected per hour
+increase(btrfs_nfs_csi_node_health_checks_total{result="stale"}[1h])
+
+# Failed remounts (needs operator attention)
+increase(btrfs_nfs_csi_node_health_checks_total{result="remount_failed"}[1h]) > 0
+```
+
+**Disable:** Set `DRIVER_HEALTH_CHECK_INTERVAL=0`.
+
 ## Scrub
 
 btrfs scrub verifies data integrity by reading all blocks and checking checksums. Runs as a background task via the task system.

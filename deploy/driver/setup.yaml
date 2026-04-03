@@ -105,6 +105,15 @@ rules:
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -311,6 +320,8 @@ spec:
               value: unix:///csi/csi.sock
             - name: DRIVER_METRICS_ADDR
               value: ":9090"
+            - name: DRIVER_HEALTH_CHECK_INTERVAL
+              value: "30s"
           ports:
             - name: metrics
               containerPort: 9090

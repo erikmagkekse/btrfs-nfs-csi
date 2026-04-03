@@ -1,7 +1,6 @@
 package driver
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"os"
@@ -33,7 +32,7 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 	// Resolve the staging path from /proc/self/mountinfo by matching the volume name in NFS sources.
 	stagingPath := req.StagingTargetPath
 	if stagingPath == "" {
-		stagingPath = findStagingPath(req.VolumeId)
+		stagingPath = s.findStagingPath(req.VolumeId)
 	}
 
 	log.Debug().Str("volume", req.VolumeId).Str("volumePath", req.VolumePath).Str("stagingPath", stagingPath).Msg("looking up volume stats")
@@ -56,18 +55,24 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 						avail = 0
 					}
 					volumeStatsOpsTotal.WithLabelValues("success").Inc()
-					return &csi.NodeGetVolumeStatsResponse{
+					resp := &csi.NodeGetVolumeStatsResponse{
 						Usage: []*csi.VolumeUsage{{
 							Available: avail,
 							Total:     total,
 							Used:      used,
 							Unit:      csi.VolumeUsage_BYTES,
 						}},
-					}, nil
+					}
+					s.attachVolumeCondition(req.VolumeId, resp)
+					return resp, nil
 				}
 				// Quota disabled: fallback to statfs
 				log.Debug().Str("volume", req.VolumeId).Msg("quota not configured, falling back to statfs")
-				return statfsResponse(req.VolumePath)
+				resp, err := statfsResponse(req.VolumePath)
+				if err == nil {
+					s.attachVolumeCondition(req.VolumeId, resp)
+				}
+				return resp, err
 			}
 		}
 	}
@@ -79,52 +84,43 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 	return nil, status.Errorf(codes.Internal, "failed to read %s for volume %s from %s", config.MetadataFile, req.VolumeId, stagingPath)
 }
 
-// findStagingPath parses /proc/self/mountinfo to find the globalmount staging path for a volume.
-func findStagingPath(volumeId string) string {
+// findStagingPath finds the globalmount staging path for a volume by scanning active mounts.
+func (s *NodeServer) findStagingPath(volumeId string) string {
 	_, volName, err := utils.ParseVolumeID(volumeId)
 	if err != nil {
 		log.Debug().Err(err).Str("volume", volumeId).Msg("failed to parse volume ID for staging path lookup")
 		return ""
 	}
 
-	f, err := os.Open("/proc/self/mountinfo")
+	mounts, err := s.mounter.List()
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to open /proc/self/mountinfo")
+		log.Warn().Err(err).Msg("failed to list mounts")
 		return ""
 	}
-	defer func() { _ = f.Close() }()
 
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		fields := strings.Split(sc.Text(), " ")
-		if len(fields) < 10 {
+	for _, mp := range mounts {
+		if (mp.Type != "nfs" && mp.Type != "nfs4") || !strings.Contains(mp.Path, "globalmount") {
 			continue
 		}
-		mountpoint := fields[4]
-		if !strings.Contains(mountpoint, "globalmount") {
-			continue
-		}
-		sepIdx := len(fields) - 4
-		for sepIdx > 5 && fields[sepIdx] != "-" {
-			sepIdx--
-		}
-		if fields[sepIdx] != "-" {
-			continue
-		}
-		fstype := fields[sepIdx+1]
-		if fstype != "nfs" && fstype != "nfs4" {
-			continue
-		}
-		source := fields[sepIdx+2]
-		if strings.HasSuffix(source, "/"+volName) {
-			return mountpoint
+		if strings.HasSuffix(mp.Device, "/"+volName) {
+			return mp.Path
 		}
 	}
-	if err := sc.Err(); err != nil {
-		log.Warn().Err(err).Msg("error reading /proc/self/mountinfo")
-	}
-	log.Debug().Str("volume", volumeId).Msg("no staging path found in mountinfo")
+
+	log.Debug().Str("volume", volumeId).Msg("no staging path found in mounts")
 	return ""
+}
+
+func (s *NodeServer) attachVolumeCondition(volumeID string, resp *csi.NodeGetVolumeStatsResponse) {
+	if h, ok := s.healthState.Load(volumeID); ok {
+		vh := h.(*volumeHealth)
+		if vh.abnormal {
+			resp.VolumeCondition = &csi.VolumeCondition{
+				Abnormal: true,
+				Message:  vh.message,
+			}
+		}
+	}
 }
 
 func statfsResponse(path string) (*csi.NodeGetVolumeStatsResponse, error) {

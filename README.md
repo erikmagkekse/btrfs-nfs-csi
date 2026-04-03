@@ -48,11 +48,12 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - Web dashboard (`/v1/dashboard`)
 - Background task system with progress tracking and persistence
 - Filesystem scrub via API (`POST /v1/tasks/scrub`)
+- NFS mount health checker with auto-heal (detects stale mounts, remounts automatically, heals all pods without restart)
 - TLS support
 - HA via DRBD + Pacemaker (active/passive failover)
 
 **Roadmap:**
-NFS-Ganesha support, cross-agent snapshot transfers, `VOLUME_CONDITION` health reporting
+NFS-Ganesha support, cross-agent snapshot transfers
 
 ## Quick Start
 

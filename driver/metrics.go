@@ -51,11 +51,27 @@ var (
 		Name:      "volume_stats_ops_total",
 		Help:      "Total volume stats lookups by status.",
 	}, []string{"status"})
+
+	healthChecksTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "node",
+		Name:      "health_checks_total",
+		Help:      "Total health check results.",
+	}, []string{"result"})
+
+	healthCheckDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "node",
+		Name:      "health_check_duration_seconds",
+		Help:      "Duration of a full health check cycle.",
+		Buckets:   []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30},
+	})
 )
 
 func init() {
 	prometheus.MustRegister(grpcRequestsTotal, grpcRequestDuration,
-		mountOpsTotal, mountDuration, volumeStatsOpsTotal)
+		mountOpsTotal, mountDuration, volumeStatsOpsTotal,
+		healthChecksTotal, healthCheckDuration)
 }
 
 func metricsInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

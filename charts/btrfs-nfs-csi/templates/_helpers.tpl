@@ -92,3 +92,10 @@ Driver service account name
 {{- default "default" .Values.serviceAccount.driver.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Health check enabled (returns "1" if interval is set and not "0")
+*/}}
+{{- define "btrfs-nfs-csi.healthCheckEnabled" -}}
+{{- if and .Values.driver.healthCheckInterval (ne .Values.driver.healthCheckInterval "0") }}1{{- else }}0{{- end }}
+{{- end }}

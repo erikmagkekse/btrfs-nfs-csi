@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -13,7 +14,12 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/mount-utils"
 )
+
+const staleCheckTimeout = 5 * time.Second
+
+var errStatTimeout = errors.New("stat timed out (likely stale NFS mount)")
 
 func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	if req.VolumeId == "" || req.StagingTargetPath == "" {
@@ -32,9 +38,9 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	stagingPath := req.StagingTargetPath
 
-	if notMnt, err := s.mounter.IsLikelyNotMountPoint(stagingPath); err != nil {
-		log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", stagingPath).Msg("failed to check mount point")
-	} else if !notMnt {
+	// Healthy mount check: stat the data dir to see if staging is already done.
+	// Stale staging mounts are handled by the background health checker, not here.
+	if err := statWithTimeout(stagingPath+"/"+config.DataDir, staleCheckTimeout); err == nil {
 		log.Info().Str("volume", req.VolumeId).Str("path", stagingPath).Msg("already mounted at staging path")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
@@ -88,6 +94,8 @@ func (s *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 		return nil, status.Errorf(codes.Internal, "cleanup staging for volume %s at %s: %v", req.VolumeId, req.StagingTargetPath, err)
 	}
 
+	s.healthState.Delete(req.VolumeId)
+
 	log.Info().Str("volume", req.VolumeId).Str("node", s.nodeID).Str("path", req.StagingTargetPath).Msg("unstage complete")
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
@@ -100,11 +108,11 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if notMnt, err := s.mounter.IsLikelyNotMountPoint(req.TargetPath); err != nil {
-		log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", req.TargetPath).Msg("failed to check mount point")
-	} else if !notMnt {
+	if err := statWithTimeout(req.TargetPath, staleCheckTimeout); err == nil {
 		log.Info().Str("volume", req.VolumeId).Str("path", req.TargetPath).Msg("already mounted, skipping publish")
 		return &csi.NodePublishVolumeResponse{}, nil
+	} else if mount.IsCorruptedMnt(err) || errors.Is(err, errStatTimeout) {
+		log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", req.TargetPath).Msg("stale bind mount detected, remounting over it")
 	}
 
 	if err := os.MkdirAll(req.TargetPath, 0755); err != nil {
@@ -158,4 +166,21 @@ func (s *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 
 	log.Info().Str("volume", req.VolumeId).Str("node", s.nodeID).Str("path", req.TargetPath).Msg("unpublish complete")
 	return &csi.NodeUnpublishVolumeResponse{}, nil
+}
+
+// statWithTimeout runs os.Stat in a goroutine with a timeout.
+// Returns nil if stat succeeds, error if it fails or times out.
+// Needed because os.Stat on a stale NFS hard mount hangs indefinitely.
+func statWithTimeout(path string, timeout time.Duration) error {
+	ch := make(chan error, 1)
+	go func() {
+		_, err := os.Stat(path)
+		ch <- err
+	}()
+	select {
+	case err := <-ch:
+		return err
+	case <-time.After(timeout):
+		return fmt.Errorf("stat %s after %s: %w", path, timeout, errStatTimeout)
+	}
 }

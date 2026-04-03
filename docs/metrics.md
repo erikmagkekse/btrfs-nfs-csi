@@ -75,7 +75,7 @@ Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERV
 
 **Buckets (agent_duration):** `[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`
 
-## Node (4) - port 9090
+## Node (7) - port 9090
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -83,8 +83,13 @@ Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERV
 | `btrfs_nfs_csi_node_grpc_request_duration_seconds` | Histogram | `method` |
 | `btrfs_nfs_csi_node_mount_ops_total` | Counter | `operation`, `status` |
 | `btrfs_nfs_csi_node_mount_duration_seconds` | Histogram | `operation` |
+| `btrfs_nfs_csi_node_volume_stats_ops_total` | Counter | `status` |
+| `btrfs_nfs_csi_node_health_checks_total` | Counter | `result` |
+| `btrfs_nfs_csi_node_health_check_duration_seconds` | Histogram | - |
 
-**Mount operations:** `nfs_mount`, `bind_mount`, `umount`, `force_umount`, `remount_ro`
+**Mount operations:** `nfs_mount`, `bind_mount`, `umount`, `force_umount`, `remount_ro`, `health_remount`
+
+**Health check results:** `healthy`, `stale`, `remounted`, `remount_failed`, `error`
 
 **Buckets (grpc_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`
 
@@ -113,6 +118,15 @@ increase(btrfs_nfs_csi_node_mount_ops_total{operation="force_umount"}[1h])
 
 # Agent health check errors
 rate(btrfs_nfs_csi_controller_agent_ops_total{operation="health_check",status="error"}[5m])
+
+# Stale NFS mounts detected
+increase(btrfs_nfs_csi_node_health_checks_total{result="stale"}[1h])
+
+# Auto-healed mounts
+increase(btrfs_nfs_csi_node_health_checks_total{result="remounted"}[1h])
+
+# Failed remounts (needs attention)
+increase(btrfs_nfs_csi_node_health_checks_total{result="remount_failed"}[1h]) > 0
 
 # P99 mount latency
 histogram_quantile(0.99, rate(btrfs_nfs_csi_node_mount_duration_seconds_bucket{operation="nfs_mount"}[5m]))

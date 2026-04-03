@@ -65,10 +65,11 @@ type ControllerConfig struct {
 }
 
 type NodeConfig struct {
-	NodeID           string `env:"DRIVER_NODE_ID,required"`
-	NodeIP           string `env:"DRIVER_NODE_IP"`
-	StorageInterface string `env:"DRIVER_STORAGE_INTERFACE"`
-	StorageCIDR      string `env:"DRIVER_STORAGE_CIDR"`
-	Endpoint         string `env:"DRIVER_ENDPOINT" envDefault:"unix:///csi/csi.sock"`
-	MetricsAddr      string `env:"DRIVER_METRICS_ADDR" envDefault:":9090"`
+	NodeID              string        `env:"DRIVER_NODE_ID,required"`
+	NodeIP              string        `env:"DRIVER_NODE_IP"`
+	StorageInterface    string        `env:"DRIVER_STORAGE_INTERFACE"`
+	StorageCIDR         string        `env:"DRIVER_STORAGE_CIDR"`
+	Endpoint            string        `env:"DRIVER_ENDPOINT" envDefault:"unix:///csi/csi.sock"`
+	MetricsAddr         string        `env:"DRIVER_METRICS_ADDR" envDefault:":9090"`
+	HealthCheckInterval time.Duration `env:"DRIVER_HEALTH_CHECK_INTERVAL" envDefault:"30s"`
 }
