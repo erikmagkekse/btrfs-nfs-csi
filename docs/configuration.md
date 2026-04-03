@@ -24,6 +24,9 @@
 | `AGENT_DEFAULT_DATA_MODE` | `2770` | Default mode for data subvolumes (setgid + group rwx) |
 | `AGENT_TASK_CLEANUP_INTERVAL` | `24h` | Remove completed/failed tasks after this duration |
 | `AGENT_TASK_MAX_CONCURRENT` | `2` | Max concurrent tasks (`0` = unlimited) |
+| `AGENT_TASK_DEFAULT_TIMEOUT` | `6h` | Default timeout for tasks (e.g. test). `0` = no timeout |
+| `AGENT_TASK_SCRUB_TIMEOUT` | `24h` | Timeout for btrfs scrub tasks. `0` = no timeout |
+| `AGENT_TASK_POLL_INTERVAL` | `5s` | Progress update interval for background tasks |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 
 ## CLI Environment Variables

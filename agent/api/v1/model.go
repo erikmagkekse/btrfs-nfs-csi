@@ -180,33 +180,41 @@ type FilesystemStatsResponse struct {
 	Devices            []DeviceStatsResponse `json:"devices"`
 }
 
-type TaskStartResponse struct {
+type TaskCreateRequest struct {
+	Timeout string            `json:"timeout,omitempty"`
+	Opts    map[string]string `json:"opts,omitempty"`
+}
+
+type TaskCreateResponse struct {
 	TaskID string `json:"task_id"`
 	Status string `json:"status"`
 }
 
 type TaskResponse struct {
-	ID          string     `json:"id"`
-	Type        string     `json:"type"`
-	Status      string     `json:"status"`
-	Progress    int        `json:"progress"`
-	Error       string     `json:"error,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	StartedAt   *time.Time `json:"started_at,omitempty"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	ID          string            `json:"id"`
+	Type        string            `json:"type"`
+	Status      string            `json:"status"`
+	Progress    int               `json:"progress"`
+	Opts        map[string]string `json:"opts,omitempty"`
+	Timeout     string            `json:"timeout,omitempty"`
+	Error       string            `json:"error,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+	StartedAt   *time.Time        `json:"started_at,omitempty"`
+	CompletedAt *time.Time        `json:"completed_at,omitempty"`
 }
 
 type TaskDetailResponse struct {
-	ID          string          `json:"id"`
-	Type        string          `json:"type"`
-	Status      string          `json:"status"`
-	Progress    int             `json:"progress"`
-	Result      json.RawMessage `json:"result,omitempty"`
-	Info        string          `json:"info,omitempty"`
-	Error       string          `json:"error,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
-	StartedAt   *time.Time      `json:"started_at,omitempty"`
-	CompletedAt *time.Time      `json:"completed_at,omitempty"`
+	ID          string            `json:"id"`
+	Type        string            `json:"type"`
+	Status      string            `json:"status"`
+	Progress    int               `json:"progress"`
+	Opts        map[string]string `json:"opts,omitempty"`
+	Timeout     string            `json:"timeout,omitempty"`
+	Result      json.RawMessage   `json:"result,omitempty"`
+	Error       string            `json:"error,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+	StartedAt   *time.Time        `json:"started_at,omitempty"`
+	CompletedAt *time.Time        `json:"completed_at,omitempty"`
 }
 
 type TaskListResponse struct {

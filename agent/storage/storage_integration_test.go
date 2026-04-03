@@ -95,7 +95,7 @@ func (s *StorageIntegrationSuite) SetupSuite() {
 		tenants:         []string{"test"},
 		defaultDirMode:  0o755,
 		defaultDataMode: "2770",
-		tasks:           task.NewManager(taskDir, 0),
+		tasks:           task.NewManager(taskDir, 0, 0),
 	}
 }
 
@@ -396,7 +396,7 @@ func (s *StorageIntegrationSuite) TestStartScrub() {
 	s.Require().NoError(err)
 
 	// start scrub via storage layer
-	taskID, err := s.storage.StartScrub(s.ctx)
+	taskID, err := s.storage.StartScrub(s.ctx, nil, 0)
 	s.Require().NoError(err)
 	s.Assert().NotEmpty(taskID)
 
@@ -419,7 +419,7 @@ func (s *StorageIntegrationSuite) TestStartScrub() {
 func (s *StorageIntegrationSuite) TestStartScrubDuplicate() {
 	// start a blocking scrub in background
 	started := make(chan struct{})
-	s.storage.Tasks().Create(string(task.TypeScrub), func(ctx context.Context, update *task.Update) error {
+	s.storage.Tasks().Create(string(task.TypeScrub), task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
@@ -427,7 +427,7 @@ func (s *StorageIntegrationSuite) TestStartScrubDuplicate() {
 	<-started
 
 	// second scrub should be rejected
-	_, err := s.storage.StartScrub(s.ctx)
+	_, err := s.storage.StartScrub(s.ctx, nil, 0)
 	s.Require().Error(err)
 	var se *StorageError
 	s.Require().ErrorAs(err, &se)
@@ -438,7 +438,7 @@ func (s *StorageIntegrationSuite) TestTaskPersistence() {
 	taskDir := filepath.Join(s.mnt, config.TasksDir)
 
 	// submit a task that completes
-	id := s.storage.Tasks().Create("test", func(ctx context.Context, update *task.Update) error {
+	id := s.storage.Tasks().Create("test", task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
 		return update.SetResult(map[string]string{"key": "value"})
 	})
 	time.Sleep(100 * time.Millisecond)
@@ -468,7 +468,7 @@ func (s *StorageIntegrationSuite) TestTaskLoadFromDisk() {
 	s.Require().NoError(writeMetadataAtomic(filepath.Join(taskDir, "stale-task-123.json"), &staleTask))
 
 	// create new TaskManager (triggers loadFromDisk)
-	tm := task.NewManager(taskDir, 0)
+	tm := task.NewManager(taskDir, 0, 0)
 
 	// stale task should be marked failed
 	tsk, err := tm.Get("stale-task-123")
@@ -481,7 +481,7 @@ func (s *StorageIntegrationSuite) TestTaskLoadFromDisk() {
 func (s *StorageIntegrationSuite) TestTaskCleanupRemovesFiles() {
 	taskDir := filepath.Join(s.mnt, config.TasksDir)
 
-	id := s.storage.Tasks().Create("test", func(ctx context.Context, update *task.Update) error {
+	id := s.storage.Tasks().Create("test", task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
 		return nil
 	})
 	time.Sleep(100 * time.Millisecond)
@@ -505,7 +505,7 @@ func (s *StorageIntegrationSuite) TestTaskCleanupRemovesFiles() {
 
 func (s *StorageIntegrationSuite) TestScrubOnEmptyFilesystem() {
 	// no volumes, no data -- scrub should still work
-	taskID, err := s.storage.StartScrub(s.ctx)
+	taskID, err := s.storage.StartScrub(s.ctx, nil, 0)
 	s.Require().NoError(err)
 
 	for i := 0; i < 30; i++ {
@@ -531,7 +531,7 @@ func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
 	s.Require().NoError(writeMetadataAtomic(filepath.Join(taskDir, "stale-scrub.json"), &staleTask))
 
 	// create new TaskManager (simulates agent restart)
-	tm := task.NewManager(taskDir, 0)
+	tm := task.NewManager(taskDir, 0, 0)
 
 	// stale scrub should be failed
 	tsk, err := tm.Get("stale-scrub")
@@ -541,7 +541,7 @@ func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
 
 	// should be able to start a new scrub (stale one doesn't block)
 	s.storage.tasks = tm
-	newID, err := s.storage.StartScrub(s.ctx)
+	newID, err := s.storage.StartScrub(s.ctx, nil, 0)
 	s.Require().NoError(err)
 	s.Assert().NotEmpty(newID)
 

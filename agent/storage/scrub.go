@@ -9,12 +9,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	scrubPollInterval = 2 * time.Second
-)
-
 // StartScrub starts a btrfs scrub as a background task and returns the task ID.
-func (s *Storage) StartScrub(ctx context.Context) (string, error) {
+func (s *Storage) StartScrub(ctx context.Context, opts map[string]string, timeout time.Duration) (string, error) {
 	for _, t := range s.tasks.List(string(task.TypeScrub)) {
 		if t.Status == task.TaskRunning || t.Status == task.TaskPending {
 			return "", &StorageError{Code: ErrBusy, Message: "scrub already running"}
@@ -25,7 +21,11 @@ func (s *Storage) StartScrub(ctx context.Context) (string, error) {
 		return "", &StorageError{Code: ErrBusy, Message: "scrub already running on filesystem"}
 	}
 
-	id := s.tasks.Create(string(task.TypeScrub), func(ctx context.Context, update *task.Update) error {
+	t := s.taskScrubTimeout
+	if timeout > 0 {
+		t = timeout
+	}
+	id := s.tasks.Create(string(task.TypeScrub), task.TaskOpts{Opts: opts, Timeout: t}, func(ctx context.Context, update *task.Update) error {
 		return s.runScrub(ctx, update)
 	})
 
@@ -34,36 +34,25 @@ func (s *Storage) StartScrub(ctx context.Context) (string, error) {
 }
 
 func (s *Storage) runScrub(ctx context.Context, update *task.Update) error {
-	stopProgress := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(scrubPollInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-stopProgress:
-				return
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				status, err := s.btrfs.ScrubStatus(ctx, s.mountPoint)
-				if err != nil {
-					continue
-				}
-				scrubbed := status.DataBytesScrubbed + status.TreeBytesScrubbed
-				if total := s.filesystemUsedBytes(); total > 0 {
-					pct := int(scrubbed * 100 / total)
-					if pct > 100 {
-						pct = 100
-					}
-					update.SetProgress(pct)
-				}
-				_ = update.SetResult(status)
-			}
+	stop := update.PollProgress(ctx, func() int {
+		status, err := s.btrfs.ScrubStatus(ctx, s.mountPoint)
+		if err != nil {
+			return -1
 		}
-	}()
+		_ = update.SetResult(status)
+		scrubbed := status.DataBytesScrubbed + status.TreeBytesScrubbed
+		if total := s.filesystemUsedBytes(); total > 0 {
+			pct := int(scrubbed * 100 / total)
+			if pct > 100 {
+				return 100
+			}
+			return pct
+		}
+		return 0
+	})
 
 	err := s.btrfs.ScrubStart(ctx, s.mountPoint)
-	close(stopProgress)
+	stop()
 
 	if err != nil {
 		return fmt.Errorf("btrfs scrub: %w", err)
