@@ -28,8 +28,8 @@ const (
 	ParamUID         = "uid"
 	ParamGID         = "gid"
 	ParamMode        = "mode"
-	ParamLabels   = "labels"
-	MaxUserLabels = 4
+	ParamLabels      = "labels"
+	MaxUserLabels    = 4
 
 	// MaxLabels caps total labels per resource, trying to keep metadata JSON below 4KB (one filesystem block).
 	// Worst case: 12 * (63 + 128 + 6) = ~2.4KB labels + ~500B other fields = ~2.9KB.

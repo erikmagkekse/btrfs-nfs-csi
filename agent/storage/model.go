@@ -85,7 +85,7 @@ type VolumeCloneRequest struct {
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
-func (m VolumeMetadata) GetLabels() map[string]string  { return m.Labels }
+func (m VolumeMetadata) GetLabels() map[string]string   { return m.Labels }
 func (m SnapshotMetadata) GetLabels() map[string]string { return m.Labels }
 func (m CloneMetadata) GetLabels() map[string]string    { return m.Labels }
 
