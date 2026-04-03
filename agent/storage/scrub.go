@@ -10,7 +10,7 @@ import (
 )
 
 // StartScrub starts a btrfs scrub as a background task and returns the task ID.
-func (s *Storage) StartScrub(ctx context.Context, opts map[string]string, timeout time.Duration) (string, error) {
+func (s *Storage) StartScrub(ctx context.Context, opts map[string]string, labels map[string]string, timeout time.Duration) (string, error) {
 	for _, t := range s.tasks.List(string(task.TypeScrub)) {
 		if t.Status == task.TaskRunning || t.Status == task.TaskPending {
 			return "", &StorageError{Code: ErrBusy, Message: "scrub already running"}
@@ -21,11 +21,15 @@ func (s *Storage) StartScrub(ctx context.Context, opts map[string]string, timeou
 		return "", &StorageError{Code: ErrBusy, Message: "scrub already running on filesystem"}
 	}
 
+	if err := validateLabels(labels); err != nil {
+		return "", err
+	}
+
 	t := s.taskScrubTimeout
 	if timeout > 0 {
 		t = timeout
 	}
-	id := s.tasks.Create(string(task.TypeScrub), task.TaskOpts{Opts: opts, Timeout: t}, func(ctx context.Context, update *task.Update) error {
+	id := s.tasks.Create(string(task.TypeScrub), task.TaskOpts{Opts: opts, Labels: labels, Timeout: t}, func(ctx context.Context, update *task.Update) error {
 		return s.runScrub(ctx, update)
 	})
 

@@ -35,6 +35,7 @@ func taskDetailResponseFrom(t *task.Task) TaskDetailResponse {
 		Status:      string(t.Status),
 		Progress:    t.Progress,
 		Opts:        t.Opts,
+		Labels:      t.Labels,
 		Timeout:     formatTimeout(t.Timeout),
 		Result:      t.Result,
 		Error:       t.Error,

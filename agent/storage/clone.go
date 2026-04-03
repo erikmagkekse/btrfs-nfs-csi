@@ -25,6 +25,9 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	if err := validateName(req.Snapshot); err != nil {
 		return nil, err
 	}
+	if err := validateLabels(req.Labels); err != nil {
+		return nil, err
+	}
 	snapDir := filepath.Join(bp, config.SnapshotsDir, req.Snapshot)
 	srcData := filepath.Join(snapDir, config.DataDir)
 	if _, err := os.Stat(srcData); os.IsNotExist(err) {
@@ -52,11 +55,20 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
 	}
 
+	labels := req.Labels
+	if labels == nil {
+		var snapMeta SnapshotMetadata
+		if err := ReadMetadata(filepath.Join(snapDir, config.MetadataFile), &snapMeta); err == nil {
+			labels = snapMeta.Labels
+		}
+	}
+
 	now := time.Now().UTC()
 	meta := CloneMetadata{
 		Name:           req.Name,
 		SourceSnapshot: req.Snapshot,
 		Path:           cloneDir,
+		Labels:         labels,
 		CreatedAt:      now,
 	}
 

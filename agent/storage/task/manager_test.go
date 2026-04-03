@@ -551,6 +551,39 @@ func TestManager_CreateWithOpts(t *testing.T) {
 	assert.Equal(t, "5s", tsk.Opts["sleep"])
 }
 
+func TestManager_CreateWithLabels(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewManager(dir, 0, 0)
+
+	labels := map[string]string{"env": "prod", "team": "storage"}
+	id := tm.Create("test", TaskOpts{
+		Labels: labels,
+	}, func(ctx context.Context, update *Update) error {
+		return nil
+	})
+
+	tsk := awaitStatus(t, tm, id, TaskCompleted)
+	assert.Equal(t, labels, tsk.Labels)
+
+	// verify persisted to disk
+	data, err := os.ReadFile(filepath.Join(dir, id+".json"))
+	require.NoError(t, err)
+	var ondisk Task
+	require.NoError(t, json.Unmarshal(data, &ondisk))
+	assert.Equal(t, labels, ondisk.Labels)
+}
+
+func TestManager_CreateWithoutLabels(t *testing.T) {
+	tm := NewManager(t.TempDir(), 0, 0)
+
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
+		return nil
+	})
+
+	tsk := awaitStatus(t, tm, id, TaskCompleted)
+	assert.Nil(t, tsk.Labels)
+}
+
 func TestManager_Timeout(t *testing.T) {
 	tm := NewManager(t.TempDir(), 0, 0)
 

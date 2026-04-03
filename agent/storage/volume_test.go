@@ -55,6 +55,30 @@ func TestCreateVolume(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid_labels", func(t *testing.T) {
+		s, _, _, _ := newTestStorage(t)
+		_, err := s.CreateVolume(ctx, "test", VolumeCreateRequest{
+			Name: "vol", SizeBytes: 1024,
+			Labels: map[string]string{"BAD": "val"},
+		})
+		requireStorageError(t, err, ErrInvalid)
+	})
+
+	t.Run("success_with_labels", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+
+		labels := map[string]string{"env": "prod", "team": "backend"}
+		meta, err := s.CreateVolume(ctx, "test", VolumeCreateRequest{
+			Name: "labelvol", SizeBytes: 1024,
+			Labels: labels,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, labels, meta.Labels)
+
+		ondisk := readVolumeMeta(t, filepath.Join(bp, "labelvol"))
+		assert.Equal(t, labels, ondisk.Labels)
+	})
+
 	t.Run("nocow_with_compression_none_allowed", func(t *testing.T) {
 		s, _, _, _ := newTestStorage(t)
 
@@ -464,6 +488,44 @@ func TestUpdateVolume(t *testing.T) {
 		info, err := os.Stat(dataDir)
 		require.NoError(t, err, "Stat data dir")
 		assert.Equal(t, os.FileMode(0o700), info.Mode().Perm(), "permissions should be updated")
+	})
+
+	t.Run("update_labels", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Labels: map[string]string{"env": "dev"}})
+
+		newLabels := map[string]string{"env": "prod", "team": "platform"}
+		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
+			Labels: &newLabels,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, newLabels, meta.Labels)
+
+		ondisk := readVolumeMeta(t, filepath.Join(bp, "vol"))
+		assert.Equal(t, newLabels, ondisk.Labels)
+	})
+
+	t.Run("update_labels_invalid", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
+
+		bad := map[string]string{"BAD KEY": "val"}
+		_, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
+			Labels: &bad,
+		})
+		requireStorageError(t, err, ErrInvalid)
+	})
+
+	t.Run("update_labels_clear", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Labels: map[string]string{"env": "dev"}})
+
+		empty := map[string]string{}
+		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
+			Labels: &empty,
+		})
+		require.NoError(t, err)
+		assert.Empty(t, meta.Labels)
 	})
 
 	t.Run("qgroup_limit_fails", func(t *testing.T) {

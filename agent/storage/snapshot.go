@@ -25,6 +25,9 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	if err := validateName(req.Volume); err != nil {
 		return nil, err
 	}
+	if err := validateLabels(req.Labels); err != nil {
+		return nil, err
+	}
 	volDir := filepath.Join(bp, req.Volume)
 	srcData := filepath.Join(volDir, config.DataDir)
 	if _, err := os.Stat(srcData); os.IsNotExist(err) {
@@ -60,6 +63,7 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 		Path:      filepath.Join(filepath.Dir(volMeta.Path), config.SnapshotsDir, req.Name),
 		SizeBytes: volMeta.SizeBytes,
 		ReadOnly:  true,
+		Labels:    req.Labels,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

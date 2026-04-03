@@ -7,8 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
+
+func generateLabelQuery(labels []string) url.Values {
+	v := make(url.Values)
+	for _, l := range labels {
+		v.Add("label", l)
+	}
+	return v
+}
 
 type Client struct {
 	url   string
@@ -91,17 +100,20 @@ func (c *Client) UnexportVolume(ctx context.Context, name string, cl string) err
 	return c.do(ctx, http.MethodDelete, "/v1/volumes/"+name+"/export", ExportRequest{Client: cl}, nil)
 }
 
-func (c *Client) ListVolumes(ctx context.Context) (*VolumeListResponse, error) {
+func (c *Client) ListVolumes(ctx context.Context, labels ...string) (*VolumeListResponse, error) {
 	var resp VolumeListResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/volumes", nil, &resp); err != nil {
+	q := generateLabelQuery(labels)
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) ListVolumesDetail(ctx context.Context) (*VolumeDetailListResponse, error) {
+func (c *Client) ListVolumesDetail(ctx context.Context, labels ...string) (*VolumeDetailListResponse, error) {
 	var resp VolumeDetailListResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/volumes?detail=true", nil, &resp); err != nil {
+	q := generateLabelQuery(labels)
+	q.Set("detail", "true")
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -115,33 +127,39 @@ func (c *Client) GetVolume(ctx context.Context, name string) (*VolumeDetailRespo
 	return &resp, nil
 }
 
-func (c *Client) ListSnapshots(ctx context.Context) (*SnapshotListResponse, error) {
+func (c *Client) ListSnapshots(ctx context.Context, labels ...string) (*SnapshotListResponse, error) {
 	var resp SnapshotListResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/snapshots", nil, &resp); err != nil {
+	q := generateLabelQuery(labels)
+	if err := c.do(ctx, http.MethodGet, "/v1/snapshots?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) ListVolumeSnapshots(ctx context.Context, volume string) (*SnapshotListResponse, error) {
+func (c *Client) ListVolumeSnapshots(ctx context.Context, volume string, labels ...string) (*SnapshotListResponse, error) {
 	var resp SnapshotListResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/volumes/"+volume+"/snapshots", nil, &resp); err != nil {
+	q := generateLabelQuery(labels)
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes/"+volume+"/snapshots?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) ListVolumeSnapshotsDetail(ctx context.Context, volume string) (*SnapshotDetailListResponse, error) {
+func (c *Client) ListVolumeSnapshotsDetail(ctx context.Context, volume string, labels ...string) (*SnapshotDetailListResponse, error) {
 	var resp SnapshotDetailListResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/volumes/"+volume+"/snapshots?detail=true", nil, &resp); err != nil {
+	q := generateLabelQuery(labels)
+	q.Set("detail", "true")
+	if err := c.do(ctx, http.MethodGet, "/v1/volumes/"+volume+"/snapshots?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) ListSnapshotsDetail(ctx context.Context) (*SnapshotDetailListResponse, error) {
+func (c *Client) ListSnapshotsDetail(ctx context.Context, labels ...string) (*SnapshotDetailListResponse, error) {
 	var resp SnapshotDetailListResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/snapshots?detail=true", nil, &resp); err != nil {
+	q := generateLabelQuery(labels)
+	q.Set("detail", "true")
+	if err := c.do(ctx, http.MethodGet, "/v1/snapshots?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -171,25 +189,26 @@ func (c *Client) CreateTask(ctx context.Context, taskType string, req TaskCreate
 	return &resp, nil
 }
 
-func (c *Client) ListTasks(ctx context.Context, taskType string) (*TaskListResponse, error) {
+func (c *Client) ListTasks(ctx context.Context, taskType string, labels ...string) (*TaskListResponse, error) {
 	var resp TaskListResponse
-	path := "/v1/tasks"
+	q := generateLabelQuery(labels)
 	if taskType != "" {
-		path += "?type=" + taskType
+		q.Set("type", taskType)
 	}
-	if err := c.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/v1/tasks?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) ListTasksDetail(ctx context.Context, taskType string) (*TaskDetailListResponse, error) {
+func (c *Client) ListTasksDetail(ctx context.Context, taskType string, labels ...string) (*TaskDetailListResponse, error) {
 	var resp TaskDetailListResponse
-	path := "/v1/tasks?detail=true"
+	q := generateLabelQuery(labels)
+	q.Set("detail", "true")
 	if taskType != "" {
-		path += "&type=" + taskType
+		q.Set("type", taskType)
 	}
-	if err := c.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/v1/tasks?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

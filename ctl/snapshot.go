@@ -16,11 +16,12 @@ func snapshotCloneCmd() *cli.Command {
 		Name:      "clone",
 		Usage:     "create writable clone from snapshot",
 		ArgsUsage: "<snapshot> <name>",
+		Flags:     []cli.Flag{labelFlag()},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if cmd.NArg() < 2 {
 				return fmt.Errorf("usage: snapshot clone <snapshot> <name>")
 			}
-			resp, err := clientFrom(cmd).CreateClone(ctx, v1.CloneCreateRequest{Snapshot: cmd.Args().Get(0), Name: cmd.Args().Get(1)})
+			resp, err := clientFrom(cmd).CreateClone(ctx, v1.CloneCreateRequest{Snapshot: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: parseLabelsFlag(cmd)})
 			if err != nil {
 				return wrapErr(err, "clone", cmd.Args().Get(1))
 			}
@@ -40,7 +41,7 @@ func snapshotCmd() *cli.Command {
 				Aliases:   []string{"ls"},
 				Usage:     "list snapshots (optionally filter by volume)",
 				ArgsUsage: "[volume]",
-				Flags:     []cli.Flag{sortFlag(), ascFlag()},
+				Flags:     []cli.Flag{sortFlag(), ascFlag(), labelFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c := clientFrom(cmd)
 					sortBy := cmd.String("sort")
@@ -49,13 +50,14 @@ func snapshotCmd() *cli.Command {
 					}
 					rev := !cmd.Bool("asc")
 					vol := cmd.Args().First()
+					labels := cmd.StringSlice("label")
 					if isWide(cmd) {
 						var resp *v1.SnapshotDetailListResponse
 						var err error
 						if vol != "" {
-							resp, err = c.ListVolumeSnapshotsDetail(ctx, vol)
+							resp, err = c.ListVolumeSnapshotsDetail(ctx, vol, labels...)
 						} else {
-							resp, err = c.ListSnapshotsDetail(ctx)
+							resp, err = c.ListSnapshotsDetail(ctx, labels...)
 						}
 						if err != nil {
 							return err
@@ -63,11 +65,11 @@ func snapshotCmd() *cli.Command {
 						sortSnapshotsDetail(resp.Snapshots, sortBy, rev)
 						return output(cmd, resp, func() {
 							w := tab()
-							_, _ = fmt.Fprintln(w, "NAME\tVOLUME\tSIZE\tUSED\tEXCLUSIVE\tREADONLY\tCREATED")
+							_, _ = fmt.Fprintln(w, "NAME\tVOLUME\tSIZE\tUSED\tEXCLUSIVE\tREADONLY\tLABELS\tCREATED")
 							for _, s := range resp.Snapshots {
-								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\t%s\n",
+								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\t%s\t%s\n",
 									s.Name, s.Volume, utils.FormatBytes(s.SizeBytes), utils.FormatBytes(s.UsedBytes),
-									utils.FormatBytes(s.ExclusiveBytes), s.ReadOnly, s.CreatedAt.Format(timeFmt))
+									utils.FormatBytes(s.ExclusiveBytes), s.ReadOnly, formatLabelsShort(s.Labels), s.CreatedAt.Format(timeFmt))
 							}
 							_ = w.Flush()
 						})
@@ -75,9 +77,9 @@ func snapshotCmd() *cli.Command {
 					var resp *v1.SnapshotListResponse
 					var err error
 					if vol != "" {
-						resp, err = c.ListVolumeSnapshots(ctx, vol)
+						resp, err = c.ListVolumeSnapshots(ctx, vol, labels...)
 					} else {
-						resp, err = c.ListSnapshots(ctx)
+						resp, err = c.ListSnapshots(ctx, labels...)
 					}
 					if err != nil {
 						return err
@@ -114,6 +116,7 @@ func snapshotCmd() *cli.Command {
 						fmt.Printf("Used:       %s\n", utils.FormatBytes(resp.UsedBytes))
 						fmt.Printf("Exclusive:  %s\n", utils.FormatBytes(resp.ExclusiveBytes))
 						fmt.Printf("ReadOnly:   %v\n", resp.ReadOnly)
+						printLabels("Labels:", resp.Labels, 12)
 						fmt.Printf("Created:    %s\n", resp.CreatedAt.Format(timeFmt))
 						fmt.Printf("Updated:    %s\n", resp.UpdatedAt.Format(timeFmt))
 					})
@@ -123,11 +126,12 @@ func snapshotCmd() *cli.Command {
 				Name:      "create",
 				Usage:     "create a snapshot",
 				ArgsUsage: "<volume> <name>",
+				Flags:     []cli.Flag{labelFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 2 {
 						return fmt.Errorf("usage: snapshot create <volume> <name>")
 					}
-					resp, err := clientFrom(cmd).CreateSnapshot(ctx, v1.SnapshotCreateRequest{Volume: cmd.Args().Get(0), Name: cmd.Args().Get(1)})
+					resp, err := clientFrom(cmd).CreateSnapshot(ctx, v1.SnapshotCreateRequest{Volume: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: labelsWithDefault(cmd, "created-by", "cli")})
 					if err != nil {
 						return wrapErr(err, "snapshot", cmd.Args().Get(1))
 					}

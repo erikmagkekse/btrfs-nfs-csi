@@ -26,6 +26,19 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
 | `METADATA_ERROR` | 500 | Volume/snapshot metadata corrupt or unreadable |
 | `INTERNAL_ERROR` | 500 | Server error |
 
+## Labels
+
+Volumes, snapshots, clones, and tasks support user-defined labels (`map[string]string`). Labels are optional on create requests and returned in detail responses.
+
+| Constraint | Rule |
+|---|---|
+| Key format | `^[a-z0-9][a-z0-9._-]{0,62}$` |
+| Value format | `^[a-zA-Z0-9._-]{0,128}$` (empty allowed) |
+| Max labels | 12 per resource |
+| Max user labels | 4 via PVC annotation or CLI `--label` |
+
+Filter with `?label=key=value` (exact match, repeatable, AND logic) or `?label=key` (key exists, any value).
+
 ## Volumes
 
 ### POST /v1/volumes
@@ -42,7 +55,8 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
   "quota_bytes": 1073741824,
   "uid": 1000,
   "gid": 1000,
-  "mode": "0750"
+  "mode": "0750",
+  "labels": {"env": "prod", "team": "backend"}
 }
 
 // Response 201
@@ -57,6 +71,7 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
   "uid": 1000,
   "gid": 1000,
   "mode": "0750",
+  "labels": {"env": "prod", "team": "backend"},
   "clients": [],
   "created_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T10:30:00Z",
@@ -73,7 +88,7 @@ curl -X POST http://10.0.0.5:8080/v1/volumes \
 
 ### GET /v1/volumes
 
-Returns a summary list. Use `GET /v1/volumes/:name` for full details, or append `?detail=true` to get full details for all volumes in a single call.
+Returns a summary list. Use `GET /v1/volumes/:name` for full details, or append `?detail=true` to get full details for all volumes in a single call. Filter by label with `?label=key=value` (exact match) or `?label=key` (key exists). Repeatable, AND logic.
 
 ```json
 {
@@ -90,7 +105,7 @@ Returns a summary list. Use `GET /v1/volumes/:name` for full details, or append 
 }
 ```
 
-With `?detail=true`, each volume includes the full detail fields (same as `GET /v1/volumes/:name`): `path`, `quota_bytes`, `compression`, `nocow`, `uid`, `gid`, `mode`, `clients` (as array), `updated_at`, `last_attach_at`.
+With `?detail=true`, each volume includes the full detail fields (same as `GET /v1/volumes/:name`): `path`, `quota_bytes`, `compression`, `nocow`, `uid`, `gid`, `mode`, `labels`, `clients` (as array), `updated_at`, `last_attach_at`.
 
 ### GET /v1/volumes/:name
 
@@ -106,6 +121,7 @@ With `?detail=true`, each volume includes the full detail fields (same as `GET /
   "uid": 1000,
   "gid": 1000,
   "mode": "0750",
+  "labels": {"env": "prod", "team": "backend"},
   "clients": ["10.1.0.50"],
   "created_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T10:30:00Z",
@@ -115,7 +131,7 @@ With `?detail=true`, each volume includes the full detail fields (same as `GET /
 
 ### PATCH /v1/volumes/:name
 
-All fields optional. `size_bytes` must be larger than current.
+All fields optional. `size_bytes` must be larger than current. `labels` replaces all labels when present.
 
 ```json
 {
@@ -124,7 +140,8 @@ All fields optional. `size_bytes` must be larger than current.
   "compression": "lzo",
   "uid": 2000,
   "gid": 2000,
-  "mode": "0755"
+  "mode": "0755",
+  "labels": {"env": "staging"}
 }
 ```
 
@@ -175,7 +192,8 @@ All fields optional. `size_bytes` must be larger than current.
 // Request
 {
   "volume": "vol-1",
-  "name": "snap-1"
+  "name": "snap-1",
+  "labels": {"env": "prod"}
 }
 
 // Response 201
@@ -187,6 +205,7 @@ All fields optional. `size_bytes` must be larger than current.
   "used_bytes": 16384,
   "exclusive_bytes": 0,
   "readonly": true,
+  "labels": {"env": "prod"},
   "created_at": "2025-01-15T12:00:00Z",
   "updated_at": "2025-01-15T12:00:00Z"
 }
@@ -194,7 +213,7 @@ All fields optional. `size_bytes` must be larger than current.
 
 ### GET /v1/snapshots
 
-Returns a summary list of all snapshots. Use `GET /v1/snapshots/:name` for full details, or append `?detail=true` to get full details for all snapshots in a single call.
+Returns a summary list of all snapshots. Use `GET /v1/snapshots/:name` for full details, or append `?detail=true` to get full details for all snapshots in a single call. Filter by label with `?label=key=value` or `?label=key`. Repeatable, AND logic.
 
 ```json
 {
@@ -211,11 +230,11 @@ Returns a summary list of all snapshots. Use `GET /v1/snapshots/:name` for full 
 }
 ```
 
-With `?detail=true`, each snapshot includes the full detail fields (same as `GET /v1/snapshots/:name`): `path`, `exclusive_bytes`, `readonly`, `updated_at`.
+With `?detail=true`, each snapshot includes the full detail fields (same as `GET /v1/snapshots/:name`): `path`, `exclusive_bytes`, `readonly`, `labels`, `updated_at`.
 
 ### GET /v1/volumes/:name/snapshots
 
-Returns a summary list of snapshots for a specific volume. Same response format as `GET /v1/snapshots`. Also supports `?detail=true`.
+Returns a summary list of snapshots for a specific volume. Same response format as `GET /v1/snapshots`. Also supports `?detail=true` and `?label=` filtering.
 
 ### GET /v1/snapshots/:name
 
@@ -228,6 +247,7 @@ Returns a summary list of snapshots for a specific volume. Same response format 
   "used_bytes": 16384,
   "exclusive_bytes": 0,
   "readonly": true,
+  "labels": {"env": "prod"},
   "created_at": "2025-01-15T12:00:00Z",
   "updated_at": "2025-01-15T12:00:00Z"
 }
@@ -241,13 +261,14 @@ Returns a summary list of snapshots for a specific volume. Same response format 
 
 ### POST /v1/volumes/clone
 
-Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediate snapshot needed. 409 returns existing volume.
+Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediate snapshot needed. 409 returns existing volume. If `labels` is omitted, source volume labels are inherited.
 
 ```json
 // Request
 {
   "source": "my-volume",
-  "name": "my-clone"
+  "name": "my-clone",
+  "labels": {"env": "staging"}
 }
 
 // Response 201
@@ -262,6 +283,7 @@ Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediat
   "uid": 0,
   "gid": 0,
   "mode": "2770",
+  "labels": {"env": "staging"},
   "clients": [],
   "created_at": "2025-01-15T12:30:00Z",
   "updated_at": "2025-01-15T12:30:00Z"
@@ -272,13 +294,14 @@ Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediat
 
 ### POST /v1/clones
 
-Clone from a read-only snapshot. 409 returns existing clone.
+Clone from a read-only snapshot. 409 returns existing clone. If `labels` is omitted, source snapshot labels are inherited.
 
 ```json
 // Request
 {
   "snapshot": "snap-1",
-  "name": "clone-1"
+  "name": "clone-1",
+  "labels": {"env": "dev"}
 }
 
 // Response 201
@@ -286,6 +309,7 @@ Clone from a read-only snapshot. 409 returns existing clone.
   "name": "clone-1",
   "source_snapshot": "snap-1",
   "path": "/srv/csi/default/clone-1",
+  "labels": {"env": "dev"},
   "created_at": "2025-01-15T12:30:00Z"
 }
 ```
@@ -354,11 +378,12 @@ Starts a background task. `type` is `scrub` or `test`. Returns 423 if a scrub is
 // Request (all fields optional)
 {
   "timeout": "1h",
-  "opts": {"sleep": "10s"}
+  "opts": {"sleep": "10s"},
+  "labels": {"created-by": "cron"}
 }
 ```
 
-`timeout` overrides the server default (scrub: 24h, test: 6h). `opts` is task-type-specific: scrub has no opts, test accepts `{"sleep": "10s"}`.
+`timeout` overrides the server default (scrub: 24h, test: 6h). `opts` is task-type-specific: scrub has no opts, test accepts `{"sleep": "10s"}`. `labels` are optional metadata (same rules as volume labels).
 
 ```json
 // Response 202
@@ -388,7 +413,7 @@ curl -X POST http://10.0.0.5:8080/v1/tasks/test \
 
 ### GET /v1/tasks
 
-List all tasks. Optional `?type=` filter (e.g. `scrub`, `test`). Returns a summary without the `result` field. Append `?detail=true` to include `result`.
+List all tasks. Optional `?type=` filter (e.g. `scrub`, `test`). Filter by label with `?label=key=value` or `?label=key`. Repeatable, AND logic. Returns a summary without the `result` field. Append `?detail=true` to include `result` and `labels`.
 
 ```json
 {
@@ -408,11 +433,11 @@ List all tasks. Optional `?type=` filter (e.g. `scrub`, `test`). Returns a summa
 }
 ```
 
-With `?detail=true`, each task includes `result` and `opts` fields.
+With `?detail=true`, each task includes `result`, `opts`, and `labels` fields.
 
 ### GET /v1/tasks/:id
 
-Returns a single task with full details including `result` and `opts`. 404 if not found.
+Returns a single task with full details including `result`, `opts`, and `labels`. 404 if not found.
 
 ```json
 {

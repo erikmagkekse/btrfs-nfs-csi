@@ -396,7 +396,7 @@ func (s *StorageIntegrationSuite) TestStartScrub() {
 	s.Require().NoError(err)
 
 	// start scrub via storage layer
-	taskID, err := s.storage.StartScrub(s.ctx, nil, 0)
+	taskID, err := s.storage.StartScrub(s.ctx, nil, nil, 0)
 	s.Require().NoError(err)
 	s.Assert().NotEmpty(taskID)
 
@@ -427,7 +427,7 @@ func (s *StorageIntegrationSuite) TestStartScrubDuplicate() {
 	<-started
 
 	// second scrub should be rejected
-	_, err := s.storage.StartScrub(s.ctx, nil, 0)
+	_, err := s.storage.StartScrub(s.ctx, nil, nil, 0)
 	s.Require().Error(err)
 	var se *StorageError
 	s.Require().ErrorAs(err, &se)
@@ -505,7 +505,7 @@ func (s *StorageIntegrationSuite) TestTaskCleanupRemovesFiles() {
 
 func (s *StorageIntegrationSuite) TestScrubOnEmptyFilesystem() {
 	// no volumes, no data -- scrub should still work
-	taskID, err := s.storage.StartScrub(s.ctx, nil, 0)
+	taskID, err := s.storage.StartScrub(s.ctx, nil, nil, 0)
 	s.Require().NoError(err)
 
 	for i := 0; i < 30; i++ {
@@ -541,7 +541,7 @@ func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
 
 	// should be able to start a new scrub (stale one doesn't block)
 	s.storage.tasks = tm
-	newID, err := s.storage.StartScrub(s.ctx, nil, 0)
+	newID, err := s.storage.StartScrub(s.ctx, nil, nil, 0)
 	s.Require().NoError(err)
 	s.Assert().NotEmpty(newID)
 

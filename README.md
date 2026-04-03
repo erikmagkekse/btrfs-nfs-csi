@@ -36,6 +36,7 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - Instant snapshots and writable clones (btrfs CoW)
 - Online volume expansion
 - Per-volume quota enforcement and usage reporting
+- User-defined labels on volumes, snapshots, clones, and tasks (with filtering)
 - Per-volume tuning via StorageClass parameters or PVC annotations:
   - Compression (`zstd`, `lzo`, `zlib` with levels)
   - NoCOW mode (`chattr +C`) for databases

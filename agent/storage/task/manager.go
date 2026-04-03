@@ -57,6 +57,7 @@ func (tm *Manager) Create(taskType string, opts TaskOpts, fn TaskFunc) string {
 		Type:      taskType,
 		Status:    TaskPending,
 		Opts:      opts.Opts,
+		Labels:    opts.Labels,
 		Timeout:   opts.Timeout,
 		CreatedAt: now,
 	}

@@ -52,6 +52,10 @@ func (h *Handler) ListVolumes(c *echo.Context) error {
 		return StorageError(c, err)
 	}
 
+	if filters := c.QueryParams()["label"]; len(filters) > 0 {
+		vols = filterByLabels(vols, filters)
+	}
+
 	if c.QueryParam("detail") == "true" {
 		resp := make([]VolumeDetailResponse, len(vols))
 		for i := range vols {
@@ -84,6 +88,7 @@ func volumeDetailResponseFrom(meta *storage.VolumeMetadata) VolumeDetailResponse
 		UID:          meta.UID,
 		GID:          meta.GID,
 		Mode:         meta.Mode,
+		Labels:       meta.Labels,
 		Clients:      clients,
 		CreatedAt:    meta.CreatedAt,
 		UpdatedAt:    meta.UpdatedAt,
@@ -273,6 +278,10 @@ func (h *Handler) ListSnapshots(c *echo.Context) error {
 		return StorageError(c, err)
 	}
 
+	if filters := c.QueryParams()["label"]; len(filters) > 0 {
+		snaps = filterByLabels(snaps, filters)
+	}
+
 	if c.QueryParam("detail") == "true" {
 		resp := make([]SnapshotDetailResponse, len(snaps))
 		for i := range snaps {
@@ -295,6 +304,10 @@ func (h *Handler) ListVolumeSnapshots(c *echo.Context) error {
 	snaps, err := h.Store.ListSnapshots(tenant, c.Param("name"))
 	if err != nil {
 		return StorageError(c, err)
+	}
+
+	if filters := c.QueryParams()["label"]; len(filters) > 0 {
+		snaps = filterByLabels(snaps, filters)
 	}
 
 	if c.QueryParam("detail") == "true" {
@@ -322,6 +335,7 @@ func snapshotDetailResponseFrom(meta *storage.SnapshotMetadata) SnapshotDetailRe
 		UsedBytes:      meta.UsedBytes,
 		ExclusiveBytes: meta.ExclusiveBytes,
 		ReadOnly:       meta.ReadOnly,
+		Labels:         meta.Labels,
 		CreatedAt:      meta.CreatedAt,
 		UpdatedAt:      meta.UpdatedAt,
 	}
@@ -382,22 +396,22 @@ func (h *Handler) CreateClone(c *echo.Context) error {
 	meta, err := h.Store.CreateClone(c.Request().Context(), tenant, req)
 	if err != nil {
 		if meta != nil {
-			return c.JSON(http.StatusConflict, CloneResponse{
-				Name:           meta.Name,
-				SourceSnapshot: meta.SourceSnapshot,
-				Path:           meta.Path,
-				CreatedAt:      meta.CreatedAt,
-			})
+			return c.JSON(http.StatusConflict, cloneResponseFrom(meta))
 		}
 		return StorageError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, CloneResponse{
+	return c.JSON(http.StatusCreated, cloneResponseFrom(meta))
+}
+
+func cloneResponseFrom(meta *storage.CloneMetadata) CloneResponse {
+	return CloneResponse{
 		Name:           meta.Name,
 		SourceSnapshot: meta.SourceSnapshot,
 		Path:           meta.Path,
+		Labels:         meta.Labels,
 		CreatedAt:      meta.CreatedAt,
-	})
+	}
 }
 
 // --- Tasks ---
@@ -425,9 +439,9 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 	var err error
 	switch taskType {
 	case TaskTypeScrub:
-		taskID, err = h.Store.StartScrub(c.Request().Context(), req.Opts, timeout)
+		taskID, err = h.Store.StartScrub(c.Request().Context(), req.Opts, req.Labels, timeout)
 	case TaskTypeTest:
-		taskID, err = h.Store.StartTestTask(c.Request().Context(), req.Opts, timeout)
+		taskID, err = h.Store.StartTestTask(c.Request().Context(), req.Opts, req.Labels, timeout)
 	default:
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "unknown task type: " + taskType, Code: storage.ErrInvalid})
 	}
@@ -439,6 +453,10 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 
 func (h *Handler) ListTasks(c *echo.Context) error {
 	tasks := h.Store.Tasks().List(c.QueryParam("type"))
+
+	if filters := c.QueryParams()["label"]; len(filters) > 0 {
+		tasks = filterByLabels(tasks, filters)
+	}
 
 	if c.QueryParam("detail") == "true" {
 		detail := make([]TaskDetailResponse, len(tasks))

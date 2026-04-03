@@ -112,7 +112,7 @@ func runController() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := controller.Start(ctx, cfg.Endpoint, cfg.MetricsAddr, version, commit); err != nil {
+	if err := controller.Start(ctx, cfg.Endpoint, cfg.MetricsAddr, version, commit, cfg.DefaultLabels); err != nil {
 		log.Fatal().Err(err).Msg("controller failed")
 	}
 }

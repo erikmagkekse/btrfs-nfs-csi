@@ -44,6 +44,7 @@ Also configurable via `--agent-url` and `--agent-token` flags.
 |---|---|---|
 | `DRIVER_ENDPOINT` | `unix:///csi/csi.sock` | gRPC socket |
 | `DRIVER_METRICS_ADDR` | `:9090` | Metrics address |
+| `DRIVER_DEFAULT_LABELS` | - | Default labels for all volumes (`key=value,key=value`) |
 
 ## Node Environment Variables
 
@@ -84,8 +85,34 @@ Each StorageClass binds one agent + one tenant. The SC name is used in volume ID
 | `btrfs-nfs-csi/uid` | integer |
 | `btrfs-nfs-csi/gid` | integer |
 | `btrfs-nfs-csi/mode` | octal string |
+| `btrfs-nfs-csi/labels` | `key=value,key=value` (max 4 user labels, see below) |
 
 Annotations override StorageClass defaults. Applied at create and on every attach.
+
+### Default Labels
+
+The CSI controller automatically sets these labels on every PVC volume:
+
+| Label | Value | Reserved |
+|---|---|---|
+| `kubernetes.pvc.name` | PVC name | yes |
+| `kubernetes.pvc.namespace` | PVC namespace | yes |
+| `kubernetes.pvc.storageclass` | StorageClass name | yes |
+| `created-by` | `csi` | no (overridable) |
+
+Reserved keys cannot be overridden via PVC annotation (set by user will be skipped with a warning). This restriction only applies to the CSI controller, the agent API and CLI have no reserved keys. The `created-by` label can be overridden. Max 4 user labels via annotation (max 12 total).
+
+### Custom Default Labels
+
+Set `DRIVER_DEFAULT_LABELS` on the controller to add custom defaults to every volume:
+
+```yaml
+env:
+  - name: DRIVER_DEFAULT_LABELS
+    value: "kubernetes.cluster=my-cluster,env=prod"
+```
+
+These are merged after the built-in defaults but before user annotation labels. Reserved keys (`kubernetes.pvc.*`) are ignored. User annotation labels override env defaults on key conflict.
 
 ## Secret
 

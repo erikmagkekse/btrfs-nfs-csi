@@ -38,6 +38,7 @@ type Task struct {
 	Status      TaskStatus        `json:"status"`
 	Progress    int               `json:"progress"`
 	Opts        map[string]string `json:"opts,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
 	Timeout     time.Duration     `json:"timeout,omitempty"`
 	Result      json.RawMessage   `json:"result,omitempty"`
 	Error       string            `json:"error,omitempty"`
@@ -46,9 +47,12 @@ type Task struct {
 	CompletedAt *time.Time        `json:"completed_at,omitempty"`
 }
 
+func (t Task) GetLabels() map[string]string { return t.Labels }
+
 // TaskOpts configures a new task.
 type TaskOpts struct {
 	Opts    map[string]string
+	Labels  map[string]string
 	Timeout time.Duration
 }
 

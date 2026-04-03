@@ -3,7 +3,8 @@ package storage
 import (
 	"fmt"
 	"os"
-	"regexp"
+
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 )
 
 // --- Error types ---
@@ -25,11 +26,24 @@ func (e *StorageError) Error() string { return e.Message }
 
 // --- Validation ---
 
-var validName = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
-
 func validateName(name string) error {
-	if !validName.MatchString(name) {
+	if !config.ValidName.MatchString(name) {
 		return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid name: %q (must be 1-128 chars, only a-z A-Z 0-9 _ -)", name)}
+	}
+	return nil
+}
+
+func validateLabels(labels map[string]string) error {
+	if len(labels) > config.MaxLabels {
+		return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("too many labels: %d (max %d)", len(labels), config.MaxLabels)}
+	}
+	for k, v := range labels {
+		if !config.ValidLabelKey.MatchString(k) {
+			return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid label key: %q", k)}
+		}
+		if !config.ValidLabelVal.MatchString(v) {
+			return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid label value: %q", v)}
+		}
 	}
 	return nil
 }
