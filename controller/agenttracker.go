@@ -8,7 +8,9 @@ import (
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
-	"github.com/erikmagkekse/btrfs-nfs-csi/k8s"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/rs/zerolog/log"
 )
@@ -21,19 +23,21 @@ type agentInfo struct {
 }
 
 type AgentTracker struct {
-	version string
-	commit  string
-	mu      sync.RWMutex
-	agents  map[string]*agentAPI.Client
-	scToURL map[string]string // SC name -> agentURL
+	kubeClient kubernetes.Interface
+	version    string
+	commit     string
+	mu         sync.RWMutex
+	agents     map[string]*agentAPI.Client
+	scToURL    map[string]string // SC name -> agentURL
 }
 
-func NewAgentTracker(version, commit string) *AgentTracker {
+func NewAgentTracker(kubeClient kubernetes.Interface, version, commit string) *AgentTracker {
 	return &AgentTracker{
-		version: version,
-		commit:  commit,
-		agents:  make(map[string]*agentAPI.Client),
-		scToURL: make(map[string]string),
+		kubeClient: kubeClient,
+		version:    version,
+		commit:     commit,
+		agents:     make(map[string]*agentAPI.Client),
+		scToURL:    make(map[string]string),
 	}
 }
 
@@ -83,8 +87,8 @@ func (t *AgentTracker) Run(ctx context.Context) {
 }
 
 // discoverAgents returns agent info for all StorageClasses owned by our driver.
-func discoverAgents(ctx context.Context) ([]agentInfo, error) {
-	scList, err := k8s.ListStorageClasses(ctx, config.DriverName)
+func (t *AgentTracker) discoverAgents(ctx context.Context) ([]agentInfo, error) {
+	scList, err := t.kubeClient.StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		ctrlK8sOpsTotal.WithLabelValues("error").Inc()
 		return nil, err
@@ -92,44 +96,44 @@ func discoverAgents(ctx context.Context) ([]agentInfo, error) {
 	ctrlK8sOpsTotal.WithLabelValues("success").Inc()
 
 	var result []agentInfo
-	for _, sc := range scList {
+	for _, sc := range scList.Items {
+		if sc.Provisioner != config.DriverName {
+			continue
+		}
 		url := sc.Parameters[paramAgentURL]
 		if url == "" {
 			continue
 		}
-
-		token := resolveAgentToken(ctx, sc.Parameters)
-
 		result = append(result, agentInfo{
-			scName:   sc.Metadata.Name,
+			scName:   sc.Name,
 			agentURL: url,
-			token:    token,
+			token:    t.resolveAgentToken(ctx, sc.Parameters),
 		})
 	}
 	return result, nil
 }
 
 // resolveAgentToken reads the agentToken from the K8s Secret referenced by SC parameters.
-func resolveAgentToken(ctx context.Context, params map[string]string) string {
+func (t *AgentTracker) resolveAgentToken(ctx context.Context, params map[string]string) string {
 	name := params[config.SecretNameKey]
 	ns := params[config.SecretNamespaceKey]
 	if name == "" || ns == "" {
 		return ""
 	}
 
-	token, err := k8s.GetSecretValue(ctx, ns, name, secretAgentToken)
+	secret, err := t.kubeClient.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		log.Warn().Err(err).Str("secret", ns+"/"+name).Msg("failed to read agent secret")
 		return ""
 	}
-	return token
+	return string(secret.Data[secretAgentToken])
 }
 
 func (t *AgentTracker) discoverFromStorageClasses(ctx context.Context) {
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	scList, err := discoverAgents(checkCtx)
+	scList, err := t.discoverAgents(checkCtx)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to list StorageClasses")
 		return

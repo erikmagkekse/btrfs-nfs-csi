@@ -9,8 +9,10 @@ import (
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
-	"github.com/erikmagkekse/btrfs-nfs-csi/k8s"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/rs/zerolog/log"
 )
@@ -49,7 +51,7 @@ type volumeParams struct {
 	Labels       map[string]string
 }
 
-func resolveVolumeParams(ctx context.Context, params map[string]string) volumeParams {
+func (s *Server) resolveVolumeParams(ctx context.Context, params map[string]string) volumeParams {
 	vp := volumeParams{
 		NoCOW:       params[config.ParamNoCOW],
 		Compression: params[config.ParamCompression],
@@ -64,27 +66,20 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 		return vp
 	}
 
-	var obj struct {
-		Metadata struct {
-			Annotations map[string]string `json:"annotations"`
-		} `json:"metadata"`
-		Spec struct {
-			StorageClassName string `json:"storageClassName"`
-		} `json:"spec"`
-	}
-	path := "/api/v1/namespaces/" + pvcNamespace + "/persistentvolumeclaims/" + pvcName
-	if err := k8s.Get(ctx, path, &obj); err != nil {
+	pvc, err := s.kubeClient.CoreV1().PersistentVolumeClaims(pvcNamespace).Get(ctx, pvcName, metav1.GetOptions{})
+	if err != nil {
 		ctrlK8sOpsTotal.WithLabelValues("error").Inc()
 		log.Warn().Err(err).Str("pvc", pvcNamespace+"/"+pvcName).Msg("failed to fetch PVC, using SC defaults")
 		return vp
 	}
 	ctrlK8sOpsTotal.WithLabelValues("success").Inc()
 
-	vp.StorageClass = obj.Spec.StorageClassName
+	scName := ptr.Deref(pvc.Spec.StorageClassName, "")
+	vp.StorageClass = scName
 	vp.Labels = map[string]string{
 		"kubernetes.pvc.name":         pvcName,
 		"kubernetes.pvc.namespace":    pvcNamespace,
-		"kubernetes.pvc.storageclass": obj.Spec.StorageClassName,
+		"kubernetes.pvc.storageclass": scName,
 		"created-by":                  "csi",
 	}
 	for k, v := range envDefaultLabels {
@@ -93,7 +88,7 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 		}
 	}
 
-	annos := obj.Metadata.Annotations
+	annos := pvc.Annotations
 	if v, ok := annos[config.AnnoPrefix+config.ParamNoCOW]; ok {
 		vp.NoCOW = v
 	}

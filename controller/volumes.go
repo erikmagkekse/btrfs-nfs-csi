@@ -71,7 +71,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 	s.agents.Track(agentURL, client)
 
-	vp := resolveVolumeParams(ctx, params)
+	vp := s.resolveVolumeParams(ctx, params)
 	sc := vp.StorageClass
 	if sc == "" {
 		return nil, status.Errorf(codes.Internal, "failed to resolve StorageClass name for volume %s", req.Name)

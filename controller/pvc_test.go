@@ -1,10 +1,17 @@
 package controller
 
 import (
+	"context"
 	"testing"
+
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakekube "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/ptr"
 )
 
 // --- TestVolumeParamsValidate ---
@@ -170,5 +177,64 @@ func TestInitDefaultLabels(t *testing.T) {
 		initDefaultLabels("BADKEY=val,env=prod")
 		assert.NotContains(t, envDefaultLabels, "BADKEY")
 		assert.Equal(t, "prod", envDefaultLabels["env"])
+	})
+}
+
+// --- TestResolveVolumeParams ---
+
+func TestResolveVolumeParams(t *testing.T) {
+	t.Run("reads_pvc_annotations", func(t *testing.T) {
+		pvc := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "my-pvc",
+				Namespace: "default",
+				Annotations: map[string]string{
+					config.AnnoPrefix + config.ParamNoCOW: "true",
+					config.AnnoPrefix + config.ParamUID:   "1000",
+				},
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				StorageClassName: ptr.To("my-sc"),
+			},
+		}
+		srv := &Server{kubeClient: fakekube.NewSimpleClientset(pvc)}
+
+		params := map[string]string{
+			config.PvcNameKey:      "my-pvc",
+			config.PvcNamespaceKey: "default",
+		}
+		vp := srv.resolveVolumeParams(context.Background(), params)
+
+		assert.Equal(t, "my-sc", vp.StorageClass)
+		assert.Equal(t, "true", vp.NoCOW)
+		assert.Equal(t, "1000", vp.UID)
+		assert.Equal(t, "my-pvc", vp.Labels["kubernetes.pvc.name"])
+		assert.Equal(t, "default", vp.Labels["kubernetes.pvc.namespace"])
+		assert.Equal(t, "my-sc", vp.Labels["kubernetes.pvc.storageclass"])
+		assert.Equal(t, "csi", vp.Labels["created-by"])
+	})
+
+	t.Run("no_pvc_info", func(t *testing.T) {
+		srv := &Server{kubeClient: fakekube.NewSimpleClientset()}
+
+		vp := srv.resolveVolumeParams(context.Background(), map[string]string{
+			config.ParamNoCOW: "true",
+		})
+
+		assert.Equal(t, "true", vp.NoCOW)
+		assert.Empty(t, vp.StorageClass)
+		assert.Nil(t, vp.Labels)
+	})
+
+	t.Run("pvc_not_found", func(t *testing.T) {
+		srv := &Server{kubeClient: fakekube.NewSimpleClientset()}
+
+		vp := srv.resolveVolumeParams(context.Background(), map[string]string{
+			config.PvcNameKey:      "missing",
+			config.PvcNamespaceKey: "default",
+		})
+
+		assert.Empty(t, vp.StorageClass)
+		assert.Nil(t, vp.Labels)
 	})
 }

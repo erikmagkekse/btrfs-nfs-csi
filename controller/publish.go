@@ -38,7 +38,7 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	// apply PVC annotation changes to agent
-	vp := resolveVolumeParams(ctx, req.VolumeContext)
+	vp := s.resolveVolumeParams(ctx, req.VolumeContext)
 	if err := vp.validate(); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "volume %s: %v", name, err)
 	}
