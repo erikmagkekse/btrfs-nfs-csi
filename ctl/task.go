@@ -2,13 +2,88 @@ package ctl
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/urfave/cli/v3"
 )
+
+func taskResultSummary(resp *v1.TaskDetailResponse) string {
+	if len(resp.Result) == 0 {
+		return ""
+	}
+	switch resp.Type {
+	case v1.TaskTypeScrub:
+		return scrubResultSummary(resp)
+	default:
+		return genericResultSummary(resp.Result)
+	}
+}
+
+func scrubResultSummary(resp *v1.TaskDetailResponse) string {
+	var s btrfs.ScrubStatus
+	if json.Unmarshal(resp.Result, &s) != nil {
+		return genericResultSummary(resp.Result)
+	}
+	errs := s.ReadErrors + s.CSumErrors + s.VerifyErrors + s.UncorrectableErrs
+	switch resp.Status {
+	case v1.TaskStatusRunning:
+		parts := make([]string, 0, 2)
+		if resp.StartedAt != nil {
+			elapsed := time.Since(*resp.StartedAt).Seconds()
+			if elapsed > 0 && s.DataBytesScrubbed > 0 {
+				speed := float64(s.DataBytesScrubbed) / elapsed
+				parts = append(parts, utils.FormatBytes(uint64(speed))+"/s")
+			}
+		}
+		if errs > 0 {
+			parts = append(parts, fmt.Sprintf("%d errors", errs))
+		}
+		if len(parts) == 0 {
+			return ""
+		}
+		return strings.Join(parts, ", ")
+	case v1.TaskStatusCompleted:
+		speed := ""
+		if s.DataBytesScrubbed > 0 && resp.StartedAt != nil && resp.CompletedAt != nil {
+			elapsed := resp.CompletedAt.Sub(*resp.StartedAt).Seconds()
+			if elapsed > 0 {
+				speed = ", " + utils.FormatBytes(uint64(float64(s.DataBytesScrubbed)/elapsed)) + "/s"
+			}
+		}
+		return fmt.Sprintf("%s scrubbed, %d errors%s", utils.FormatBytes(s.DataBytesScrubbed), errs, speed)
+	case v1.TaskStatusFailed:
+		if errs > 0 {
+			return fmt.Sprintf("%d errors", errs)
+		}
+		return ""
+	default:
+		return ""
+	}
+}
+
+func genericResultSummary(result json.RawMessage) string {
+	var m map[string]any
+	if json.Unmarshal(result, &m) != nil {
+		return ""
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s: %v", k, m[k]))
+	}
+	return strings.Join(parts, ", ")
+}
 
 func taskCmd() *cli.Command {
 	return &cli.Command{
@@ -36,7 +111,7 @@ func taskCmd() *cli.Command {
 						})
 						return output(cmd, resp, func() {
 							w := tab()
-							_, _ = fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTOOK\tCREATED\tINFO")
+							_, _ = fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTIMEOUT\tTOOK\tCREATED\tRESULT\tERROR")
 							for _, t := range resp.Tasks {
 								took := "-"
 								if t.CompletedAt != nil {
@@ -44,12 +119,20 @@ func taskCmd() *cli.Command {
 								} else if t.StartedAt != nil {
 									took = fmtDuration(time.Since(*t.StartedAt))
 								}
-								info := t.Info
-								if info == "" {
-									info = "-"
+								result := taskResultSummary(&t)
+								if result == "" {
+									result = "-"
 								}
-								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\t%s\n",
-									t.ID, t.Type, t.Status, t.Progress, took, t.CreatedAt.Format(timeFmt), info)
+								timeout := "-"
+								if t.Timeout != "" {
+									timeout = t.Timeout
+								}
+								errMsg := "-"
+								if t.Error != "" {
+									errMsg = t.Error
+								}
+								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\t%s\t%s\t%s\n",
+									t.ID, t.Type, t.Status, t.Progress, timeout, took, t.CreatedAt.Format(timeFmt), result, errMsg)
 							}
 							_ = w.Flush()
 						})
@@ -63,7 +146,7 @@ func taskCmd() *cli.Command {
 					})
 					return output(cmd, resp, func() {
 						w := tab()
-						_, _ = fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTOOK\tCREATED")
+						_, _ = fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTIMEOUT\tTOOK\tCREATED")
 						for _, t := range resp.Tasks {
 							took := "-"
 							if t.CompletedAt != nil {
@@ -71,8 +154,12 @@ func taskCmd() *cli.Command {
 							} else if t.StartedAt != nil {
 								took = fmtDuration(time.Since(*t.StartedAt))
 							}
-							_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\n",
-								t.ID, t.Type, t.Status, t.Progress, took, t.CreatedAt.Format(timeFmt))
+							timeout := "-"
+							if t.Timeout != "" {
+								timeout = t.Timeout
+							}
+							_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\t%s\n",
+								t.ID, t.Type, t.Status, t.Progress, timeout, took, t.CreatedAt.Format(timeFmt))
 						}
 						_ = w.Flush()
 					})
@@ -94,6 +181,16 @@ func taskCmd() *cli.Command {
 					return output(cmd, resp, func() {
 						fmt.Printf("ID:         %s\n", resp.ID)
 						fmt.Printf("Type:       %s\n", resp.Type)
+						if len(resp.Opts) > 0 {
+							parts := make([]string, 0, len(resp.Opts))
+							for k, v := range resp.Opts {
+								parts = append(parts, k+"="+v)
+							}
+							fmt.Printf("Opts:       %s\n", strings.Join(parts, ", "))
+						}
+						if resp.Timeout != "" {
+							fmt.Printf("Timeout:    %s\n", resp.Timeout)
+						}
 						fmt.Printf("Status:     %s\n", resp.Status)
 						fmt.Printf("Progress:   %d%%\n", resp.Progress)
 						if resp.Error != "" {
@@ -107,8 +204,8 @@ func taskCmd() *cli.Command {
 							fmt.Printf("Completed:  %s\n", resp.CompletedAt.Format(timeFmt))
 							fmt.Printf("Took:       %s\n", fmtDuration(resp.CompletedAt.Sub(resp.CreatedAt)))
 						}
-						if resp.Info != "" {
-							fmt.Printf("Result:     %s\n", resp.Info)
+						if s := taskResultSummary(resp); s != "" {
+							fmt.Printf("Result:     %s\n", s)
 						}
 					})
 				},
@@ -136,11 +233,16 @@ func taskCmd() *cli.Command {
 						Name:  v1.TaskTypeScrub,
 						Usage: "start a btrfs scrub",
 						Flags: []cli.Flag{
+							&cli.DurationFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "timeout (e.g. 1h, 30m)"},
 							&cli.BoolFlag{Name: "wait", Aliases: []string{"w"}, Usage: "wait for completion"},
 						},
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							c := clientFrom(cmd)
-							resp, err := c.CreateTask(ctx, v1.TaskTypeScrub, nil)
+							req := v1.TaskCreateRequest{}
+							if t := cmd.Duration("timeout"); t > 0 {
+								req.Timeout = t.String()
+							}
+							resp, err := c.CreateTask(ctx, v1.TaskTypeScrub, req)
 							if err != nil {
 								return err
 							}
@@ -158,15 +260,19 @@ func taskCmd() *cli.Command {
 						Usage: "start a test task",
 						Flags: []cli.Flag{
 							&cli.DurationFlag{Name: "sleep", Aliases: []string{"s"}, Usage: "sleep duration (e.g. 10s, 1m)"},
+							&cli.DurationFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "timeout (e.g. 1h, 30m)"},
 							&cli.BoolFlag{Name: "wait", Aliases: []string{"w"}, Usage: "wait for completion"},
 						},
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							c := clientFrom(cmd)
-							var opts any
+							req := v1.TaskCreateRequest{}
 							if s := cmd.Duration("sleep"); s > 0 {
-								opts = map[string]string{"sleep": s.String()}
+								req.Opts = map[string]string{"sleep": s.String()}
 							}
-							resp, err := c.CreateTask(ctx, v1.TaskTypeTest, opts)
+							if t := cmd.Duration("timeout"); t > 0 {
+								req.Timeout = t.String()
+							}
+							resp, err := c.CreateTask(ctx, v1.TaskTypeTest, req)
 							if err != nil {
 								return err
 							}
@@ -203,8 +309,8 @@ func waitForTask(ctx context.Context, c *v1.Client, id string) error {
 				if t.CompletedAt != nil {
 					took = fmtDuration(t.CompletedAt.Sub(t.CreatedAt))
 				}
-				if t.Info != "" {
-					fmt.Printf("completed (took %s, %s)\n", took, t.Info)
+				if s := taskResultSummary(t); s != "" {
+					fmt.Printf("completed (took %s, %s)\n", took, s)
 				} else {
 					fmt.Printf("completed (took %s)\n", took)
 				}
@@ -215,8 +321,8 @@ func waitForTask(ctx context.Context, c *v1.Client, id string) error {
 				fmt.Println("cancelled")
 				return nil
 			default:
-				if t.Info != "" {
-					fmt.Printf("%s %d%% (%s)\n", t.Status, t.Progress, t.Info)
+				if s := taskResultSummary(t); s != "" {
+					fmt.Printf("%s %d%% (%s)\n", t.Status, t.Progress, s)
 				} else {
 					fmt.Printf("%s %d%%\n", t.Status, t.Progress)
 				}

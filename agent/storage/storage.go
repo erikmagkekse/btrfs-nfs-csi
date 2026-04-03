@@ -21,15 +21,17 @@ import (
 
 // Storage encapsulates all btrfs volume, snapshot, and clone operations.
 type Storage struct {
-	basePath        string
-	mountPoint      string
-	quotaEnabled    bool
-	btrfs           *btrfs.Manager
-	exporter        nfs.Exporter
-	tenants         []string
-	defaultDirMode  os.FileMode
-	defaultDataMode string
-	tasks           *task.Manager
+	basePath           string
+	mountPoint         string
+	quotaEnabled       bool
+	btrfs              *btrfs.Manager
+	exporter           nfs.Exporter
+	tenants            []string
+	defaultDirMode     os.FileMode
+	defaultDataMode    string
+	tasks              *task.Manager
+	taskDefaultTimeout time.Duration
+	taskScrubTimeout   time.Duration
 
 	// cachedDevices is written by both the IO poller (5s) and btrfs stats poller (1m).
 	// Each poller loads the current state, updates its own fields (IO or Errors),
@@ -41,7 +43,7 @@ type Storage struct {
 	cachedFilesystem atomic.Pointer[btrfs.FilesystemUsage]
 }
 
-func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode, btrfsBin string, taskMaxConcurrent int) *Storage {
+func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode, btrfsBin string, taskMaxConcurrent int, taskDefaultTimeout, taskScrubTimeout, taskPollInterval time.Duration) *Storage {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -112,7 +114,7 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 		initialStates[i] = DeviceState{BTRFSDevice: d}
 	}
 	taskDir := filepath.Join(basePath, config.TasksDir)
-	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, tasks: task.NewManager(taskDir, taskMaxConcurrent)}
+	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, tasks: task.NewManager(taskDir, taskMaxConcurrent, taskPollInterval), taskDefaultTimeout: taskDefaultTimeout, taskScrubTimeout: taskScrubTimeout}
 	s.cachedDevices.Store(&initialStates)
 	return s
 }

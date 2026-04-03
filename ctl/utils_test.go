@@ -4,50 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestParseSize(t *testing.T) {
-	tests := []struct {
-		input string
-		want  uint64
-	}{
-		{"0", 0},
-		{"1024", 1024},
-		{"1Ki", 1024},
-		{"10Ki", 10240},
-		{"1Mi", 1048576},
-		{"1Gi", 1073741824},
-		{"5Gi", 5368709120},
-		{"1K", 1000},
-		{"1M", 1000000},
-		{"1G", 1000000000},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got, err := parseSize(tt.input)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestParseSizeErrors(t *testing.T) {
-	tests := []string{
-		"",
-		"abc",
-		"-1Gi",
-		"1.5Gi",
-	}
-
-	for _, input := range tests {
-		t.Run(input, func(t *testing.T) {
-			_, err := parseSize(input)
-			assert.Error(t, err)
-		})
-	}
-}
 
 func TestUsedPct(t *testing.T) {
 	assert.Equal(t, 0.0, usedPct(0, 0))

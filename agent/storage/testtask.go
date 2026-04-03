@@ -8,34 +8,39 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// TestTaskOpts configures the test task behavior.
-type TestTaskOpts struct {
-	Sleep string `json:"sleep,omitempty"`
-}
-
 // StartTestTask creates a test task that sleeps for the given duration and returns "Hallo Welt".
-func (s *Storage) StartTestTask(ctx context.Context, opts TestTaskOpts) (string, error) {
+func (s *Storage) StartTestTask(ctx context.Context, opts map[string]string, timeout time.Duration) (string, error) {
 	var sleep time.Duration
-	if opts.Sleep != "" {
+	if v := opts["sleep"]; v != "" {
 		var err error
-		sleep, err = time.ParseDuration(opts.Sleep)
+		sleep, err = time.ParseDuration(v)
 		if err != nil {
-			return "", &StorageError{Code: ErrInvalid, Message: "invalid sleep duration: " + opts.Sleep}
+			return "", &StorageError{Code: ErrInvalid, Message: "invalid sleep duration: " + v}
 		}
 	}
 
-	id := s.tasks.Create(string(task.TypeTest), func(ctx context.Context, update *task.Update) error {
+	t := s.taskDefaultTimeout
+	if timeout > 0 {
+		t = timeout
+	}
+	id := s.tasks.Create(string(task.TypeTest), task.TaskOpts{Opts: opts, Timeout: t}, func(ctx context.Context, update *task.Update) error {
 		if sleep > 0 {
 			log.Debug().Dur("sleep", sleep).Msg("test task sleeping")
+			start := time.Now()
+			stop := update.PollProgress(ctx, func() int {
+				return int(time.Since(start) * 100 / sleep)
+			})
 			select {
 			case <-time.After(sleep):
+				stop()
 			case <-ctx.Done():
+				stop()
 				return ctx.Err()
 			}
 		}
 		return update.SetResult(map[string]string{"message": "Hallo Welt"})
 	})
 
-	log.Info().Str("task", id).Str("sleep", opts.Sleep).Msg("test task started")
+	log.Info().Str("task", id).Str("sleep", opts["sleep"]).Msg("test task started")
 	return id, nil
 }

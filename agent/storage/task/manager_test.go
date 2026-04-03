@@ -46,11 +46,11 @@ func awaitDone(t *testing.T, tm *Manager, id string) *Task {
 }
 
 func TestManager_SubmitAndGet(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
 	started := make(chan struct{})
 	done := make(chan struct{})
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		close(started)
 		<-done
 		return nil
@@ -74,9 +74,9 @@ func TestManager_SubmitAndGet(t *testing.T) {
 }
 
 func TestManager_SubmitWithError(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return fmt.Errorf("something broke")
 	})
 
@@ -86,10 +86,10 @@ func TestManager_SubmitWithError(t *testing.T) {
 }
 
 func TestManager_Cancel(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
 	started := make(chan struct{})
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
@@ -103,9 +103,9 @@ func TestManager_Cancel(t *testing.T) {
 }
 
 func TestManager_CancelFinished(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -114,26 +114,26 @@ func TestManager_CancelFinished(t *testing.T) {
 }
 
 func TestManager_CancelUnknown(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
 	err := tm.Cancel("nonexistent")
 	assert.Error(t, err)
 }
 
 func TestManager_GetUnknown(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
 	_, err := tm.Get("nonexistent")
 	assert.Error(t, err)
 }
 
 func TestManager_List(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
-	id1 := tm.Create("scrub", func(ctx context.Context, update *Update) error {
+	id1 := tm.Create("scrub", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
-	id2 := tm.Create("transfer", func(ctx context.Context, update *Update) error {
+	id2 := tm.Create("transfer", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -156,9 +156,9 @@ func TestManager_List(t *testing.T) {
 }
 
 func TestManager_ListReturnsCopies(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -175,10 +175,10 @@ func TestManager_ListReturnsCopies(t *testing.T) {
 }
 
 func TestManager_ProgressUpdate(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
 	checkpoint := make(chan struct{})
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		update.SetProgress(50)
 		close(checkpoint)
 		<-ctx.Done()
@@ -201,9 +201,9 @@ func TestManager_ResultStruct(t *testing.T) {
 		Name  string `json:"name"`
 	}
 
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return update.SetResult(TestResult{Count: 42, Name: "hello"})
 	})
 
@@ -217,9 +217,9 @@ func TestManager_ResultStruct(t *testing.T) {
 }
 
 func TestManager_Cleanup(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -231,10 +231,10 @@ func TestManager_Cleanup(t *testing.T) {
 }
 
 func TestManager_CleanupKeepsRunning(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
 	done := make(chan struct{})
-	id := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		<-done
 		return nil
 	})
@@ -259,7 +259,7 @@ func TestManager_CorruptTaskFile(t *testing.T) {
 	valid, _ := json.MarshalIndent(Task{ID: "good", Type: "test", Status: TaskCompleted}, "", "  ")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "good.json"), valid, 0o644))
 
-	tm := NewManager(dir, 0)
+	tm := NewManager(dir, 0, 0)
 
 	tasks := tm.List("")
 	assert.Len(t, tasks, 1)
@@ -271,13 +271,13 @@ func TestManager_EmptyTaskFile(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "empty.json"), []byte(""), 0o644))
 
-	tm := NewManager(dir, 0)
+	tm := NewManager(dir, 0, 0)
 	tasks := tm.List("")
 	assert.Empty(t, tasks)
 }
 
 func TestManager_ConcurrentSubmit(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
 	ids := make([]string, 50)
 	var wg sync.WaitGroup
@@ -285,7 +285,7 @@ func TestManager_ConcurrentSubmit(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			ids[idx] = tm.Create("test", func(ctx context.Context, update *Update) error {
+			ids[idx] = tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 				return nil
 			})
 		}(i)
@@ -304,18 +304,18 @@ func TestManager_ConcurrentSubmit(t *testing.T) {
 }
 
 func TestManager_WorkerPoolBlocksSecondTask(t *testing.T) {
-	tm := NewManager(t.TempDir(), 1)
+	tm := NewManager(t.TempDir(), 1, 0)
 
 	started := make(chan struct{})
 	blocker := make(chan struct{})
-	first := tm.Create("test", func(ctx context.Context, update *Update) error {
+	first := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		close(started)
 		<-blocker
 		return nil
 	})
 	<-started
 
-	second := tm.Create("test", func(ctx context.Context, update *Update) error {
+	second := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -331,18 +331,18 @@ func TestManager_WorkerPoolBlocksSecondTask(t *testing.T) {
 }
 
 func TestManager_WorkerPoolMaxTwo(t *testing.T) {
-	tm := NewManager(t.TempDir(), 2)
+	tm := NewManager(t.TempDir(), 2, 0)
 
 	started1 := make(chan struct{})
 	started2 := make(chan struct{})
 	blocker := make(chan struct{})
 
-	id1 := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id1 := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		close(started1)
 		<-blocker
 		return nil
 	})
-	id2 := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id2 := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		close(started2)
 		<-blocker
 		return nil
@@ -351,7 +351,7 @@ func TestManager_WorkerPoolMaxTwo(t *testing.T) {
 	<-started1
 	<-started2
 
-	id3 := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id3 := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -367,13 +367,13 @@ func TestManager_WorkerPoolMaxTwo(t *testing.T) {
 }
 
 func TestManager_WorkerPoolUnlimited(t *testing.T) {
-	tm := NewManager(t.TempDir(), 0)
+	tm := NewManager(t.TempDir(), 0, 0)
 
 	started := make(chan struct{}, 10)
 	blocker := make(chan struct{})
 	var ids []string
 	for i := 0; i < 10; i++ {
-		id := tm.Create("test", func(ctx context.Context, update *Update) error {
+		id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 			started <- struct{}{}
 			<-blocker
 			return nil
@@ -398,18 +398,18 @@ func TestManager_WorkerPoolUnlimited(t *testing.T) {
 }
 
 func TestManager_CancelPending(t *testing.T) {
-	tm := NewManager(t.TempDir(), 1)
+	tm := NewManager(t.TempDir(), 1, 0)
 
 	started := make(chan struct{})
 	blocker := make(chan struct{})
-	first := tm.Create("test", func(ctx context.Context, update *Update) error {
+	first := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		close(started)
 		<-blocker
 		return nil
 	})
 	<-started
 
-	second := tm.Create("test", func(ctx context.Context, update *Update) error {
+	second := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -427,7 +427,7 @@ func TestManager_CancelPending(t *testing.T) {
 }
 
 func TestManager_PendingTaskRunsAfterSlotFreed(t *testing.T) {
-	tm := NewManager(t.TempDir(), 1)
+	tm := NewManager(t.TempDir(), 1, 0)
 
 	order := make([]string, 0, 3)
 	var mu sync.Mutex
@@ -440,7 +440,7 @@ func TestManager_PendingTaskRunsAfterSlotFreed(t *testing.T) {
 
 	started := make(chan struct{})
 	blocker := make(chan struct{})
-	tm.Create("test", func(ctx context.Context, update *Update) error {
+	tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		record("first-start")
 		close(started)
 		<-blocker
@@ -449,7 +449,7 @@ func TestManager_PendingTaskRunsAfterSlotFreed(t *testing.T) {
 	})
 	<-started
 
-	second := tm.Create("test", func(ctx context.Context, update *Update) error {
+	second := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		record("second-start")
 		return nil
 	})
@@ -466,15 +466,15 @@ func TestManager_PendingTaskRunsAfterSlotFreed(t *testing.T) {
 }
 
 func TestManager_WorkerPoolTaskError(t *testing.T) {
-	tm := NewManager(t.TempDir(), 1)
+	tm := NewManager(t.TempDir(), 1, 0)
 
-	id1 := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id1 := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return fmt.Errorf("boom")
 	})
 
 	awaitStatus(t, tm, id1, TaskFailed)
 
-	id2 := tm.Create("test", func(ctx context.Context, update *Update) error {
+	id2 := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 		return nil
 	})
 
@@ -482,7 +482,7 @@ func TestManager_WorkerPoolTaskError(t *testing.T) {
 }
 
 func TestManager_Stress(t *testing.T) {
-	tm := NewManager(t.TempDir(), 4)
+	tm := NewManager(t.TempDir(), 4, 0)
 
 	const total = 1000
 	var running atomic.Int32
@@ -494,7 +494,7 @@ func TestManager_Stress(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			ids[idx] = tm.Create("test", func(ctx context.Context, update *Update) error {
+			ids[idx] = tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 				cur := running.Add(1)
 				for {
 					old := maxRunning.Load()
@@ -533,4 +533,60 @@ func TestManager_Stress(t *testing.T) {
 	assert.Equal(t, 0, failed, "no tasks should fail")
 	assert.LessOrEqual(t, int(maxRunning.Load()), 4, "max concurrency should not exceed 4")
 	t.Logf("peak concurrency: %d/4, completed: %d/%d", maxRunning.Load(), completed, total)
+}
+
+func TestManager_CreateWithOpts(t *testing.T) {
+	tm := NewManager(t.TempDir(), 0, 0)
+
+	id := tm.Create("test", TaskOpts{
+		Opts:    map[string]string{"sleep": "5s"},
+		Timeout: 10 * time.Minute,
+	}, func(ctx context.Context, update *Update) error {
+		return nil
+	})
+
+	tsk := awaitStatus(t, tm, id, TaskCompleted)
+	require.NotNil(t, tsk.Opts)
+	assert.Equal(t, 10*time.Minute, tsk.Timeout)
+	assert.Equal(t, "5s", tsk.Opts["sleep"])
+}
+
+func TestManager_Timeout(t *testing.T) {
+	tm := NewManager(t.TempDir(), 0, 0)
+
+	id := tm.Create("test", TaskOpts{
+		Timeout: 50 * time.Millisecond,
+	}, func(ctx context.Context, update *Update) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+
+	tsk := awaitStatus(t, tm, id, TaskFailed)
+	assert.Contains(t, tsk.Error, "timed out")
+	assert.NotNil(t, tsk.CompletedAt)
+}
+
+func TestManager_TimeoutCompletesBeforeDeadline(t *testing.T) {
+	tm := NewManager(t.TempDir(), 0, 0)
+
+	id := tm.Create("test", TaskOpts{
+		Timeout: 10 * time.Second,
+	}, func(ctx context.Context, update *Update) error {
+		return nil
+	})
+
+	tsk := awaitStatus(t, tm, id, TaskCompleted)
+	assert.Empty(t, tsk.Error)
+}
+
+func TestManager_ZeroTimeoutMeansNoTimeout(t *testing.T) {
+	tm := NewManager(t.TempDir(), 0, 0)
+
+	id := tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
+		return nil
+	})
+
+	tsk := awaitStatus(t, tm, id, TaskCompleted)
+	assert.Equal(t, time.Duration(0), tsk.Timeout)
+	assert.Nil(t, tsk.Opts)
 }

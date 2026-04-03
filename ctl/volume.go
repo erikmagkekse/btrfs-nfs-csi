@@ -126,7 +126,7 @@ func volumeCmd() *cli.Command {
 						return fmt.Errorf("usage: volume create <name> <size>")
 					}
 
-					size, err := parseSize(cmd.Args().Get(1))
+					size, err := utils.ParseSize(cmd.Args().Get(1))
 					if err != nil {
 						return err
 					}
@@ -210,7 +210,7 @@ func volumeCmd() *cli.Command {
 						return fmt.Errorf("usage: volume expand <name> <new-size>")
 					}
 
-					size, err := parseSize(cmd.Args().Get(1))
+					size, err := utils.ParseSize(cmd.Args().Get(1))
 					if err != nil {
 						return err
 					}

@@ -64,7 +64,7 @@ func (a *Agent) Start(ctx context.Context) {
 	store := storage.New(
 		a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames,
 		a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin,
-		a.cfg.TaskMaxConcurrent,
+		a.cfg.TaskMaxConcurrent, a.cfg.TaskDefaultTimeout, a.cfg.TaskScrubTimeout, a.cfg.TaskPollInterval,
 	)
 	h := &v1.Handler{Store: store}
 
@@ -96,8 +96,7 @@ func (a *Agent) Start(ctx context.Context) {
 	api.POST("/volumes/clone", h.CloneVolume)
 
 	api.GET("/tasks", h.ListTasks)
-	api.POST("/tasks/scrub", h.StartScrub)
-	api.POST("/tasks/test", h.StartTestTask)
+	api.POST("/tasks/:type", h.CreateTask)
 	api.GET("/tasks/:id", h.GetTask)
 	api.DELETE("/tasks/:id", h.CancelTask)
 

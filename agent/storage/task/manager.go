@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,21 +14,26 @@ import (
 
 // Manager manages async tasks as goroutines with progress tracking.
 type Manager struct {
-	mu      sync.Mutex
-	tasks   map[string]*runningTask
-	taskDir string
-	sem     chan struct{}
+	mu           sync.Mutex
+	tasks        map[string]*runningTask
+	taskDir      string
+	sem          chan struct{}
+	pollInterval time.Duration
 }
 
 // NewManager creates a new Manager with persistence under taskDir.
 // maxConcurrent limits the number of tasks running simultaneously.
-func NewManager(taskDir string, maxConcurrent int) *Manager {
+func NewManager(taskDir string, maxConcurrent int, pollInterval time.Duration) *Manager {
 	if err := os.MkdirAll(taskDir, 0o755); err != nil {
 		log.Fatal().Err(err).Str("path", taskDir).Msg("failed to create tasks directory")
 	}
+	if pollInterval <= 0 {
+		pollInterval = 5 * time.Second
+	}
 	tm := &Manager{
-		tasks:   make(map[string]*runningTask),
-		taskDir: taskDir,
+		tasks:        make(map[string]*runningTask),
+		taskDir:      taskDir,
+		pollInterval: pollInterval,
 	}
 	if maxConcurrent > 0 {
 		tm.sem = make(chan struct{}, maxConcurrent)
@@ -42,7 +48,7 @@ func NewManager(taskDir string, maxConcurrent int) *Manager {
 }
 
 // Create starts a task as a background goroutine and returns its ID.
-func (tm *Manager) Create(taskType string, fn TaskFunc) string {
+func (tm *Manager) Create(taskType string, opts TaskOpts, fn TaskFunc) string {
 	id := generateID()
 	now := time.Now().UTC()
 
@@ -50,10 +56,18 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 		ID:        id,
 		Type:      taskType,
 		Status:    TaskPending,
+		Opts:      opts.Opts,
+		Timeout:   opts.Timeout,
 		CreatedAt: now,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if opts.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), opts.Timeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
 	rt := &runningTask{cancel: cancel}
 	rt.state.Store(t)
 	tm.persist(t)
@@ -62,7 +76,7 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 	tm.tasks[id] = rt
 	tm.mu.Unlock()
 
-	log.Info().Str("task", id).Str("type", taskType).Msg("task submitted")
+	log.Info().Str("task", id).Str("type", taskType).Dur("timeout", opts.Timeout).Msg("task submitted")
 
 	go func() {
 		// Wait for a worker slot (nil sem = unlimited)
@@ -90,6 +104,7 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 		}
 
 		tasksRunning.WithLabelValues(taskType).Inc()
+		defer cancel()
 
 		start := time.Now()
 		startUTC := start.UTC()
@@ -100,12 +115,15 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 		tm.persist(&running)
 		rt.state.Store(&running)
 
-		err := fn(ctx, &Update{rt: rt, persist: tm.persist})
+		err := fn(ctx, &Update{rt: rt, persist: tm.persist, pollInterval: tm.pollInterval})
 
 		now := time.Now().UTC()
 		final := *rt.state.Load()
 		final.CompletedAt = &now
 		switch {
+		case ctx.Err() == context.DeadlineExceeded:
+			final.Status = TaskFailed
+			final.Error = fmt.Sprintf("task timed out after %s", opts.Timeout)
 		case ctx.Err() != nil:
 			final.Status = TaskCancelled
 		case err != nil:

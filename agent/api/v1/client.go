@@ -163,9 +163,9 @@ func (c *Client) ListExports(ctx context.Context) (*ExportListResponse, error) {
 	return &resp, nil
 }
 
-func (c *Client) CreateTask(ctx context.Context, taskType string, opts any) (*TaskStartResponse, error) {
-	var resp TaskStartResponse
-	if err := c.do(ctx, http.MethodPost, "/v1/tasks/"+taskType, opts, &resp); err != nil {
+func (c *Client) CreateTask(ctx context.Context, taskType string, req TaskCreateRequest) (*TaskCreateResponse, error) {
+	var resp TaskCreateResponse
+	if err := c.do(ctx, http.MethodPost, "/v1/tasks/"+taskType, req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

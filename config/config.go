@@ -57,6 +57,9 @@ type AgentConfig struct {
 	DefaultDataMode      string        `env:"AGENT_DEFAULT_DATA_MODE" envDefault:"2770"`
 	TaskCleanupInterval  time.Duration `env:"AGENT_TASK_CLEANUP_INTERVAL" envDefault:"24h"`
 	TaskMaxConcurrent    int           `env:"AGENT_TASK_MAX_CONCURRENT" envDefault:"2"`
+	TaskDefaultTimeout   time.Duration `env:"AGENT_TASK_DEFAULT_TIMEOUT" envDefault:"6h"`
+	TaskScrubTimeout     time.Duration `env:"AGENT_TASK_SCRUB_TIMEOUT" envDefault:"24h"`
+	TaskPollInterval     time.Duration `env:"AGENT_TASK_POLL_INTERVAL" envDefault:"5s"`
 }
 
 type ControllerConfig struct {

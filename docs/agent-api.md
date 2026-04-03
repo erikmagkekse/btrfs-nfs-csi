@@ -346,9 +346,19 @@ Filesystem space usage, per-device IO counters (from sysfs), per-device btrfs er
 
 Background task system for long-running operations (scrub, future: transfers). Tasks are persisted to disk and survive agent restarts. Running tasks that were interrupted by an agent restart are marked as `failed`.
 
-### POST /v1/tasks/scrub
+### POST /v1/tasks/:type
 
-Starts a btrfs scrub on the filesystem. Returns 423 if a scrub is already running.
+Starts a background task. `type` is `scrub` or `test`. Returns 423 if a scrub is already running.
+
+```json
+// Request (all fields optional)
+{
+  "timeout": "1h",
+  "opts": {"sleep": "10s"}
+}
+```
+
+`timeout` overrides the server default (scrub: 24h, test: 6h). `opts` is task-type-specific: scrub has no opts, test accepts `{"sleep": "10s"}`.
 
 ```json
 // Response 202
@@ -359,25 +369,21 @@ Starts a btrfs scrub on the filesystem. Returns 423 if a scrub is already runnin
 ```
 
 ```bash
+# Start scrub
 curl -X POST http://10.0.0.5:8080/v1/tasks/scrub \
   -H "Authorization: Bearer changeme"
-```
 
-### POST /v1/tasks/test
+# Start scrub with 30m timeout
+curl -X POST http://10.0.0.5:8080/v1/tasks/scrub \
+  -H "Authorization: Bearer changeme" \
+  -H "Content-Type: application/json" \
+  -d '{"timeout": "30m"}'
 
-Starts a test task for debugging. Optional `sleep` parameter. Result is always `{"message": "Hallo Welt"}`.
-
-```json
-// Request (optional)
-{
-  "sleep": "10s"
-}
-
-// Response 202
-{
-  "task_id": "abc123",
-  "status": "pending"
-}
+# Start test task with sleep
+curl -X POST http://10.0.0.5:8080/v1/tasks/test \
+  -H "Authorization: Bearer changeme" \
+  -H "Content-Type: application/json" \
+  -d '{"opts": {"sleep": "10s"}, "timeout": "1m"}'
 ```
 
 ### GET /v1/tasks
@@ -392,6 +398,7 @@ List all tasks. Optional `?type=` filter (e.g. `scrub`, `test`). Returns a summa
       "type": "scrub",
       "status": "completed",
       "progress": 100,
+      "timeout": "24h0m0s",
       "created_at": "2025-01-15T02:00:00Z",
       "started_at": "2025-01-15T02:00:00Z",
       "completed_at": "2025-01-15T02:00:05Z"
@@ -401,11 +408,11 @@ List all tasks. Optional `?type=` filter (e.g. `scrub`, `test`). Returns a summa
 }
 ```
 
-With `?detail=true`, each task includes the `result` field containing task-type-specific data (e.g. scrub statistics).
+With `?detail=true`, each task includes `result` and `opts` fields.
 
 ### GET /v1/tasks/:id
 
-Returns a single task with full details including `result`. 404 if not found.
+Returns a single task with full details including `result` and `opts`. 404 if not found.
 
 ```json
 {
@@ -413,6 +420,7 @@ Returns a single task with full details including `result`. 404 if not found.
   "type": "scrub",
   "status": "completed",
   "progress": 100,
+  "timeout": "24h0m0s",
   "result": {
     "data_bytes_scrubbed": 3145728000,
     "tree_bytes_scrubbed": 6979584,
@@ -428,6 +436,7 @@ Returns a single task with full details including `result`. 404 if not found.
   "started_at": "2025-01-15T02:00:00Z",
   "completed_at": "2025-01-15T02:00:05Z"
 }
+```
 
 ### DELETE /v1/tasks/:id
 

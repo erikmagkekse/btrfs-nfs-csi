@@ -2,9 +2,9 @@ package v1
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
-	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
 
 	"github.com/labstack/echo/v5"
 )
@@ -400,37 +400,42 @@ func (h *Handler) CreateClone(c *echo.Context) error {
 	})
 }
 
-// --- Scrub ---
-
-func (h *Handler) StartScrub(c *echo.Context) error {
-	taskID, err := h.Store.StartScrub(c.Request().Context())
-	if err != nil {
-		return StorageError(c, err)
-	}
-	return c.JSON(http.StatusAccepted, map[string]any{
-		"task_id": taskID,
-		"status":  string(task.TaskPending),
-	})
-}
-
-// --- Test Task ---
-
-func (h *Handler) StartTestTask(c *echo.Context) error {
-	var opts storage.TestTaskOpts
-	if err := c.Bind(&opts); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request body: " + err.Error(), Code: storage.ErrInvalid})
-	}
-	taskID, err := h.Store.StartTestTask(c.Request().Context(), opts)
-	if err != nil {
-		return StorageError(c, err)
-	}
-	return c.JSON(http.StatusAccepted, map[string]any{
-		"task_id": taskID,
-		"status":  string(task.TaskPending),
-	})
-}
-
 // --- Tasks ---
+
+func (h *Handler) CreateTask(c *echo.Context) error {
+	taskType := c.Param("type")
+
+	var req TaskCreateRequest
+	if c.Request().ContentLength > 0 || c.Request().ContentLength == -1 {
+		if err := c.Bind(&req); err != nil {
+			return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request body: " + err.Error(), Code: storage.ErrInvalid})
+		}
+	}
+
+	var timeout time.Duration
+	if req.Timeout != "" {
+		var err error
+		timeout, err = time.ParseDuration(req.Timeout)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid timeout: " + req.Timeout, Code: storage.ErrInvalid})
+		}
+	}
+
+	var taskID string
+	var err error
+	switch taskType {
+	case TaskTypeScrub:
+		taskID, err = h.Store.StartScrub(c.Request().Context(), req.Opts, timeout)
+	case TaskTypeTest:
+		taskID, err = h.Store.StartTestTask(c.Request().Context(), req.Opts, timeout)
+	default:
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "unknown task type: " + taskType, Code: storage.ErrInvalid})
+	}
+	if err != nil {
+		return StorageError(c, err)
+	}
+	return c.JSON(http.StatusAccepted, TaskCreateResponse{TaskID: taskID, Status: TaskStatusPending})
+}
 
 func (h *Handler) ListTasks(c *echo.Context) error {
 	tasks := h.Store.Tasks().List(c.QueryParam("type"))

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/urfave/cli/v3"
 )
 
@@ -193,8 +192,4 @@ func usedPct(used, total uint64) float64 {
 		return 0
 	}
 	return float64(used) / float64(total) * 100
-}
-
-func parseSize(s string) (uint64, error) {
-	return utils.ParseSize(s)
 }
