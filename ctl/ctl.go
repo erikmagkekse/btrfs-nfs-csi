@@ -26,7 +26,6 @@ func Run(args []string) {
 		Commands: []*cli.Command{
 			volumeCmd(),
 			snapshotCmd(),
-			cloneCmd(),
 			exportCmd(),
 			taskCmd(),
 			{
