@@ -89,6 +89,12 @@ func (m VolumeMetadata) GetLabels() map[string]string   { return m.Labels }
 func (m SnapshotMetadata) GetLabels() map[string]string { return m.Labels }
 func (m CloneMetadata) GetLabels() map[string]string    { return m.Labels }
 
+type PaginatedResult[T any] struct {
+	Items []T
+	Total int
+	Next  string // cursor for next page, empty = end of list
+}
+
 type ExportEntry struct {
 	Path   string `json:"path"`
 	Client string `json:"client"`

@@ -164,6 +164,55 @@ func (s *Storage) ListVolumes(tenant string) ([]VolumeMetadata, error) {
 	return vols, nil
 }
 
+func (s *Storage) ListVolumesPaginated(tenant, after string, limit int) (*PaginatedResult[VolumeMetadata], error) {
+	bp, err := s.tenantPath(tenant)
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(bp)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to read base path")
+		return nil, fmt.Errorf("failed to read base path: %w", err)
+	}
+
+	// count valid directories (excluding snapshots dir)
+	total := 0
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != config.SnapshotsDir {
+			total++
+		}
+	}
+
+	var vols []VolumeMetadata
+	for _, e := range entries {
+		if !e.IsDir() || e.Name() == config.SnapshotsDir {
+			continue
+		}
+		if after != "" && e.Name() <= after {
+			continue
+		}
+		metaPath := filepath.Join(bp, e.Name(), config.MetadataFile)
+		var meta VolumeMetadata
+		if err := ReadMetadata(metaPath, &meta); err != nil {
+			continue
+		}
+		vols = append(vols, meta)
+		if limit > 0 && len(vols) > limit {
+			break
+		}
+	}
+
+	result := &PaginatedResult[VolumeMetadata]{Total: total}
+	if limit > 0 && len(vols) > limit {
+		result.Next = vols[limit-1].Name
+		result.Items = vols[:limit]
+	} else {
+		result.Items = vols
+	}
+	return result, nil
+}
+
 func (s *Storage) GetVolume(tenant, name string) (*VolumeMetadata, error) {
 	bp, err := s.tenantPath(tenant)
 	if err != nil {

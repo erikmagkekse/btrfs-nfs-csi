@@ -1,8 +1,9 @@
 package controller
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
@@ -12,29 +13,31 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// paginate applies index-based pagination to a slice. Order is non-deterministic
-// (map iteration) which may cause duplicates or skips across paginated requests.
-// Acceptable for now since a single agent is not expected to host more than ~5k
-// volumes and the project is targeting homelab or small prod environments.
-func paginate[T any](entries []T, startingToken string, maxEntries int32) ([]T, string, error) {
-	startIndex := 0
-	if startingToken != "" {
-		idx, err := strconv.Atoi(startingToken)
-		if err != nil {
-			return nil, "", status.Errorf(codes.Aborted, "invalid starting_token: %v", err)
-		}
-		startIndex = idx
+// pageToken encodes/decodes a cursor for multi-agent pagination.
+// Format: base64(json({"sc":"storageclass","after":"last_name"}))
+type pageToken struct {
+	SC    string `json:"sc"`
+	After string `json:"after"`
+}
+
+func encodePageToken(sc, after string) string {
+	data, _ := json.Marshal(pageToken{SC: sc, After: after})
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func decodePageToken(token string) (pageToken, error) {
+	var pt pageToken
+	if token == "" {
+		return pt, nil
 	}
-	if startIndex > len(entries) {
-		startIndex = len(entries)
+	data, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return pt, status.Errorf(codes.Aborted, "invalid starting_token: %v", err)
 	}
-	entries = entries[startIndex:]
-	var nextToken string
-	if maxEntries > 0 && int(maxEntries) < len(entries) {
-		nextToken = strconv.Itoa(startIndex + int(maxEntries))
-		entries = entries[:maxEntries]
+	if err := json.Unmarshal(data, &pt); err != nil {
+		return pt, status.Errorf(codes.Aborted, "invalid starting_token: %v", err)
 	}
-	return entries, nextToken, nil
+	return pt, nil
 }
 
 const (

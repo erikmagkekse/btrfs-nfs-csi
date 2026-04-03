@@ -17,79 +17,125 @@ import (
 func (s *Server) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	agents := s.agents.Agents()
 
-	type agentQuery struct {
-		sc     string
-		client *agentAPI.Client
-		volume string
-	}
-	var queries []agentQuery
-
+	// single-agent queries (by snapshot or source volume ID)
 	if req.SnapshotId != "" {
 		sc, _, err := utils.ParseVolumeID(req.SnapshotId)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
 		}
-		if c, ok := agents[sc]; ok {
-			queries = append(queries, agentQuery{sc: sc, client: c})
+		c, ok := agents[sc]
+		if !ok {
+			return &csi.ListSnapshotsResponse{}, nil
 		}
-	} else if req.SourceVolumeId != "" {
-		sc, volName, err := utils.ParseVolumeID(req.SourceVolumeId)
+		snapList, err := c.ListSnapshots(ctx, agentAPI.ListOpts{})
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
+			return nil, status.Errorf(codes.Internal, "list snapshots from %s: %v", sc, err)
 		}
-		if c, ok := agents[sc]; ok {
-			queries = append(queries, agentQuery{sc: sc, client: c, volume: volName})
-		}
-	} else {
-		for sc, client := range agents {
-			queries = append(queries, agentQuery{sc: sc, client: client})
-		}
-	}
-
-	var entries []*csi.ListSnapshotsResponse_Entry
-	for _, q := range queries {
-		start := time.Now()
-		var snapList *agentAPI.SnapshotListResponse
-		var err error
-		if q.volume != "" {
-			snapList, err = q.client.ListVolumeSnapshots(ctx, q.volume)
-		} else {
-			snapList, err = q.client.ListSnapshots(ctx)
-		}
-		agentDuration.WithLabelValues("list_snapshots", q.sc).Observe(time.Since(start).Seconds())
-		if err != nil {
-			agentOpsTotal.WithLabelValues("list_snapshots", "error", q.sc).Inc()
-			log.Warn().Err(err).Str("sc", q.sc).Msg("failed to list snapshots from agent")
-			continue
-		}
-		agentOpsTotal.WithLabelValues("list_snapshots", "success", q.sc).Inc()
-
+		var entries []*csi.ListSnapshotsResponse_Entry
 		for _, snap := range snapList.Snapshots {
-			snapID := utils.MakeVolumeID(q.sc, snap.Name)
-
-			if req.SnapshotId != "" && snapID != req.SnapshotId {
+			snapID := utils.MakeVolumeID(sc, snap.Name)
+			if snapID != req.SnapshotId {
 				continue
 			}
-
 			entries = append(entries, &csi.ListSnapshotsResponse_Entry{
 				Snapshot: &csi.Snapshot{
 					SnapshotId:     snapID,
-					SourceVolumeId: utils.MakeVolumeID(q.sc, snap.Volume),
+					SourceVolumeId: utils.MakeVolumeID(sc, snap.Volume),
 					SizeBytes:      int64(snap.SizeBytes),
 					ReadyToUse:     true,
 					CreationTime:   timestamppb.New(snap.CreatedAt),
 				},
 			})
 		}
+		return &csi.ListSnapshotsResponse{Entries: entries}, nil
 	}
 
-	paged, nextToken, err := paginate(entries, req.StartingToken, req.MaxEntries)
+	if req.SourceVolumeId != "" {
+		sc, volName, err := utils.ParseVolumeID(req.SourceVolumeId)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
+		}
+		c, ok := agents[sc]
+		if !ok {
+			return &csi.ListSnapshotsResponse{}, nil
+		}
+		snapList, err := c.ListVolumeSnapshots(ctx, volName, agentAPI.ListOpts{})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "list snapshots from %s: %v", sc, err)
+		}
+		var entries []*csi.ListSnapshotsResponse_Entry
+		for _, snap := range snapList.Snapshots {
+			entries = append(entries, &csi.ListSnapshotsResponse_Entry{
+				Snapshot: &csi.Snapshot{
+					SnapshotId:     utils.MakeVolumeID(sc, snap.Name),
+					SourceVolumeId: utils.MakeVolumeID(sc, snap.Volume),
+					SizeBytes:      int64(snap.SizeBytes),
+					ReadyToUse:     true,
+					CreationTime:   timestamppb.New(snap.CreatedAt),
+				},
+			})
+		}
+		return &csi.ListSnapshotsResponse{Entries: entries}, nil
+	}
+
+	// multi-agent paginated query
+	pt, err := decodePageToken(req.StartingToken)
 	if err != nil {
 		return nil, err
 	}
 
+	sorted := sortedAgents(agents)
+	limit := int(req.MaxEntries)
+
+	var entries []*csi.ListSnapshotsResponse_Entry
+	var nextToken string
+
+	for _, a := range sorted {
+		if pt.SC != "" && a.sc < pt.SC {
+			continue
+		}
+		after := ""
+		if a.sc == pt.SC {
+			after = pt.After
+		}
+
+		start := time.Now()
+		snapList, err := a.client.ListSnapshots(ctx, agentAPI.ListOpts{After: after, Limit: limit})
+		agentDuration.WithLabelValues("list_snapshots", a.sc).Observe(time.Since(start).Seconds())
+		if err != nil {
+			agentOpsTotal.WithLabelValues("list_snapshots", "error", a.sc).Inc()
+			log.Warn().Err(err).Str("sc", a.sc).Msg("failed to list snapshots from agent")
+			continue
+		}
+		agentOpsTotal.WithLabelValues("list_snapshots", "success", a.sc).Inc()
+
+		for _, snap := range snapList.Snapshots {
+			entries = append(entries, &csi.ListSnapshotsResponse_Entry{
+				Snapshot: &csi.Snapshot{
+					SnapshotId:     utils.MakeVolumeID(a.sc, snap.Name),
+					SourceVolumeId: utils.MakeVolumeID(a.sc, snap.Volume),
+					SizeBytes:      int64(snap.SizeBytes),
+					ReadyToUse:     true,
+					CreationTime:   timestamppb.New(snap.CreatedAt),
+				},
+			})
+		}
+
+		if snapList.Next != "" {
+			nextToken = encodePageToken(a.sc, snapList.Next)
+			break
+		}
+
+		if limit > 0 {
+			limit -= len(snapList.Snapshots)
+			if limit <= 0 {
+				break
+			}
+		}
+	}
+
 	return &csi.ListSnapshotsResponse{
-		Entries:   paged,
+		Entries:   entries,
 		NextToken: nextToken,
 	}, nil
 }

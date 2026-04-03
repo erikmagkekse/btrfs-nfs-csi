@@ -50,14 +50,14 @@ func snapshotCmd() *cli.Command {
 					}
 					rev := !cmd.Bool("asc")
 					vol := cmd.Args().First()
-					labels := cmd.StringSlice("label")
+					opts := v1.ListOpts{Labels: cmd.StringSlice("label")}
 					if isWide(cmd) {
 						var resp *v1.SnapshotDetailListResponse
 						var err error
 						if vol != "" {
-							resp, err = c.ListVolumeSnapshotsDetail(ctx, vol, labels...)
+							resp, err = c.ListVolumeSnapshotsDetail(ctx, vol, opts)
 						} else {
-							resp, err = c.ListSnapshotsDetail(ctx, labels...)
+							resp, err = c.ListSnapshotsDetail(ctx, opts)
 						}
 						if err != nil {
 							return err
@@ -77,9 +77,9 @@ func snapshotCmd() *cli.Command {
 					var resp *v1.SnapshotListResponse
 					var err error
 					if vol != "" {
-						resp, err = c.ListVolumeSnapshots(ctx, vol, labels...)
+						resp, err = c.ListVolumeSnapshots(ctx, vol, opts)
 					} else {
-						resp, err = c.ListSnapshots(ctx, labels...)
+						resp, err = c.ListSnapshots(ctx, opts)
 					}
 					if err != nil {
 						return err

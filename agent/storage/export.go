@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -115,4 +116,41 @@ func (s *Storage) ListExports(ctx context.Context, tenant string) ([]ExportEntry
 	}
 	log.Debug().Str("tenant", tenant).Int("count", len(entries)).Msg("exports listed")
 	return entries, nil
+}
+
+func (s *Storage) ListExportsPaginated(ctx context.Context, tenant, after string, limit int) (*PaginatedResult[ExportEntry], error) {
+	entries, err := s.ListExports(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Path != entries[j].Path {
+			return entries[i].Path < entries[j].Path
+		}
+		return entries[i].Client < entries[j].Client
+	})
+
+	total := len(entries)
+	if after != "" {
+		for i, e := range entries {
+			key := e.Path + "|" + e.Client
+			if key > after {
+				entries = entries[i:]
+				break
+			}
+			if i == len(entries)-1 {
+				return &PaginatedResult[ExportEntry]{Total: total}, nil
+			}
+		}
+	}
+
+	result := &PaginatedResult[ExportEntry]{Total: total}
+	if limit > 0 && len(entries) > limit {
+		last := entries[limit-1]
+		result.Next = last.Path + "|" + last.Client
+		result.Items = entries[:limit]
+	} else {
+		result.Items = entries
+	}
+	return result, nil
 }

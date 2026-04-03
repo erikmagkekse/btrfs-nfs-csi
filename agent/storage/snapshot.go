@@ -116,6 +116,63 @@ func (s *Storage) ListSnapshots(tenant, volume string) ([]SnapshotMetadata, erro
 	return snaps, nil
 }
 
+func (s *Storage) ListSnapshotsPaginated(tenant, volume, after string, limit int) (*PaginatedResult[SnapshotMetadata], error) {
+	bp, err := s.tenantPath(tenant)
+	if err != nil {
+		return nil, err
+	}
+
+	snapBaseDir := filepath.Join(bp, config.SnapshotsDir)
+	entries, err := os.ReadDir(snapBaseDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &PaginatedResult[SnapshotMetadata]{}, nil
+		}
+		log.Error().Err(err).Msg("failed to read snapshots directory")
+		return nil, fmt.Errorf("failed to read snapshots directory: %w", err)
+	}
+
+	// when volume filter is set, total requires reading all metadata, so we
+	// count directories as an approximation (exact when unfiltered)
+	total := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			total++
+		}
+	}
+
+	var snaps []SnapshotMetadata
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if after != "" && e.Name() <= after {
+			continue
+		}
+		metaPath := filepath.Join(snapBaseDir, e.Name(), config.MetadataFile)
+		var meta SnapshotMetadata
+		if err := ReadMetadata(metaPath, &meta); err != nil {
+			continue
+		}
+		if volume != "" && meta.Volume != volume {
+			continue
+		}
+		snaps = append(snaps, meta)
+		if limit > 0 && len(snaps) > limit {
+			break
+		}
+	}
+
+	result := &PaginatedResult[SnapshotMetadata]{Total: total}
+	if limit > 0 && len(snaps) > limit {
+		result.Next = snaps[limit-1].Name
+		result.Items = snaps[:limit]
+	} else {
+		result.Items = snaps
+	}
+	return result, nil
+}
+
 func (s *Storage) GetSnapshot(tenant, name string) (*SnapshotMetadata, error) {
 	bp, err := s.tenantPath(tenant)
 	if err != nil {
