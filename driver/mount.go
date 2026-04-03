@@ -35,6 +35,6 @@ func cleanupMountPoint(ctx context.Context, mounter mount.Interface, path string
 
 	mountOpsTotal.WithLabelValues("umount", "success").Inc()
 	mountDuration.WithLabelValues("umount").Observe(time.Since(start).Seconds())
-	log.Info().Str("path", path).Msg("unmounted")
+	log.Info().Str("path", path).Msg("unmount complete")
 	return nil
 }

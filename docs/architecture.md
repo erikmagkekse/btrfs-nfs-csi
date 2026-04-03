@@ -64,7 +64,7 @@ Long-running operations (scrub, future: cross-agent transfers) run as background
 
 **Controller:** `CREATE_DELETE_VOLUME`, `CREATE_DELETE_SNAPSHOT`, `EXPAND_VOLUME`, `CLONE_VOLUME`, `PUBLISH_UNPUBLISH_VOLUME`, `LIST_VOLUMES`, `LIST_SNAPSHOTS`
 
-**Node:** `STAGE_UNSTAGE_VOLUME`, `GET_VOLUME_STATS`
+**Node:** `STAGE_UNSTAGE_VOLUME`, `GET_VOLUME_STATS`, `VOLUME_CONDITION`
 
 **Plugin:** `CONTROLLER_SERVICE`
 
@@ -85,13 +85,14 @@ All controller sidecars use `--leader-election`.
 
 **Controller** (`btrfs-nfs-csi-controller`): PV/PVC/SC/VolumeAttachment/events/nodes/pods/secrets/leases + snapshot CRDs (full access)
 
-**Node** (`btrfs-nfs-csi-node`): PVC get/patch only
+**Node** (`btrfs-nfs-csi-node`): PVC get/patch, VolumeAttachments get/list, PV get, events create
 
 ## HA
 
 - **Controller:** 1 replica + leader election. Sidecars elect independently.
 - **Node:** DaemonSet, rolling update max 1 unavailable.
 - **Agent:** Stateful (local btrfs). NFS reconciler re-exports on restart.
+- **Node health checker:** Background goroutine detects stale NFS mounts via `statWithTimeout` and auto-heals them by remounting over the stale mount. Heals all bind mounts (running pods) automatically. Reports `VOLUME_CONDITION` and writes k8s events on PVCs. Configurable via `DRIVER_HEALTH_CHECK_INTERVAL` (default 30s).
 
 | Failure | Impact | Recovery |
 |---|---|---|

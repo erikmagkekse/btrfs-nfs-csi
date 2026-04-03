@@ -134,7 +134,7 @@ func runDriver() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := driver.Start(ctx, cfg.Endpoint, cfg.NodeID, nodeIP, cfg.MetricsAddr, version); err != nil {
+	if err := driver.Start(ctx, cfg.Endpoint, cfg.NodeID, nodeIP, cfg.MetricsAddr, version, cfg.HealthCheckInterval); err != nil {
 		log.Fatal().Err(err).Msg("node failed")
 	}
 }

@@ -88,6 +88,8 @@ spec:
               value: unix:///csi/csi.sock
             - name: DRIVER_METRICS_ADDR
               value: {{ .Values.driver.metricsAddr | quote }}
+            - name: DRIVER_HEALTH_CHECK_INTERVAL
+              value: {{ .Values.driver.healthCheckInterval | quote }}
             - name: LOG_LEVEL
               value: {{ .Values.logLevel | quote }}
             {{- with .Values.driver.extraEnv }}

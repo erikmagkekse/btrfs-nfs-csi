@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -51,11 +52,27 @@ var (
 		Name:      "volume_stats_ops_total",
 		Help:      "Total volume stats lookups by status.",
 	}, []string{"status"})
+
+	healthChecksTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "node",
+		Name:      "health_checks_total",
+		Help:      "Total health check results.",
+	}, []string{"result"})
+
+	healthCheckDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "btrfs_nfs_csi",
+		Subsystem: "node",
+		Name:      "health_check_duration_seconds",
+		Help:      "Duration of a full health check cycle.",
+		Buckets:   []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 30},
+	})
 )
 
 func init() {
 	prometheus.MustRegister(grpcRequestsTotal, grpcRequestDuration,
-		mountOpsTotal, mountDuration, volumeStatsOpsTotal)
+		mountOpsTotal, mountDuration, volumeStatsOpsTotal,
+		healthChecksTotal, healthCheckDuration)
 }
 
 func metricsInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
@@ -88,9 +105,14 @@ func startMetricsServer(addr string) {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Error().Err(err).Str("addr", addr).Msg("metrics server failed to start")
+		return
+	}
+	log.Info().Str("addr", addr).Msg("metrics server listening")
 	go func() {
-		log.Info().Str("addr", addr).Msg("metrics server listening")
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		if err := http.Serve(ln, mux); err != nil {
 			log.Error().Err(err).Msg("metrics server failed")
 		}
 	}()

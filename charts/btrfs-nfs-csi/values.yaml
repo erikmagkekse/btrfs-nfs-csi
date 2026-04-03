@@ -177,6 +177,7 @@ driver:
   storageInterface: "" # NIC name, e.g. "eth1"
   storageCIDR: "" # subnet CIDR, e.g. "10.10.0.0/24"
   hostNetwork: false # auto-enabled when storageInterface or storageCIDR is set
+  healthCheckInterval: "30s" # NFS mount health check interval, set to "0" to disable
 
   updateStrategy:
     type: RollingUpdate
