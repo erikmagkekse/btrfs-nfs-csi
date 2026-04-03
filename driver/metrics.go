@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -104,9 +105,14 @@ func startMetricsServer(addr string) {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Error().Err(err).Str("addr", addr).Msg("metrics server failed to start")
+		return
+	}
+	log.Info().Str("addr", addr).Msg("metrics server listening")
 	go func() {
-		log.Info().Str("addr", addr).Msg("metrics server listening")
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		if err := http.Serve(ln, mux); err != nil {
 			log.Error().Err(err).Msg("metrics server failed")
 		}
 	}()
