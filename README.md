@@ -46,8 +46,8 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - Dynamic device discovery with live stats, hot-added devices are picked up automatically
 - Prometheus `/metrics` on all components
 - Web dashboard (`/v1/dashboard`)
-- Background task system with progress tracking and persistence
-- Filesystem scrub via API (`POST /v1/tasks/scrub`)
+- Background task system with progress tracking, persistence, and configurable timeouts
+- Filesystem scrub via API
 - NFS mount health checker with auto-heal (detects stale mounts, remounts automatically, heals all pods without restart)
 - TLS support
 - HA via DRBD + Pacemaker (active/passive failover)
