@@ -27,23 +27,13 @@ func newTestNodeServer(mps []mount.MountPoint) *NodeServer {
 
 func newTestNodeServerWithKube(mps []mount.MountPoint, objects ...metav1.Object) *NodeServer {
 	ns := newTestNodeServer(mps)
-	// Build fake clientset with VolumeAttachments + PVs
-	var runtimeObjects []metav1.Object
-	runtimeObjects = append(runtimeObjects, objects...)
-	// Convert to runtime.Object for fake clientset
-	var objs []interface {
-		GetObjectKind() interface{ GroupVersionKind() interface{} }
-	}
-	_ = objs // unused, use the simpler approach below
-
 	fakeClient := fakekube.NewSimpleClientset()
-	// Manually create objects via the fake client
 	for _, obj := range objects {
 		switch o := obj.(type) {
 		case *storagev1.VolumeAttachment:
-			fakeClient.StorageV1().VolumeAttachments().Create(context.Background(), o, metav1.CreateOptions{})
+			_, _ = fakeClient.StorageV1().VolumeAttachments().Create(context.Background(), o, metav1.CreateOptions{})
 		case *corev1.PersistentVolume:
-			fakeClient.CoreV1().PersistentVolumes().Create(context.Background(), o, metav1.CreateOptions{})
+			_, _ = fakeClient.CoreV1().PersistentVolumes().Create(context.Background(), o, metav1.CreateOptions{})
 		}
 	}
 	ns.kubeClient = fakeClient
