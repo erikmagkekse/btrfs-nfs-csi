@@ -2,32 +2,45 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 func Start(ctx context.Context, endpoint, metricsAddr, version, commit, defaultLabels string) error {
 	initDefaultLabels(defaultLabels)
 	startMetricsServer(metricsAddr)
 
-	agents := NewAgentTracker(version, commit)
+	k8sCfg, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("k8s in-cluster config: %w", err)
+	}
+	kubeClient, err := kubernetes.NewForConfig(k8sCfg)
+	if err != nil {
+		return fmt.Errorf("k8s client: %w", err)
+	}
+
+	agents := NewAgentTracker(kubeClient, version, commit)
 	go agents.Run(ctx)
 
 	srv, err := csiserver.New(endpoint, version, metricsInterceptor)
 	if err != nil {
 		return err
 	}
-	csi.RegisterControllerServer(srv.GRPC(), &Server{agents: agents})
+	csi.RegisterControllerServer(srv.GRPC(), &Server{agents: agents, kubeClient: kubeClient})
 	return srv.Run(ctx, "controller")
 }
 
 type Server struct {
 	csi.UnimplementedControllerServer
-	agents *AgentTracker
+	agents     *AgentTracker
+	kubeClient kubernetes.Interface
 }
 
 func (s *Server) ValidateVolumeCapabilities(_ context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
