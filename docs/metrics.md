@@ -1,8 +1,8 @@
 # Metrics
 
-40 metrics across 3 components.
+43 metrics across 3 components.
 
-## Agent (31) - port 9090
+## Agent (34) - port 9090
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -37,6 +37,9 @@
 | `btrfs_nfs_csi_agent_filesystem_data_ratio` | Gauge | `path` |
 | `btrfs_nfs_csi_agent_tasks_total` | Counter | `type`, `status` |
 | `btrfs_nfs_csi_agent_task_duration_seconds` | Histogram | `type` |
+| `btrfs_nfs_csi_agent_tasks_running` | Gauge | `type` |
+| `btrfs_nfs_csi_agent_tasks_queued` | Gauge | `type` |
+| `btrfs_nfs_csi_agent_tasks_workers` | Gauge | - |
 
 **Buckets (http_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]`
 
@@ -113,4 +116,10 @@ rate(btrfs_nfs_csi_controller_agent_ops_total{operation="health_check",status="e
 
 # P99 mount latency
 histogram_quantile(0.99, rate(btrfs_nfs_csi_node_mount_duration_seconds_bucket{operation="nfs_mount"}[5m]))
+
+# Task queue depth (tasks waiting for a worker slot)
+sum(btrfs_nfs_csi_agent_tasks_queued)
+
+# Worker pool utilization
+sum(btrfs_nfs_csi_agent_tasks_running) / btrfs_nfs_csi_agent_tasks_workers
 ```

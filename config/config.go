@@ -56,6 +56,7 @@ type AgentConfig struct {
 	DefaultDirMode       string        `env:"AGENT_DEFAULT_DIR_MODE" envDefault:"0700"`
 	DefaultDataMode      string        `env:"AGENT_DEFAULT_DATA_MODE" envDefault:"2770"`
 	TaskCleanupInterval  time.Duration `env:"AGENT_TASK_CLEANUP_INTERVAL" envDefault:"24h"`
+	TaskMaxConcurrent    int           `env:"AGENT_TASK_MAX_CONCURRENT" envDefault:"2"`
 }
 
 type ControllerConfig struct {

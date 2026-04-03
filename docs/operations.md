@@ -207,6 +207,8 @@ btrfs-nfs-csi task get <id>
 btrfs-nfs-csi task cancel <id>
 btrfs-nfs-csi task create scrub
 btrfs-nfs-csi task create scrub --wait
+btrfs-nfs-csi task create test
+btrfs-nfs-csi task create test --sleep 10s --wait
 btrfs-nfs-csi stats
 btrfs-nfs-csi stats -o wide                 # per-device IO and error details
 btrfs-nfs-csi health

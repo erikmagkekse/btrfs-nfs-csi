@@ -33,6 +33,7 @@ const (
 	TaskStatusCancelled = string(task.TaskCancelled)
 
 	TaskTypeScrub = string(task.TypeScrub)
+	TaskTypeTest  = string(task.TypeTest)
 )
 
 // request models (HTTP-layer only)
