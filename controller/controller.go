@@ -10,7 +10,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func Start(ctx context.Context, endpoint, metricsAddr, version, commit string) error {
+func Start(ctx context.Context, endpoint, metricsAddr, version, commit, defaultLabels string) error {
+	initDefaultLabels(defaultLabels)
 	startMetricsServer(metricsAddr)
 
 	agents := NewAgentTracker(version, commit)

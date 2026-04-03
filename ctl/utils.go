@@ -10,6 +10,7 @@ import (
 	"time"
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/urfave/cli/v3"
 )
 
@@ -27,6 +28,93 @@ const (
 	sortClients = "clients"
 	sortVolume  = "volume"
 )
+
+func labelFlag() cli.Flag {
+	return &cli.StringSliceFlag{Name: "label", Aliases: []string{"l"}, Usage: "label filter key=value (repeatable)"}
+}
+
+func formatLabels(labels map[string]string) string {
+	if len(labels) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(labels))
+	for k, v := range labels {
+		parts = append(parts, k+"="+v)
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
+}
+
+func printLabels(header string, labels map[string]string, indent int) {
+	if len(labels) == 0 {
+		fmt.Printf("%-*s%s\n", indent, header, "none")
+		return
+	}
+	keys := make([]string, 0, len(labels))
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for i, k := range keys {
+		if i == 0 {
+			fmt.Printf("%-*s%s=%s\n", indent, header, k, labels[k])
+		} else {
+			fmt.Printf("%-*s%s=%s\n", indent, "", k, labels[k])
+		}
+	}
+}
+
+func formatLabelsShort(labels map[string]string) string {
+	if len(labels) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(labels))
+	if v, ok := labels["created-by"]; ok {
+		parts = append(parts, "created-by="+v)
+	}
+	rest := make([]string, 0, len(labels))
+	for k, v := range labels {
+		if k == "created-by" {
+			continue
+		}
+		rest = append(rest, k+"="+v)
+	}
+	sort.Strings(rest)
+	parts = append(parts, rest...)
+	s := strings.Join(parts, ", ")
+	if len(s) > 48 {
+		return s[:45] + "..."
+	}
+	return s
+}
+
+func parseLabelsFlag(cmd *cli.Command) map[string]string {
+	raw := cmd.StringSlice("label")
+	if len(raw) == 0 {
+		return nil
+	}
+	if len(raw) > config.MaxUserLabels {
+		_, _ = fmt.Fprintf(os.Stderr, "warning: too many labels (%d), max %d user labels allowed\n", len(raw), config.MaxUserLabels)
+		raw = raw[:config.MaxUserLabels]
+	}
+	labels := make(map[string]string, len(raw))
+	for _, pair := range raw {
+		k, v, _ := strings.Cut(pair, "=")
+		labels[k] = v
+	}
+	return labels
+}
+
+func labelsWithDefault(cmd *cli.Command, key, value string) map[string]string {
+	labels := parseLabelsFlag(cmd)
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	if _, ok := labels[key]; !ok {
+		labels[key] = value
+	}
+	return labels
+}
 
 func sortFlag() cli.Flag {
 	return &cli.StringFlag{Name: "sort", Aliases: []string{"s"}, Usage: "sort by: name, size, used, used%, created, clients"}

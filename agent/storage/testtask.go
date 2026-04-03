@@ -9,7 +9,7 @@ import (
 )
 
 // StartTestTask creates a test task that sleeps for the given duration and returns "Hallo Welt".
-func (s *Storage) StartTestTask(ctx context.Context, opts map[string]string, timeout time.Duration) (string, error) {
+func (s *Storage) StartTestTask(ctx context.Context, opts map[string]string, labels map[string]string, timeout time.Duration) (string, error) {
 	var sleep time.Duration
 	if v := opts["sleep"]; v != "" {
 		var err error
@@ -19,11 +19,15 @@ func (s *Storage) StartTestTask(ctx context.Context, opts map[string]string, tim
 		}
 	}
 
+	if err := validateLabels(labels); err != nil {
+		return "", err
+	}
+
 	t := s.taskDefaultTimeout
 	if timeout > 0 {
 		t = timeout
 	}
-	id := s.tasks.Create(string(task.TypeTest), task.TaskOpts{Opts: opts, Timeout: t}, func(ctx context.Context, update *task.Update) error {
+	id := s.tasks.Create(string(task.TypeTest), task.TaskOpts{Opts: opts, Labels: labels, Timeout: t}, func(ctx context.Context, update *task.Update) error {
 		if sleep > 0 {
 			log.Debug().Dur("sleep", sleep).Msg("test task sleeping")
 			start := time.Now()

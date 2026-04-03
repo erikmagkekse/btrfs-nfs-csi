@@ -1,6 +1,15 @@
 package config
 
-import "time"
+import (
+	"regexp"
+	"time"
+)
+
+var (
+	ValidName     = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
+	ValidLabelKey = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
+	ValidLabelVal = regexp.MustCompile(`^[a-zA-Z0-9._-]{0,128}$`)
+)
 
 const DriverName = "btrfs-nfs-csi"
 
@@ -19,6 +28,12 @@ const (
 	ParamUID         = "uid"
 	ParamGID         = "gid"
 	ParamMode        = "mode"
+	ParamLabels   = "labels"
+	MaxUserLabels = 4
+
+	// MaxLabels caps total labels per resource, trying to keep metadata JSON below 4KB (one filesystem block).
+	// Worst case: 12 * (63 + 128 + 6) = ~2.4KB labels + ~500B other fields = ~2.9KB.
+	MaxLabels = 12
 
 	ParamNFSServer       = "nfsServer"
 	ParamNFSMountOptions = "nfsMountOptions"
@@ -63,8 +78,9 @@ type AgentConfig struct {
 }
 
 type ControllerConfig struct {
-	Endpoint    string `env:"DRIVER_ENDPOINT" envDefault:"unix:///csi/csi.sock"`
-	MetricsAddr string `env:"DRIVER_METRICS_ADDR" envDefault:":9090"`
+	Endpoint      string `env:"DRIVER_ENDPOINT" envDefault:"unix:///csi/csi.sock"`
+	MetricsAddr   string `env:"DRIVER_METRICS_ADDR" envDefault:":9090"`
+	DefaultLabels string `env:"DRIVER_DEFAULT_LABELS"`
 }
 
 type NodeConfig struct {

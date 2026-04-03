@@ -115,6 +115,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			cloneResp, err := client.CloneVolume(ctx, agentAPI.VolumeCloneRequest{
 				Source: srcName,
 				Name:   req.Name,
+				Labels: vp.Labels,
 			})
 			agentDuration.WithLabelValues("clone_volume", sc).Observe(time.Since(start).Seconds())
 			if err != nil {
@@ -160,6 +161,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		cloneResp, err := client.CreateClone(ctx, agentAPI.CloneCreateRequest{
 			Snapshot: snapName,
 			Name:     req.Name,
+			Labels:   vp.Labels,
 		})
 		agentDuration.WithLabelValues("create_clone", sc).Observe(time.Since(start).Seconds())
 		if err != nil {
@@ -207,6 +209,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		UID:         uid,
 		GID:         gid,
 		Mode:        vp.Mode,
+		Labels:      vp.Labels,
 	})
 	agentDuration.WithLabelValues("create_volume", sc).Observe(time.Since(start).Seconds())
 	if err != nil {

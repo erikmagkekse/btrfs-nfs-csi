@@ -53,20 +53,21 @@ type VolumeResponse struct {
 }
 
 type VolumeDetailResponse struct {
-	Name         string     `json:"name"`
-	Path         string     `json:"path"`
-	SizeBytes    uint64     `json:"size_bytes"`
-	NoCOW        bool       `json:"nocow"`
-	Compression  string     `json:"compression"`
-	QuotaBytes   uint64     `json:"quota_bytes"`
-	UsedBytes    uint64     `json:"used_bytes"`
-	UID          int        `json:"uid"`
-	GID          int        `json:"gid"`
-	Mode         string     `json:"mode"`
-	Clients      []string   `json:"clients"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	LastAttachAt *time.Time `json:"last_attach_at,omitempty"`
+	Name         string            `json:"name"`
+	Path         string            `json:"path"`
+	SizeBytes    uint64            `json:"size_bytes"`
+	NoCOW        bool              `json:"nocow"`
+	Compression  string            `json:"compression"`
+	QuotaBytes   uint64            `json:"quota_bytes"`
+	UsedBytes    uint64            `json:"used_bytes"`
+	UID          int               `json:"uid"`
+	GID          int               `json:"gid"`
+	Mode         string            `json:"mode"`
+	Labels       map[string]string `json:"labels,omitempty"`
+	Clients      []string          `json:"clients"`
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
+	LastAttachAt *time.Time        `json:"last_attach_at,omitempty"`
 }
 
 type VolumeListResponse struct {
@@ -88,15 +89,16 @@ type SnapshotResponse struct {
 }
 
 type SnapshotDetailResponse struct {
-	Name           string    `json:"name"`
-	Volume         string    `json:"volume"`
-	Path           string    `json:"path"`
-	SizeBytes      uint64    `json:"size_bytes"`
-	UsedBytes      uint64    `json:"used_bytes"`
-	ExclusiveBytes uint64    `json:"exclusive_bytes"`
-	ReadOnly       bool      `json:"readonly"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	Name           string            `json:"name"`
+	Volume         string            `json:"volume"`
+	Path           string            `json:"path"`
+	SizeBytes      uint64            `json:"size_bytes"`
+	UsedBytes      uint64            `json:"used_bytes"`
+	ExclusiveBytes uint64            `json:"exclusive_bytes"`
+	ReadOnly       bool              `json:"readonly"`
+	Labels         map[string]string `json:"labels,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
 }
 
 type SnapshotListResponse struct {
@@ -110,10 +112,11 @@ type SnapshotDetailListResponse struct {
 }
 
 type CloneResponse struct {
-	Name           string    `json:"name"`
-	SourceSnapshot string    `json:"source_snapshot"`
-	Path           string    `json:"path"`
-	CreatedAt      time.Time `json:"created_at"`
+	Name           string            `json:"name"`
+	SourceSnapshot string            `json:"source_snapshot"`
+	Path           string            `json:"path"`
+	Labels         map[string]string `json:"labels,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
 }
 
 type ExportListResponse struct {
@@ -183,6 +186,7 @@ type FilesystemStatsResponse struct {
 type TaskCreateRequest struct {
 	Timeout string            `json:"timeout,omitempty"`
 	Opts    map[string]string `json:"opts,omitempty"`
+	Labels  map[string]string `json:"labels,omitempty"`
 }
 
 type TaskCreateResponse struct {
@@ -209,6 +213,7 @@ type TaskDetailResponse struct {
 	Status      string            `json:"status"`
 	Progress    int               `json:"progress"`
 	Opts        map[string]string `json:"opts,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
 	Timeout     string            `json:"timeout,omitempty"`
 	Result      json.RawMessage   `json:"result,omitempty"`
 	Error       string            `json:"error,omitempty"`

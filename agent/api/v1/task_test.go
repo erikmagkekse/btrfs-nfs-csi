@@ -79,3 +79,20 @@ func TestTaskDetailResponseFrom(t *testing.T) {
 	assert.Equal(t, map[string]string{"key": "val"}, resp.Opts)
 	assert.Equal(t, "6h0m0s", resp.Timeout)
 }
+
+func TestTaskDetailResponseFrom_WithLabels(t *testing.T) {
+	labels := map[string]string{"created-by": "cli", "env": "prod"}
+	tk := &task.Task{
+		ID:        "abc",
+		Type:      "test",
+		Status:    task.TaskCompleted,
+		Labels:    labels,
+		CreatedAt: time.Now(),
+	}
+
+	detail := taskDetailResponseFrom(tk)
+	assert.Equal(t, labels, detail.Labels)
+
+	summary := taskResponseFrom(tk)
+	assert.Nil(t, summary.Opts)
+}

@@ -97,12 +97,14 @@ func taskCmd() *cli.Command {
 				Usage:   "list tasks",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: "filter by type (e.g. scrub)"},
+					labelFlag(),
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c := clientFrom(cmd)
 					taskType := cmd.String("type")
+					labels := cmd.StringSlice("label")
 					if isWide(cmd) {
-						resp, err := c.ListTasksDetail(ctx, taskType)
+						resp, err := c.ListTasksDetail(ctx, taskType, labels...)
 						if err != nil {
 							return err
 						}
@@ -111,7 +113,7 @@ func taskCmd() *cli.Command {
 						})
 						return output(cmd, resp, func() {
 							w := tab()
-							_, _ = fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tTIMEOUT\tTOOK\tCREATED\tRESULT\tERROR")
+							_, _ = fmt.Fprintln(w, "ID\tTYPE\tSTATUS\tPROGRESS\tLABELS\tTIMEOUT\tTOOK\tCREATED\tRESULT\tERROR")
 							for _, t := range resp.Tasks {
 								took := "-"
 								if t.CompletedAt != nil {
@@ -131,13 +133,13 @@ func taskCmd() *cli.Command {
 								if t.Error != "" {
 									errMsg = t.Error
 								}
-								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\t%s\t%s\t%s\n",
-									t.ID, t.Type, t.Status, t.Progress, timeout, took, t.CreatedAt.Format(timeFmt), result, errMsg)
+								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\t%s\t%s\t%s\t%s\t%s\n",
+									t.ID, t.Type, t.Status, t.Progress, formatLabelsShort(t.Labels), timeout, took, t.CreatedAt.Format(timeFmt), result, errMsg)
 							}
 							_ = w.Flush()
 						})
 					}
-					resp, err := c.ListTasks(ctx, taskType)
+					resp, err := c.ListTasks(ctx, taskType, labels...)
 					if err != nil {
 						return err
 					}
@@ -188,6 +190,7 @@ func taskCmd() *cli.Command {
 							}
 							fmt.Printf("Opts:       %s\n", strings.Join(parts, ", "))
 						}
+						printLabels("Labels:", resp.Labels, 12)
 						if resp.Timeout != "" {
 							fmt.Printf("Timeout:    %s\n", resp.Timeout)
 						}
@@ -235,10 +238,11 @@ func taskCmd() *cli.Command {
 						Flags: []cli.Flag{
 							&cli.DurationFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "timeout (e.g. 1h, 30m)"},
 							&cli.BoolFlag{Name: "wait", Aliases: []string{"w"}, Usage: "wait for completion"},
+							labelFlag(),
 						},
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							c := clientFrom(cmd)
-							req := v1.TaskCreateRequest{}
+							req := v1.TaskCreateRequest{Labels: labelsWithDefault(cmd, "created-by", "cli")}
 							if t := cmd.Duration("timeout"); t > 0 {
 								req.Timeout = t.String()
 							}
@@ -262,10 +266,11 @@ func taskCmd() *cli.Command {
 							&cli.DurationFlag{Name: "sleep", Aliases: []string{"s"}, Usage: "sleep duration (e.g. 10s, 1m)"},
 							&cli.DurationFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "timeout (e.g. 1h, 30m)"},
 							&cli.BoolFlag{Name: "wait", Aliases: []string{"w"}, Usage: "wait for completion"},
+							labelFlag(),
 						},
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							c := clientFrom(cmd)
-							req := v1.TaskCreateRequest{}
+							req := v1.TaskCreateRequest{Labels: labelsWithDefault(cmd, "created-by", "cli")}
 							if s := cmd.Duration("sleep"); s > 0 {
 								req.Opts = map[string]string{"sleep": s.String()}
 							}

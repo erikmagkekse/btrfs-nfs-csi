@@ -200,6 +200,44 @@ Only one scrub can run at a time per filesystem. The agent detects externally st
 
 Completed tasks include a result with bytes scrubbed and error counts. Tasks are persisted to disk and cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h).
 
+**Scheduled scrub (systemd timer):**
+
+```ini
+# /etc/systemd/system/btrfs-scrub.service
+[Unit]
+Description=btrfs scrub via CSI agent
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/btrfs-nfs-csi
+ExecStart=btrfs-nfs-csi task create scrub --label created-by=systemd-timer --wait
+```
+
+```ini
+# /etc/systemd/system/btrfs-scrub.timer
+[Unit]
+Description=Weekly btrfs scrub
+
+[Timer]
+OnCalendar=Sun *-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+cat > /etc/default/btrfs-nfs-csi <<EOF
+AGENT_URL=http://10.0.0.5:8080
+AGENT_TOKEN=changeme
+EOF
+chmod 600 /etc/default/btrfs-nfs-csi
+
+systemctl enable --now btrfs-scrub.timer
+```
+
+The scrub result (bytes scrubbed, error counts) is exposed via Prometheus metrics. Your monitoring stack (e.g. Alertmanager) can alert on scrub failures or uncorrectable errors. Neat, right?
+
 ## CLI
 
 The `btrfs-nfs-csi` binary doubles as a CLI tool. Any command that isn't `agent`, `controller`, or `driver` is treated as a CLI command.
@@ -213,14 +251,17 @@ btrfs-nfs-csi volume list -o wide
 btrfs-nfs-csi volume list -o json
 btrfs-nfs-csi volume get my-vol
 btrfs-nfs-csi volume create my-vol 10Gi --compression zstd
+btrfs-nfs-csi volume create my-vol 10Gi --label env=prod --label team=backend
 btrfs-nfs-csi volume expand my-vol 20Gi
-btrfs-nfs-csi volume clone source-vol new-vol
+btrfs-nfs-csi volume clone source-vol new-vol --label env=staging
+btrfs-nfs-csi volume list --label env=prod  # filter by label
 btrfs-nfs-csi volume delete my-vol --confirm --yes
 
 btrfs-nfs-csi snapshot list
 btrfs-nfs-csi snapshot list my-vol          # filter by volume
-btrfs-nfs-csi snapshot create my-vol snap-1
-btrfs-nfs-csi snapshot clone snap-1 new-vol # clone from snapshot
+btrfs-nfs-csi snapshot list --label env=prod
+btrfs-nfs-csi snapshot create my-vol snap-1 --label env=prod
+btrfs-nfs-csi snapshot clone snap-1 new-vol --label env=dev
 btrfs-nfs-csi snapshot delete snap-1 --confirm --yes
 
 btrfs-nfs-csi export list
@@ -229,10 +270,12 @@ btrfs-nfs-csi export remove my-vol 10.1.0.50
 
 btrfs-nfs-csi task list
 btrfs-nfs-csi task list --type scrub
+btrfs-nfs-csi task list --label created-by=cron
 btrfs-nfs-csi task get <id>
 btrfs-nfs-csi task cancel <id>
 btrfs-nfs-csi task create scrub
 btrfs-nfs-csi task create scrub --wait
+btrfs-nfs-csi task create scrub --label created-by=cron
 btrfs-nfs-csi task create test
 btrfs-nfs-csi task create test --sleep 10s --wait
 btrfs-nfs-csi stats
@@ -248,3 +291,5 @@ btrfs-nfs-csi version
 **Sorting:** `--sort` / `-s` with `--asc` (default descending). Volume default: `used%`. Snapshot default: `created`.
 
 **Size values:** Supports `Ki`, `Mi`, `Gi` (binary) and `K`, `M`, `G` (decimal).
+
+**Default labels:** CLI create commands automatically add `created-by=cli`. Override with `--label created-by=myvalue`.

@@ -36,6 +36,9 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	if req.QuotaBytes == 0 {
 		req.QuotaBytes = req.SizeBytes
 	}
+	if err := validateLabels(req.Labels); err != nil {
+		return nil, err
+	}
 	if req.Mode == "" {
 		req.Mode = s.defaultDataMode
 	}
@@ -118,6 +121,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		UID:         req.UID,
 		GID:         req.GID,
 		Mode:        req.Mode,
+		Labels:      req.Labels,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -202,6 +206,11 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	}
 
 	// validation
+	if req.Labels != nil {
+		if err := validateLabels(*req.Labels); err != nil {
+			return nil, err
+		}
+	}
 	if req.SizeBytes != nil && *req.SizeBytes <= cur.SizeBytes {
 		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("new size %d must be larger than current size %d", *req.SizeBytes, cur.SizeBytes)}
 	}
@@ -290,6 +299,9 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		if req.Mode != nil {
 			meta.Mode = *req.Mode
 		}
+		if req.Labels != nil {
+			meta.Labels = *req.Labels
+		}
 		meta.UpdatedAt = time.Now().UTC()
 		updated = *meta
 	}); err != nil {
@@ -307,6 +319,10 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		return nil, err
 	}
 	if err := validateName(req.Name); err != nil {
+		return nil, err
+	}
+
+	if err := validateLabels(req.Labels); err != nil {
 		return nil, err
 	}
 
@@ -353,6 +369,11 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		}
 	}
 
+	labels := req.Labels
+	if labels == nil {
+		labels = src.Labels
+	}
+
 	now := time.Now().UTC()
 	meta := VolumeMetadata{
 		Name:        req.Name,
@@ -364,6 +385,7 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		UID:         src.UID,
 		GID:         src.GID,
 		Mode:        src.Mode,
+		Labels:      labels,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}

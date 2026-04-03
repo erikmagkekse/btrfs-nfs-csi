@@ -24,7 +24,7 @@ func volumeCmd() *cli.Command {
 				Name:    "list",
 				Aliases: []string{"ls"},
 				Usage:   "list all volumes",
-				Flags:   []cli.Flag{sortFlag(), ascFlag()},
+				Flags:   []cli.Flag{sortFlag(), ascFlag(), labelFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c := clientFrom(cmd)
 					sortBy := cmd.String("sort")
@@ -32,27 +32,28 @@ func volumeCmd() *cli.Command {
 						sortBy = sortUsedPct
 					}
 					rev := !cmd.Bool("asc")
+					labels := cmd.StringSlice("label")
 
 					if isWide(cmd) {
-						resp, err := c.ListVolumesDetail(ctx)
+						resp, err := c.ListVolumesDetail(ctx, labels...)
 						if err != nil {
 							return err
 						}
 						sortVolumesDetail(resp.Volumes, sortBy, rev)
 						return output(cmd, resp, func() {
 							w := tab()
-							_, _ = fmt.Fprintln(w, "NAME\tSIZE\tUSED\tQUOTA\tCOMPRESSION\tNOCOW\tUID\tGID\tMODE\tCLIENTS\tCREATED")
+							_, _ = fmt.Fprintln(w, "NAME\tSIZE\tUSED\tQUOTA\tCOMPRESSION\tNOCOW\tUID\tGID\tMODE\tLABELS\tCLIENTS\tCREATED")
 							for _, v := range resp.Volumes {
-								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\t%d\t%d\t%s\t%d\t%s\n",
+								_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\t%d\t%d\t%s\t%s\t%d\t%s\n",
 									v.Name, utils.FormatBytes(v.SizeBytes), utils.FormatBytes(v.UsedBytes), utils.FormatBytes(v.QuotaBytes),
 									v.Compression, v.NoCOW, v.UID, v.GID, v.Mode,
-									len(v.Clients), v.CreatedAt.Format(timeFmt))
+									formatLabelsShort(v.Labels), len(v.Clients), v.CreatedAt.Format(timeFmt))
 							}
 							_ = w.Flush()
 						})
 					}
 
-					resp, err := c.ListVolumes(ctx)
+					resp, err := c.ListVolumes(ctx, labels...)
 					if err != nil {
 						return err
 					}
@@ -97,6 +98,7 @@ func volumeCmd() *cli.Command {
 						fmt.Printf("UID:          %d\n", resp.UID)
 						fmt.Printf("GID:          %d\n", resp.GID)
 						fmt.Printf("Mode:         %s\n", resp.Mode)
+						printLabels("Labels:", resp.Labels, 14)
 						if len(resp.Clients) == 0 {
 							fmt.Printf("Clients:      none\n")
 						} else {
@@ -120,6 +122,7 @@ func volumeCmd() *cli.Command {
 					&cli.IntFlag{Name: "uid", Aliases: []string{"u"}, Usage: "owner UID"},
 					&cli.IntFlag{Name: "gid", Aliases: []string{"g"}, Usage: "owner GID"},
 					&cli.StringFlag{Name: "mode", Aliases: []string{"m"}, Usage: "directory mode (octal)"},
+					labelFlag(),
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 2 {
@@ -144,6 +147,7 @@ func volumeCmd() *cli.Command {
 						UID:         int(cmd.Int("uid")),
 						GID:         int(cmd.Int("gid")),
 						Mode:        cmd.String("mode"),
+						Labels:      labelsWithDefault(cmd, "created-by", "cli"),
 					}
 
 					resp, err := clientFrom(cmd).CreateVolume(ctx, req)
@@ -231,12 +235,13 @@ func volumeCmd() *cli.Command {
 				Name:      "clone",
 				Usage:     "clone a volume (PVC-to-PVC)",
 				ArgsUsage: "<source> <name>",
+				Flags:     []cli.Flag{labelFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 2 {
 						return fmt.Errorf("usage: volume clone <source> <name>")
 					}
 
-					resp, err := clientFrom(cmd).CloneVolume(ctx, v1.VolumeCloneRequest{Source: cmd.Args().Get(0), Name: cmd.Args().Get(1)})
+					resp, err := clientFrom(cmd).CloneVolume(ctx, v1.VolumeCloneRequest{Source: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: parseLabelsFlag(cmd)})
 					if err != nil {
 						return wrapErr(err, "volume", cmd.Args().Get(1))
 					}

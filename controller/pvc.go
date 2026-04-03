@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -13,6 +15,30 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var envDefaultLabels map[string]string
+
+func initDefaultLabels(raw string) {
+	if raw == "" {
+		return
+	}
+	parsed := parseLabels(raw)
+	envDefaultLabels = make(map[string]string, len(parsed))
+	for k, v := range parsed {
+		if reservedLabelKeys[k] {
+			log.Warn().Str("key", k).Msg("ignoring reserved key in DRIVER_DEFAULT_LABELS")
+			continue
+		}
+		if !config.ValidLabelKey.MatchString(k) || !config.ValidLabelVal.MatchString(v) {
+			log.Warn().Str("key", k).Str("value", v).Msg("ignoring invalid label in DRIVER_DEFAULT_LABELS")
+			continue
+		}
+		envDefaultLabels[k] = v
+	}
+	if len(envDefaultLabels) > 0 {
+		log.Info().Int("count", len(envDefaultLabels)).Msg("loaded default labels from env")
+	}
+}
+
 type volumeParams struct {
 	StorageClass string
 	NoCOW        string
@@ -20,6 +46,7 @@ type volumeParams struct {
 	UID          string
 	GID          string
 	Mode         string
+	Labels       map[string]string
 }
 
 func resolveVolumeParams(ctx context.Context, params map[string]string) volumeParams {
@@ -54,6 +81,17 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 	ctrlK8sOpsTotal.WithLabelValues("success").Inc()
 
 	vp.StorageClass = obj.Spec.StorageClassName
+	vp.Labels = map[string]string{
+		"kubernetes.pvc.name":         pvcName,
+		"kubernetes.pvc.namespace":    pvcNamespace,
+		"kubernetes.pvc.storageclass": obj.Spec.StorageClassName,
+		"created-by":                  "csi",
+	}
+	for k, v := range envDefaultLabels {
+		if _, exists := vp.Labels[k]; !exists {
+			vp.Labels[k] = v
+		}
+	}
 
 	annos := obj.Metadata.Annotations
 	if v, ok := annos[config.AnnoPrefix+config.ParamNoCOW]; ok {
@@ -71,8 +109,52 @@ func resolveVolumeParams(ctx context.Context, params map[string]string) volumePa
 	if v, ok := annos[config.AnnoPrefix+config.ParamMode]; ok {
 		vp.Mode = v
 	}
+	if v, ok := annos[config.AnnoPrefix+config.ParamLabels]; ok && v != "" {
+		mergeUserLabels(vp.Labels, parseLabels(v), config.MaxUserLabels)
+	}
 
 	return vp
+}
+
+var reservedLabelKeys = map[string]bool{
+	"kubernetes.pvc.name":         true,
+	"kubernetes.pvc.namespace":    true,
+	"kubernetes.pvc.storageclass": true,
+}
+
+func mergeUserLabels(dst, user map[string]string, maxUser int) {
+	keys := make([]string, 0, len(user))
+	for k := range user {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	merged := 0
+	for _, k := range keys {
+		if reservedLabelKeys[k] {
+			log.Warn().Str("key", k).Msg("skipping reserved label key from PVC annotation")
+			continue
+		}
+		if merged >= maxUser {
+			log.Warn().Int("max", maxUser).Msg("too many user labels in PVC annotation, truncating")
+			break
+		}
+		dst[k] = user[k]
+		merged++
+	}
+}
+
+func parseLabels(raw string) map[string]string {
+	labels := make(map[string]string)
+	for _, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		k, v, _ := strings.Cut(pair, "=")
+		labels[k] = v
+	}
+	return labels
 }
 
 func (vp *volumeParams) validate() error {
@@ -124,6 +206,10 @@ func (vp *volumeParams) toUpdateRequest() (agentAPI.VolumeUpdateRequest, bool) {
 	}
 	if vp.Compression != "" {
 		update.Compression = &vp.Compression
+		changed = true
+	}
+	if vp.Labels != nil {
+		update.Labels = &vp.Labels
 		changed = true
 	}
 	return update, changed
