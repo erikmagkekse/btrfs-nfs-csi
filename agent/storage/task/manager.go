@@ -56,12 +56,12 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 	ctx, cancel := context.WithCancel(context.Background())
 	rt := &runningTask{cancel: cancel}
 	rt.state.Store(t)
+	tm.persist(t)
 
 	tm.mu.Lock()
 	tm.tasks[id] = rt
 	tm.mu.Unlock()
 
-	tm.persist(t)
 	log.Info().Str("task", id).Str("type", taskType).Msg("task submitted")
 
 	go func() {
