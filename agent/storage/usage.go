@@ -153,7 +153,7 @@ func updateAll(ctx context.Context, mgr *btrfs.Manager, basePath string, tenant 
 
 		info, err := mgr.QgroupUsageEx(ctx, dataDir)
 		if err != nil {
-			log.Debug().Err(err).Str("snapshot", e.Name()).Msg("usage updater: snapshot qgroup query failed")
+			log.Warn().Err(err).Str("snapshot", e.Name()).Msg("usage updater: snapshot qgroup query failed")
 			snapFailed++
 			continue
 		}

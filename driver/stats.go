@@ -35,17 +35,19 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 		stagingPath = s.findStagingPath(req.VolumeId)
 	}
 
-	log.Debug().Str("volume", req.VolumeId).Str("volumePath", req.VolumePath).Str("stagingPath", stagingPath).Msg("looking up volume stats")
+	sc, vol := parseVolumeLog(req.VolumeId)
+
+	log.Debug().Str("volume", vol).Str("sc", sc).Str("volumePath", req.VolumePath).Str("stagingPath", stagingPath).Msg("looking up volume stats")
 
 	if stagingPath != "" {
 		metaPath := stagingPath + "/" + config.MetadataFile
 		data, err := os.ReadFile(metaPath)
 		if err != nil {
-			log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", metaPath).Msg("failed to read metadata")
+			log.Warn().Err(err).Str("volume", vol).Str("sc", sc).Str("path", metaPath).Msg("failed to read metadata")
 		} else {
 			var vs volumeStats
 			if err := json.Unmarshal(data, &vs); err != nil {
-				log.Warn().Err(err).Str("volume", req.VolumeId).Str("path", metaPath).Msg("metadata JSON corrupt")
+				log.Warn().Err(err).Str("volume", vol).Str("sc", sc).Str("path", metaPath).Msg("metadata JSON corrupt")
 			} else {
 				if vs.QuotaBytes > 0 {
 					used := int64(vs.UsedBytes)
@@ -67,7 +69,7 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 					return resp, nil
 				}
 				// Quota disabled: fallback to statfs
-				log.Debug().Str("volume", req.VolumeId).Msg("quota not configured, falling back to statfs")
+				log.Debug().Str("volume", vol).Str("sc", sc).Msg("quota not configured, falling back to statfs")
 				resp, err := statfsResponse(req.VolumePath)
 				if err == nil {
 					s.attachVolumeCondition(req.VolumeId, resp)

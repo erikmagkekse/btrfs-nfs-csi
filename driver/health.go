@@ -167,7 +167,7 @@ func (s *NodeServer) buildVolumeMap(ctx context.Context) map[string]volumeInfo {
 
 	vaList, err := s.kubeClient.StorageV1().VolumeAttachments().List(apiCtx, metav1.ListOptions{})
 	if err != nil {
-		log.Debug().Err(err).Msg("health check: failed to list volume attachments")
+		log.Warn().Err(err).Msg("health check: failed to list volume attachments")
 		return result
 	}
 
@@ -181,7 +181,7 @@ func (s *NodeServer) buildVolumeMap(ctx context.Context) map[string]volumeInfo {
 		}
 		pv, err := s.kubeClient.CoreV1().PersistentVolumes().Get(apiCtx, *pvName, metav1.GetOptions{})
 		if err != nil {
-			log.Debug().Err(err).Str("pv", *pvName).Msg("health check: failed to get PV")
+			log.Warn().Err(err).Str("pv", *pvName).Msg("health check: failed to get PV")
 			continue
 		}
 		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != config.DriverName {
