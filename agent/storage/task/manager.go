@@ -81,8 +81,8 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 				final := *rt.state.Load()
 				final.Status = TaskCancelled
 				final.CompletedAt = &now
-				rt.state.Store(&final)
 				tm.persist(&final)
+				rt.state.Store(&final)
 				tasksTotal.WithLabelValues(taskType, string(TaskCancelled)).Inc()
 				log.Info().Str("task", id).Str("type", taskType).Msg("task cancelled while pending")
 				return
@@ -97,8 +97,8 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 		running := *rt.state.Load()
 		running.Status = TaskRunning
 		running.StartedAt = &startUTC
-		rt.state.Store(&running)
 		tm.persist(&running)
+		rt.state.Store(&running)
 
 		err := fn(ctx, &Update{rt: rt, persist: tm.persist})
 
@@ -115,8 +115,8 @@ func (tm *Manager) Create(taskType string, fn TaskFunc) string {
 			final.Status = TaskCompleted
 			final.Progress = 100
 		}
-		rt.state.Store(&final)
 		tm.persist(&final)
+		rt.state.Store(&final)
 
 		elapsed := time.Since(start)
 		tasksTotal.WithLabelValues(taskType, string(final.Status)).Inc()
