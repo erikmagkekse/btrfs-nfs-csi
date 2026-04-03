@@ -64,7 +64,7 @@ func metricsInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo
 	}
 
 	start := time.Now()
-	log.Debug().Str("method", info.FullMethod).Str("req", fmt.Sprintf("%+v", req)).Msg("gRPC call")
+	log.Trace().Str("method", info.FullMethod).Str("req", fmt.Sprintf("%+v", req)).Msg("gRPC call")
 
 	resp, err := handler(ctx, req)
 
