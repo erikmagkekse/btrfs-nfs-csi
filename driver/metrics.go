@@ -93,7 +93,7 @@ func metricsInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo
 	if err != nil {
 		log.Error().Err(err).Str("method", info.FullMethod).Str("code", code).Dur("took", time.Since(start)).Msg("gRPC error")
 	} else {
-		log.Debug().Str("method", info.FullMethod).Str("code", code).Dur("took", time.Since(start)).Msg("gRPC ok")
+		log.Trace().Str("method", info.FullMethod).Str("code", code).Dur("took", time.Since(start)).Msg("gRPC ok")
 	}
 
 	return resp, err
