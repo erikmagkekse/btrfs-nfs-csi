@@ -279,6 +279,60 @@ func TestListVolumes(t *testing.T) {
 	})
 }
 
+// --- TestListVolumesPaginated ---
+
+func TestListVolumesPaginated(t *testing.T) {
+	s, bp, _, _ := newTestStorage(t)
+
+	for _, name := range []string{"aaa", "bbb", "ccc", "ddd", "eee"} {
+		dir := filepath.Join(bp, name)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		writeTestMetadata(t, dir, VolumeMetadata{Name: name, SizeBytes: 1024})
+	}
+
+	t.Run("all", func(t *testing.T) {
+		page, err := s.ListVolumesPaginated("test", "", 0)
+		require.NoError(t, err)
+		assert.Len(t, page.Items, 5)
+		assert.Equal(t, 5, page.Total)
+		assert.Empty(t, page.Next)
+	})
+
+	t.Run("first_page", func(t *testing.T) {
+		page, err := s.ListVolumesPaginated("test", "", 2)
+		require.NoError(t, err)
+		assert.Len(t, page.Items, 2)
+		assert.Equal(t, "aaa", page.Items[0].Name)
+		assert.Equal(t, "bbb", page.Items[1].Name)
+		assert.Equal(t, "bbb", page.Next)
+		assert.Equal(t, 5, page.Total)
+	})
+
+	t.Run("second_page", func(t *testing.T) {
+		page, err := s.ListVolumesPaginated("test", "bbb", 2)
+		require.NoError(t, err)
+		assert.Len(t, page.Items, 2)
+		assert.Equal(t, "ccc", page.Items[0].Name)
+		assert.Equal(t, "ddd", page.Items[1].Name)
+		assert.Equal(t, "ddd", page.Next)
+	})
+
+	t.Run("last_page", func(t *testing.T) {
+		page, err := s.ListVolumesPaginated("test", "ddd", 2)
+		require.NoError(t, err)
+		assert.Len(t, page.Items, 1)
+		assert.Equal(t, "eee", page.Items[0].Name)
+		assert.Empty(t, page.Next)
+	})
+
+	t.Run("after_last", func(t *testing.T) {
+		page, err := s.ListVolumesPaginated("test", "eee", 2)
+		require.NoError(t, err)
+		assert.Empty(t, page.Items)
+		assert.Empty(t, page.Next)
+	})
+}
+
 // --- TestGetVolume ---
 
 func TestGetVolume(t *testing.T) {

@@ -39,6 +39,24 @@ Volumes, snapshots, clones, and tasks support user-defined labels (`map[string]s
 
 Filter with `?label=key=value` (exact match, repeatable, AND logic) or `?label=key` (key exists, any value).
 
+## Pagination
+
+All list endpoints support cursor-based pagination via query parameters:
+
+| Parameter | Description |
+|---|---|
+| `after` | Cursor: return items after this name (exclusive) |
+| `limit` | Max items per page (0 or omitted = all) |
+
+Responses include:
+
+| Field | Description |
+|---|---|
+| `total` | Total number of resources (approximate when volume-filtered) |
+| `next` | Cursor for the next page (empty = last page) |
+
+Example: `GET /v1/volumes?limit=10` returns the first 10 volumes. Use the `next` value as `after` for the next page: `GET /v1/volumes?limit=10&after=<next>`.
+
 ## Volumes
 
 ### POST /v1/volumes
@@ -88,7 +106,7 @@ curl -X POST http://10.0.0.5:8080/v1/volumes \
 
 ### GET /v1/volumes
 
-Returns a summary list. Use `GET /v1/volumes/:name` for full details, or append `?detail=true` to get full details for all volumes in a single call. Filter by label with `?label=key=value` (exact match) or `?label=key` (key exists). Repeatable, AND logic.
+Returns a summary list. Supports pagination (`?after=&limit=`), label filtering (`?label=key=value` or `?label=key`), and `?detail=true` for full details.
 
 ```json
 {
@@ -213,7 +231,7 @@ All fields optional. `size_bytes` must be larger than current. `labels` replaces
 
 ### GET /v1/snapshots
 
-Returns a summary list of all snapshots. Use `GET /v1/snapshots/:name` for full details, or append `?detail=true` to get full details for all snapshots in a single call. Filter by label with `?label=key=value` or `?label=key`. Repeatable, AND logic.
+Returns a summary list of all snapshots. Supports pagination (`?after=&limit=`), label filtering (`?label=key=value` or `?label=key`), and `?detail=true` for full details.
 
 ```json
 {
@@ -234,7 +252,7 @@ With `?detail=true`, each snapshot includes the full detail fields (same as `GET
 
 ### GET /v1/volumes/:name/snapshots
 
-Returns a summary list of snapshots for a specific volume. Same response format as `GET /v1/snapshots`. Also supports `?detail=true` and `?label=` filtering.
+Returns a summary list of snapshots for a specific volume. Same response format as `GET /v1/snapshots`. Supports pagination, label filtering, and `?detail=true`.
 
 ### GET /v1/snapshots/:name
 
@@ -413,7 +431,7 @@ curl -X POST http://10.0.0.5:8080/v1/tasks/test \
 
 ### GET /v1/tasks
 
-List all tasks. Optional `?type=` filter (e.g. `scrub`, `test`). Filter by label with `?label=key=value` or `?label=key`. Repeatable, AND logic. Returns a summary without the `result` field. Append `?detail=true` to include `result` and `labels`.
+List all tasks. Supports pagination (`?after=&limit=`), `?type=` filter, label filtering (`?label=key=value` or `?label=key`), and `?detail=true` for full details including `result` and `labels`.
 
 ```json
 {

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"time"
 
@@ -15,38 +16,77 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-	agents := s.agents.Agents()
+type agentEntry struct {
+	sc     string
+	client *agentAPI.Client
+}
 
-	var entries []*csi.ListVolumesResponse_Entry
-	for sc, client := range agents {
-		start := time.Now()
-		volList, err := client.ListVolumes(ctx)
-		agentDuration.WithLabelValues("list_volumes", sc).Observe(time.Since(start).Seconds())
-		if err != nil {
-			agentOpsTotal.WithLabelValues("list_volumes", "error", sc).Inc()
-			log.Warn().Err(err).Str("sc", sc).Msg("failed to list volumes from agent")
-			continue
-		}
-		agentOpsTotal.WithLabelValues("list_volumes", "success", sc).Inc()
-
-		for _, vol := range volList.Volumes {
-			entries = append(entries, &csi.ListVolumesResponse_Entry{
-				Volume: &csi.Volume{
-					VolumeId:      utils.MakeVolumeID(sc, vol.Name),
-					CapacityBytes: int64(vol.SizeBytes),
-				},
-			})
-		}
+func sortedAgents(agents map[string]*agentAPI.Client) []agentEntry {
+	entries := make([]agentEntry, 0, len(agents))
+	for sc, c := range agents {
+		entries = append(entries, agentEntry{sc: sc, client: c})
 	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].sc < entries[j].sc })
+	return entries
+}
 
-	paged, nextToken, err := paginate(entries, req.StartingToken, req.MaxEntries)
+func (s *Server) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+	pt, err := decodePageToken(req.StartingToken)
 	if err != nil {
 		return nil, err
 	}
 
+	agents := sortedAgents(s.agents.Agents())
+	limit := int(req.MaxEntries)
+
+	var entries []*csi.ListVolumesResponse_Entry
+	var nextToken string
+
+	for _, a := range agents {
+		if pt.SC != "" && a.sc < pt.SC {
+			continue
+		}
+
+		after := ""
+		if a.sc == pt.SC {
+			after = pt.After
+		}
+
+		opts := agentAPI.ListOpts{After: after, Limit: limit}
+		start := time.Now()
+		volList, err := a.client.ListVolumes(ctx, opts)
+		agentDuration.WithLabelValues("list_volumes", a.sc).Observe(time.Since(start).Seconds())
+		if err != nil {
+			agentOpsTotal.WithLabelValues("list_volumes", "error", a.sc).Inc()
+			log.Warn().Err(err).Str("sc", a.sc).Msg("failed to list volumes from agent")
+			continue
+		}
+		agentOpsTotal.WithLabelValues("list_volumes", "success", a.sc).Inc()
+
+		for _, vol := range volList.Volumes {
+			entries = append(entries, &csi.ListVolumesResponse_Entry{
+				Volume: &csi.Volume{
+					VolumeId:      utils.MakeVolumeID(a.sc, vol.Name),
+					CapacityBytes: int64(vol.SizeBytes),
+				},
+			})
+		}
+
+		if volList.Next != "" {
+			nextToken = encodePageToken(a.sc, volList.Next)
+			break
+		}
+
+		if limit > 0 {
+			limit -= len(volList.Volumes)
+			if limit <= 0 {
+				break
+			}
+		}
+	}
+
 	return &csi.ListVolumesResponse{
-		Entries:   paged,
+		Entries:   entries,
 		NextToken: nextToken,
 	}, nil
 }

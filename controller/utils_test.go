@@ -6,63 +6,29 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-// --- TestPaginate ---
+// --- TestPageToken ---
 
-func TestPaginate(t *testing.T) {
-	items := []string{"a", "b", "c", "d", "e"}
-
-	t.Run("empty_slice", func(t *testing.T) {
-		out, next, err := paginate([]string{}, "", 0)
+func TestPageToken(t *testing.T) {
+	t.Run("roundtrip", func(t *testing.T) {
+		token := encodePageToken("my-sc", "vol-42")
+		pt, err := decodePageToken(token)
 		require.NoError(t, err)
-		assert.Empty(t, out)
-		assert.Empty(t, next)
+		assert.Equal(t, "my-sc", pt.SC)
+		assert.Equal(t, "vol-42", pt.After)
 	})
 
-	t.Run("no_limit_no_token", func(t *testing.T) {
-		out, next, err := paginate(items, "", 0)
+	t.Run("empty_token", func(t *testing.T) {
+		pt, err := decodePageToken("")
 		require.NoError(t, err)
-		assert.Equal(t, items, out)
-		assert.Empty(t, next)
-	})
-
-	t.Run("with_max_entries", func(t *testing.T) {
-		out, next, err := paginate(items, "", 2)
-		require.NoError(t, err)
-		assert.Equal(t, []string{"a", "b"}, out)
-		assert.Equal(t, "2", next)
-	})
-
-	t.Run("with_starting_token", func(t *testing.T) {
-		out, next, err := paginate(items, "2", 2)
-		require.NoError(t, err)
-		assert.Equal(t, []string{"c", "d"}, out)
-		assert.Equal(t, "4", next)
-	})
-
-	t.Run("token_at_end", func(t *testing.T) {
-		out, next, err := paginate(items, "4", 10)
-		require.NoError(t, err)
-		assert.Equal(t, []string{"e"}, out)
-		assert.Empty(t, next)
-	})
-
-	t.Run("token_beyond_length", func(t *testing.T) {
-		out, next, err := paginate(items, "99", 0)
-		require.NoError(t, err)
-		assert.Empty(t, out)
-		assert.Empty(t, next)
+		assert.Empty(t, pt.SC)
+		assert.Empty(t, pt.After)
 	})
 
 	t.Run("invalid_token", func(t *testing.T) {
-		_, _, err := paginate(items, "notanumber", 0)
+		_, err := decodePageToken("not-valid-base64!!!")
 		require.Error(t, err)
-		st, ok := status.FromError(err)
-		require.True(t, ok)
-		assert.Equal(t, codes.Aborted, st.Code())
 	})
 }
 

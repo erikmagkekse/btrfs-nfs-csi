@@ -32,10 +32,10 @@ func volumeCmd() *cli.Command {
 						sortBy = sortUsedPct
 					}
 					rev := !cmd.Bool("asc")
-					labels := cmd.StringSlice("label")
+					opts := v1.ListOpts{Labels: cmd.StringSlice("label")}
 
 					if isWide(cmd) {
-						resp, err := c.ListVolumesDetail(ctx, labels...)
+						resp, err := c.ListVolumesDetail(ctx, opts)
 						if err != nil {
 							return err
 						}
@@ -53,7 +53,7 @@ func volumeCmd() *cli.Command {
 						})
 					}
 
-					resp, err := c.ListVolumes(ctx, labels...)
+					resp, err := c.ListVolumes(ctx, opts)
 					if err != nil {
 						return err
 					}

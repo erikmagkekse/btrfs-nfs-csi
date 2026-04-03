@@ -73,11 +73,13 @@ type VolumeDetailResponse struct {
 type VolumeListResponse struct {
 	Volumes []VolumeResponse `json:"volumes"`
 	Total   int              `json:"total"`
+	Next    string           `json:"next,omitempty"`
 }
 
 type VolumeDetailListResponse struct {
 	Volumes []VolumeDetailResponse `json:"volumes"`
 	Total   int                    `json:"total"`
+	Next    string                 `json:"next,omitempty"`
 }
 
 type SnapshotResponse struct {
@@ -104,11 +106,13 @@ type SnapshotDetailResponse struct {
 type SnapshotListResponse struct {
 	Snapshots []SnapshotResponse `json:"snapshots"`
 	Total     int                `json:"total"`
+	Next      string             `json:"next,omitempty"`
 }
 
 type SnapshotDetailListResponse struct {
 	Snapshots []SnapshotDetailResponse `json:"snapshots"`
 	Total     int                      `json:"total"`
+	Next      string                   `json:"next,omitempty"`
 }
 
 type CloneResponse struct {
@@ -121,6 +125,8 @@ type CloneResponse struct {
 
 type ExportListResponse struct {
 	Exports []ExportEntry `json:"exports"`
+	Total   int           `json:"total"`
+	Next    string        `json:"next,omitempty"`
 }
 
 type StatsResponse struct {
@@ -225,11 +231,13 @@ type TaskDetailResponse struct {
 type TaskListResponse struct {
 	Tasks []TaskResponse `json:"tasks"`
 	Total int            `json:"total"`
+	Next  string         `json:"next,omitempty"`
 }
 
 type TaskDetailListResponse struct {
 	Tasks []TaskDetailResponse `json:"tasks"`
 	Total int                  `json:"total"`
+	Next  string               `json:"next,omitempty"`
 }
 
 type ErrorResponse struct {

@@ -2,12 +2,24 @@ package v1
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 
 	"github.com/labstack/echo/v5"
 )
+
+func parsePageParams(c *echo.Context) (after string, limit int) {
+	after = c.QueryParam("after")
+	if v := c.QueryParam("limit"); v != "" {
+		limit, _ = strconv.Atoi(v)
+		if limit < 0 {
+			limit = 0
+		}
+	}
+	return
+}
 
 type Handler struct {
 	Store *storage.Storage
@@ -46,12 +58,14 @@ func (h *Handler) CreateVolume(c *echo.Context) error {
 
 func (h *Handler) ListVolumes(c *echo.Context) error {
 	tenant := c.Get("tenant").(string)
+	after, limit := parsePageParams(c)
 
-	vols, err := h.Store.ListVolumes(tenant)
+	page, err := h.Store.ListVolumesPaginated(tenant, after, limit)
 	if err != nil {
 		return StorageError(c, err)
 	}
 
+	vols := page.Items
 	if filters := c.QueryParams()["label"]; len(filters) > 0 {
 		vols = filterByLabels(vols, filters)
 	}
@@ -61,7 +75,7 @@ func (h *Handler) ListVolumes(c *echo.Context) error {
 		for i := range vols {
 			resp[i] = volumeDetailResponseFrom(&vols[i])
 		}
-		return c.JSON(http.StatusOK, VolumeDetailListResponse{Volumes: resp, Total: len(resp)})
+		return c.JSON(http.StatusOK, VolumeDetailListResponse{Volumes: resp, Total: page.Total, Next: page.Next})
 	}
 
 	resp := make([]VolumeResponse, len(vols))
@@ -69,7 +83,7 @@ func (h *Handler) ListVolumes(c *echo.Context) error {
 		resp[i] = volumeResponseFrom(&vols[i])
 	}
 
-	return c.JSON(http.StatusOK, VolumeListResponse{Volumes: resp, Total: len(resp)})
+	return c.JSON(http.StatusOK, VolumeListResponse{Volumes: resp, Total: page.Total, Next: page.Next})
 }
 
 func volumeDetailResponseFrom(meta *storage.VolumeMetadata) VolumeDetailResponse {
@@ -168,17 +182,19 @@ func (h *Handler) UnexportVolume(c *echo.Context) error {
 
 func (h *Handler) ListExports(c *echo.Context) error {
 	tenant := c.Get("tenant").(string)
+	after, limit := parsePageParams(c)
 
-	entries, err := h.Store.ListExports(c.Request().Context(), tenant)
+	page, err := h.Store.ListExportsPaginated(c.Request().Context(), tenant, after, limit)
 	if err != nil {
 		return StorageError(c, err)
 	}
 
-	if entries == nil {
-		entries = []storage.ExportEntry{}
+	exports := page.Items
+	if exports == nil {
+		exports = []storage.ExportEntry{}
 	}
 
-	return c.JSON(http.StatusOK, ExportListResponse{Exports: entries})
+	return c.JSON(http.StatusOK, ExportListResponse{Exports: exports, Total: page.Total, Next: page.Next})
 }
 
 func (h *Handler) Stats(c *echo.Context) error {
@@ -270,14 +286,16 @@ func (h *Handler) CreateSnapshot(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, snapshotDetailResponseFrom(meta))
 }
 
-func (h *Handler) ListSnapshots(c *echo.Context) error {
+func (h *Handler) listSnapshotsPage(c *echo.Context, volume string) error {
 	tenant := c.Get("tenant").(string)
+	after, limit := parsePageParams(c)
 
-	snaps, err := h.Store.ListSnapshots(tenant, "")
+	page, err := h.Store.ListSnapshotsPaginated(tenant, volume, after, limit)
 	if err != nil {
 		return StorageError(c, err)
 	}
 
+	snaps := page.Items
 	if filters := c.QueryParams()["label"]; len(filters) > 0 {
 		snaps = filterByLabels(snaps, filters)
 	}
@@ -287,7 +305,7 @@ func (h *Handler) ListSnapshots(c *echo.Context) error {
 		for i := range snaps {
 			resp[i] = snapshotDetailResponseFrom(&snaps[i])
 		}
-		return c.JSON(http.StatusOK, SnapshotDetailListResponse{Snapshots: resp, Total: len(resp)})
+		return c.JSON(http.StatusOK, SnapshotDetailListResponse{Snapshots: resp, Total: page.Total, Next: page.Next})
 	}
 
 	resp := make([]SnapshotResponse, len(snaps))
@@ -295,35 +313,15 @@ func (h *Handler) ListSnapshots(c *echo.Context) error {
 		resp[i] = snapshotResponseFrom(&snaps[i])
 	}
 
-	return c.JSON(http.StatusOK, SnapshotListResponse{Snapshots: resp, Total: len(resp)})
+	return c.JSON(http.StatusOK, SnapshotListResponse{Snapshots: resp, Total: page.Total, Next: page.Next})
+}
+
+func (h *Handler) ListSnapshots(c *echo.Context) error {
+	return h.listSnapshotsPage(c, "")
 }
 
 func (h *Handler) ListVolumeSnapshots(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
-
-	snaps, err := h.Store.ListSnapshots(tenant, c.Param("name"))
-	if err != nil {
-		return StorageError(c, err)
-	}
-
-	if filters := c.QueryParams()["label"]; len(filters) > 0 {
-		snaps = filterByLabels(snaps, filters)
-	}
-
-	if c.QueryParam("detail") == "true" {
-		resp := make([]SnapshotDetailResponse, len(snaps))
-		for i := range snaps {
-			resp[i] = snapshotDetailResponseFrom(&snaps[i])
-		}
-		return c.JSON(http.StatusOK, SnapshotDetailListResponse{Snapshots: resp, Total: len(resp)})
-	}
-
-	resp := make([]SnapshotResponse, len(snaps))
-	for i := range snaps {
-		resp[i] = snapshotResponseFrom(&snaps[i])
-	}
-
-	return c.JSON(http.StatusOK, SnapshotListResponse{Snapshots: resp, Total: len(resp)})
+	return h.listSnapshotsPage(c, c.Param("name"))
 }
 
 func snapshotDetailResponseFrom(meta *storage.SnapshotMetadata) SnapshotDetailResponse {
@@ -452,7 +450,8 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 }
 
 func (h *Handler) ListTasks(c *echo.Context) error {
-	tasks := h.Store.Tasks().List(c.QueryParam("type"))
+	after, limit := parsePageParams(c)
+	tasks, total, next := h.Store.Tasks().ListPaginated(c.QueryParam("type"), after, limit)
 
 	if filters := c.QueryParams()["label"]; len(filters) > 0 {
 		tasks = filterByLabels(tasks, filters)
@@ -463,14 +462,14 @@ func (h *Handler) ListTasks(c *echo.Context) error {
 		for i, t := range tasks {
 			detail[i] = taskDetailResponseFrom(&t)
 		}
-		return c.JSON(http.StatusOK, TaskDetailListResponse{Tasks: detail, Total: len(detail)})
+		return c.JSON(http.StatusOK, TaskDetailListResponse{Tasks: detail, Total: total, Next: next})
 	}
 
 	resp := make([]TaskResponse, len(tasks))
 	for i, t := range tasks {
 		resp[i] = taskResponseFrom(&t)
 	}
-	return c.JSON(http.StatusOK, TaskListResponse{Tasks: resp, Total: len(resp)})
+	return c.JSON(http.StatusOK, TaskListResponse{Tasks: resp, Total: total, Next: next})
 }
 
 func (h *Handler) GetTask(c *echo.Context) error {
