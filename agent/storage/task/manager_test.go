@@ -192,7 +192,7 @@ func TestManager_ProgressUpdate(t *testing.T) {
 	assert.Equal(t, 50, tsk.Progress)
 
 	require.NoError(t, tm.Cancel(id))
-	awaitStatus(t, tm, id, TaskCancelled)
+	awaitDone(t, tm, id)
 }
 
 func TestManager_ResultStruct(t *testing.T) {
@@ -402,7 +402,7 @@ func TestManager_CancelPending(t *testing.T) {
 
 	started := make(chan struct{})
 	blocker := make(chan struct{})
-	tm.Create("test", func(ctx context.Context, update *Update) error {
+	first := tm.Create("test", func(ctx context.Context, update *Update) error {
 		close(started)
 		<-blocker
 		return nil
@@ -423,6 +423,7 @@ func TestManager_CancelPending(t *testing.T) {
 	assert.NotNil(t, tsk.CompletedAt, "cancelled pending should have CompletedAt")
 
 	close(blocker)
+	awaitDone(t, tm, first)
 }
 
 func TestManager_PendingTaskRunsAfterSlotFreed(t *testing.T) {
