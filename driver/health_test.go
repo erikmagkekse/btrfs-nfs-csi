@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -114,11 +115,8 @@ func TestHealMount_SetsHealthStateHealed(t *testing.T) {
 
 	ns.healMount(context.Background(), mp, vi)
 
-	h, ok := ns.healthState.Load("sc|vol-123")
-	require.True(t, ok)
-	vh := h.(*volumeHealth)
-	assert.False(t, vh.abnormal)
-	assert.Contains(t, vh.message, "auto-healed")
+	_, ok := ns.healthState.Load("sc|vol-123")
+	assert.False(t, ok, "healthState should be cleared after auto-heal")
 }
 
 func TestHealMount_SetsHealthStateAbnormalOnFailure(t *testing.T) {
@@ -142,20 +140,20 @@ func TestReportVolumeEvent_CreatesK8sEvent(t *testing.T) {
 
 	vi := &volumeInfo{volumeID: "sc|vol-1", pvcName: "my-pvc", pvcNamespace: "default"}
 
-	ns.reportVolumeEvent(context.Background(), vi, eventMountAutoHealed, "NFS mount was stale, auto-healed")
+	ns.reportVolumeEvent(context.Background(), vi, eventMountRemounted, "NFS mount was stale, auto-healed")
 
 	events, err := ns.kubeClient.CoreV1().Events("default").List(context.Background(), metav1.ListOptions{})
 	require.NoError(t, err)
 	require.Len(t, events.Items, 1)
 
 	ev := events.Items[0]
-	assert.Equal(t, eventMountAutoHealed, ev.Reason)
+	assert.Equal(t, eventMountRemounted, ev.Reason)
 	assert.Equal(t, "NFS mount was stale, auto-healed", ev.Message)
 	assert.Equal(t, "PersistentVolumeClaim", ev.InvolvedObject.Kind)
 	assert.Equal(t, "my-pvc", ev.InvolvedObject.Name)
 	assert.Equal(t, "default", ev.InvolvedObject.Namespace)
-	assert.Equal(t, corev1.EventTypeWarning, ev.Type)
-	assert.Equal(t, "btrfs-nfs-csi-node", ev.Source.Component)
+	assert.Equal(t, corev1.EventTypeNormal, ev.Type)
+	assert.Equal(t, config.DriverName+"-node", ev.Source.Component)
 }
 
 func TestReportVolumeEvent_RemountFailedEvent(t *testing.T) {
@@ -174,29 +172,28 @@ func TestReportVolumeEvent_RemountFailedEvent(t *testing.T) {
 
 func TestReportVolumeEvent_NilVolumeInfo(t *testing.T) {
 	ns := newTestNodeServer(nil)
-	ns.reportVolumeEvent(context.Background(), nil, eventMountAutoHealed, "test")
+	ns.reportVolumeEvent(context.Background(), nil, eventMountRemounted, "test")
 }
 
 func TestReportVolumeEvent_NoKubeClient(t *testing.T) {
 	ns := newTestNodeServer(nil)
-	// kubeClient is nil, should still set healthState
+	// kubeClient is nil, should still clear healthState on auto-heal
 	vi := &volumeInfo{volumeID: "sc|vol-1", pvcName: "pvc", pvcNamespace: "ns"}
 
-	ns.reportVolumeEvent(context.Background(), vi, eventMountAutoHealed, "healed")
+	ns.reportVolumeEvent(context.Background(), vi, eventMountRemounted, "healed")
 
-	h, ok := ns.healthState.Load("sc|vol-1")
-	require.True(t, ok)
-	assert.False(t, h.(*volumeHealth).abnormal)
+	_, ok := ns.healthState.Load("sc|vol-1")
+	assert.False(t, ok, "healthState should be cleared after auto-heal")
 }
 
 func TestReportVolumeEvent_NoPVCSkipsEvent(t *testing.T) {
 	ns := newTestNodeServer(nil)
 	ns.kubeClient = fakekube.NewSimpleClientset()
 
-	// No pvcName/Namespace, should still set healthState but no event
+	// No pvcName/Namespace, should skip event but still manage healthState
 	vi := &volumeInfo{volumeID: "sc|vol-1"}
 
-	ns.reportVolumeEvent(context.Background(), vi, eventMountAutoHealed, "healed")
+	ns.reportVolumeEvent(context.Background(), vi, eventMountRemountFailed, "failed")
 
 	events, _ := ns.kubeClient.CoreV1().Events("").List(context.Background(), metav1.ListOptions{})
 	assert.Empty(t, events.Items)

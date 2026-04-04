@@ -11,7 +11,9 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
 	"github.com/rs/zerolog/log"
@@ -105,7 +107,7 @@ func (s *Server) resolveVolumeParams(ctx context.Context, params map[string]stri
 		vp.Mode = v
 	}
 	if v, ok := annos[config.AnnoPrefix+config.ParamLabels]; ok && v != "" {
-		mergeUserLabels(vp.Labels, parseLabels(v), config.MaxUserLabels)
+		s.mergeUserLabels(pvc, vp.Labels, parseLabels(v), config.MaxUserLabels)
 	}
 
 	return vp
@@ -115,9 +117,10 @@ var reservedLabelKeys = map[string]bool{
 	"kubernetes.pvc.name":         true,
 	"kubernetes.pvc.namespace":    true,
 	"kubernetes.pvc.storageclass": true,
+	"created-by":                  true,
 }
 
-func mergeUserLabels(dst, user map[string]string, maxUser int) {
+func (s *Server) mergeUserLabels(pvc runtime.Object, dst, user map[string]string, maxUser int) {
 	keys := make([]string, 0, len(user))
 	for k := range user {
 		keys = append(keys, k)
@@ -128,10 +131,17 @@ func mergeUserLabels(dst, user map[string]string, maxUser int) {
 	for _, k := range keys {
 		if reservedLabelKeys[k] {
 			log.Warn().Str("key", k).Msg("skipping reserved label key from PVC annotation")
+			s.recorder.Eventf(pvc, corev1.EventTypeWarning, "LabelSkipped", "skipping reserved label key %q from PVC annotation", k)
+			continue
+		}
+		if !config.ValidLabelKey.MatchString(k) || !config.ValidLabelVal.MatchString(user[k]) {
+			log.Warn().Str("key", k).Str("value", user[k]).Msg("skipping invalid label from PVC annotation")
+			s.recorder.Eventf(pvc, corev1.EventTypeWarning, "LabelInvalid", "skipping invalid label %q=%q from PVC annotation", k, user[k])
 			continue
 		}
 		if merged >= maxUser {
 			log.Warn().Int("max", maxUser).Msg("too many user labels in PVC annotation, truncating")
+			s.recorder.Eventf(pvc, corev1.EventTypeWarning, "LabelsTruncated", "too many user labels (max %d), remaining labels ignored", maxUser)
 			break
 		}
 		dst[k] = user[k]

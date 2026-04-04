@@ -35,6 +35,8 @@
 |---|---|---|
 | `AGENT_URL` | - | Agent API URL |
 | `AGENT_TOKEN` | - | Tenant token |
+| `BTRFS_NFS_CSI_IDENTITY` | `cli` | Caller identity for `created-by` label |
+| `BTRFS_NFS_CSI_FORCE` | `false` | Skip delete protection when `true` |
 
 Also configurable via `--agent-url` and `--agent-token` flags.
 

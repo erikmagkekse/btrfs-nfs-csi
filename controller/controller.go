@@ -4,13 +4,18 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 )
 
 func Start(ctx context.Context, endpoint, metricsAddr, version, commit, defaultLabels string) error {
@@ -29,11 +34,16 @@ func Start(ctx context.Context, endpoint, metricsAddr, version, commit, defaultL
 	agents := NewAgentTracker(kubeClient, version, commit)
 	go agents.Run(ctx)
 
+	broadcaster := record.NewBroadcaster()
+	broadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
+	recorder := broadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: config.DriverName + "-controller"})
+	defer broadcaster.Shutdown()
+
 	srv, err := csiserver.New(endpoint, version, metricsInterceptor)
 	if err != nil {
 		return err
 	}
-	csi.RegisterControllerServer(srv.GRPC(), &Server{agents: agents, kubeClient: kubeClient})
+	csi.RegisterControllerServer(srv.GRPC(), &Server{agents: agents, kubeClient: kubeClient, recorder: recorder})
 	return srv.Run(ctx, "controller")
 }
 
@@ -41,6 +51,7 @@ type Server struct {
 	csi.UnimplementedControllerServer
 	agents     *AgentTracker
 	kubeClient kubernetes.Interface
+	recorder   record.EventRecorder
 }
 
 func (s *Server) ValidateVolumeCapabilities(_ context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {

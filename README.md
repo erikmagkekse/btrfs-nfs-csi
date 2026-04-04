@@ -49,7 +49,8 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - Web dashboard (`/v1/dashboard`)
 - Background task system with progress tracking, persistence, and configurable timeouts
 - Filesystem scrub via API
-- NFS mount health checker with auto-heal (detects stale mounts, remounts automatically, heals all pods without restart)
+- NFS mount health checker with auto-heal (detects stale mounts, remounts automatically, heals all pods without restart, k8s events on PVC)
+- CLI with column filter (`-c`), watch mode (`-w`), label-based delete protection, relative volume resize (`+5Gi`), and xargs-friendly output
 - TLS support
 - HA via DRBD + Pacemaker (active/passive failover)
 
