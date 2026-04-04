@@ -99,7 +99,7 @@ func TestAgentTrackerConcurrent(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			tr.AgentURL("my-sc")
+			_, _ = tr.AgentURL("my-sc")
 		}()
 		go func() {
 			defer wg.Done()
