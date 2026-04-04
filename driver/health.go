@@ -16,10 +16,18 @@ import (
 )
 
 const (
-	eventMountAutoHealed    = "MountAutoHealed"
+	eventMountHealthy       = "MountHealthy"
+	eventMountRemounted     = "MountRemounted"
 	eventMountRemountFailed = "MountRemountFailed"
 	apiCallTimeout          = 10 * time.Second
 )
+
+func eventType(reason string) string {
+	if reason == eventMountHealthy || reason == eventMountRemounted {
+		return corev1.EventTypeNormal
+	}
+	return corev1.EventTypeWarning
+}
 
 type volumeHealth struct {
 	abnormal bool
@@ -67,6 +75,15 @@ func (s *NodeServer) checkMountHealth(ctx context.Context) {
 		return vi, ok
 	}
 
+	hasUnhealthy := false
+	s.healthState.Range(func(_, v any) bool {
+		if h, _ := v.(*volumeHealth); h != nil && h.abnormal {
+			hasUnhealthy = true
+			return false
+		}
+		return true
+	})
+
 	for _, mp := range mounts {
 		if (mp.Type != "nfs" && mp.Type != "nfs4") || !strings.Contains(mp.Path, "globalmount") {
 			continue
@@ -76,6 +93,15 @@ func (s *NodeServer) checkMountHealth(ctx context.Context) {
 		err := statWithTimeout(dataPath, staleCheckTimeout)
 		if err == nil {
 			healthChecksTotal.WithLabelValues("healthy").Inc()
+			if hasUnhealthy {
+				if vi, ok := resolveVolume(mp.Device); ok {
+					if prev, loaded := s.healthState.LoadAndDelete(vi.volumeID); loaded {
+						if h, _ := prev.(*volumeHealth); h != nil && h.abnormal {
+							s.reportVolumeEvent(ctx, &vi, eventMountHealthy, "NFS mount is healthy again")
+						}
+					}
+				}
+			}
 			continue
 		}
 
@@ -119,7 +145,7 @@ func (s *NodeServer) healMount(ctx context.Context, mp mount.MountPoint, vi *vol
 	mountDuration.WithLabelValues("health_remount").Observe(time.Since(start).Seconds())
 	log.Info().Str("mountpoint", mp.Path).Msg("health check: remount succeeded, bind mounts healed")
 	healthChecksTotal.WithLabelValues("remounted").Inc()
-	s.reportVolumeEvent(ctx, vi, eventMountAutoHealed, "NFS mount was stale, auto-healed by health checker")
+	s.reportVolumeEvent(ctx, vi, eventMountRemounted, "NFS mount was stale, auto-healed by driver")
 }
 
 func (s *NodeServer) reportVolumeEvent(ctx context.Context, vi *volumeInfo, reason, message string) {
@@ -130,7 +156,7 @@ func (s *NodeServer) reportVolumeEvent(ctx context.Context, vi *volumeInfo, reas
 	if s.kubeClient != nil && vi.pvcName != "" && vi.pvcNamespace != "" {
 		event := &corev1.Event{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "btrfs-nfs-csi-",
+				GenerateName: config.DriverName + "-",
 				Namespace:    vi.pvcNamespace,
 			},
 			InvolvedObject: corev1.ObjectReference{
@@ -141,18 +167,22 @@ func (s *NodeServer) reportVolumeEvent(ctx context.Context, vi *volumeInfo, reas
 			},
 			Reason:  reason,
 			Message: message,
-			Type:    corev1.EventTypeWarning,
-			Source:  corev1.EventSource{Component: "btrfs-nfs-csi-node"},
+			Type:    eventType(reason),
+			Source:  corev1.EventSource{Component: config.DriverName + "-node"},
 		}
 		if _, err := s.kubeClient.CoreV1().Events(vi.pvcNamespace).Create(ctx, event, metav1.CreateOptions{}); err != nil {
 			log.Warn().Err(err).Str("pvc", vi.pvcNamespace+"/"+vi.pvcName).Msg("health check: failed to create PVC event")
 		}
 	}
 
-	s.healthState.Store(vi.volumeID, &volumeHealth{
-		abnormal: reason != eventMountAutoHealed,
-		message:  message,
-	})
+	if reason == eventMountRemounted || reason == eventMountHealthy {
+		s.healthState.Delete(vi.volumeID)
+	} else {
+		s.healthState.Store(vi.volumeID, &volumeHealth{
+			abnormal: true,
+			message:  message,
+		})
+	}
 }
 
 // buildVolumeMap fetches VolumeAttachments + PVs and builds a map of NFS source -> volumeInfo.

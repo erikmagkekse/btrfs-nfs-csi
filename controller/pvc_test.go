@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakekube "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 )
 
@@ -103,11 +104,18 @@ func TestToUpdateRequest(t *testing.T) {
 
 // --- TestMergeUserLabels ---
 
+func testServer() *Server {
+	return &Server{recorder: record.NewFakeRecorder(10)}
+}
+
 func TestMergeUserLabels(t *testing.T) {
+	srv := testServer()
+	pvc := &corev1.PersistentVolumeClaim{}
+
 	t.Run("basic_merge", func(t *testing.T) {
 		dst := map[string]string{"created-by": "csi"}
 		user := map[string]string{"env": "prod", "team": "be"}
-		mergeUserLabels(dst, user, 4)
+		srv.mergeUserLabels(pvc, dst, user, 4)
 		assert.Equal(t, "csi", dst["created-by"])
 		assert.Equal(t, "prod", dst["env"])
 		assert.Equal(t, "be", dst["team"])
@@ -116,7 +124,7 @@ func TestMergeUserLabels(t *testing.T) {
 	t.Run("reserved_keys_skipped", func(t *testing.T) {
 		dst := map[string]string{"kubernetes.pvc.name": "my-pvc"}
 		user := map[string]string{"kubernetes.pvc.name": "hacked", "env": "prod"}
-		mergeUserLabels(dst, user, 4)
+		srv.mergeUserLabels(pvc, dst, user, 4)
 		assert.Equal(t, "my-pvc", dst["kubernetes.pvc.name"])
 		assert.Equal(t, "prod", dst["env"])
 	})
@@ -124,7 +132,7 @@ func TestMergeUserLabels(t *testing.T) {
 	t.Run("max_user_labels", func(t *testing.T) {
 		dst := map[string]string{}
 		user := map[string]string{"a": "1", "b": "2", "c": "3", "d": "4", "e": "5"}
-		mergeUserLabels(dst, user, 4)
+		srv.mergeUserLabels(pvc, dst, user, 4)
 		assert.Len(t, dst, 4)
 	})
 
@@ -132,8 +140,8 @@ func TestMergeUserLabels(t *testing.T) {
 		dst1 := map[string]string{}
 		dst2 := map[string]string{}
 		user := map[string]string{"z": "1", "a": "2", "m": "3", "b": "4", "x": "5"}
-		mergeUserLabels(dst1, user, 3)
-		mergeUserLabels(dst2, user, 3)
+		srv.mergeUserLabels(pvc, dst1, user, 3)
+		srv.mergeUserLabels(pvc, dst2, user, 3)
 		assert.Equal(t, dst1, dst2)
 		// alphabetically first 3: a, b, m
 		assert.Contains(t, dst1, "a")
@@ -141,11 +149,11 @@ func TestMergeUserLabels(t *testing.T) {
 		assert.Contains(t, dst1, "m")
 	})
 
-	t.Run("user_overrides_non_reserved", func(t *testing.T) {
+	t.Run("created_by_reserved", func(t *testing.T) {
 		dst := map[string]string{"created-by": "csi"}
 		user := map[string]string{"created-by": "terraform"}
-		mergeUserLabels(dst, user, 4)
-		assert.Equal(t, "terraform", dst["created-by"])
+		srv.mergeUserLabels(pvc, dst, user, 4)
+		assert.Equal(t, "csi", dst["created-by"])
 	})
 }
 
@@ -197,7 +205,7 @@ func TestResolveVolumeParams(t *testing.T) {
 				StorageClassName: ptr.To("my-sc"),
 			},
 		}
-		srv := &Server{kubeClient: fakekube.NewSimpleClientset(pvc)}
+		srv := &Server{kubeClient: fakekube.NewSimpleClientset(pvc), recorder: record.NewFakeRecorder(10)}
 
 		params := map[string]string{
 			config.PvcNameKey:      "my-pvc",
@@ -215,7 +223,7 @@ func TestResolveVolumeParams(t *testing.T) {
 	})
 
 	t.Run("no_pvc_info", func(t *testing.T) {
-		srv := &Server{kubeClient: fakekube.NewSimpleClientset()}
+		srv := &Server{kubeClient: fakekube.NewSimpleClientset(), recorder: record.NewFakeRecorder(10)}
 
 		vp := srv.resolveVolumeParams(context.Background(), map[string]string{
 			config.ParamNoCOW: "true",
@@ -227,7 +235,7 @@ func TestResolveVolumeParams(t *testing.T) {
 	})
 
 	t.Run("pvc_not_found", func(t *testing.T) {
-		srv := &Server{kubeClient: fakekube.NewSimpleClientset()}
+		srv := &Server{kubeClient: fakekube.NewSimpleClientset(), recorder: record.NewFakeRecorder(10)}
 
 		vp := srv.resolveVolumeParams(context.Background(), map[string]string{
 			config.PvcNameKey:      "missing",

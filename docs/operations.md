@@ -159,7 +159,7 @@ The node driver runs a background health checker that detects and auto-heals sta
 2. Each mount is tested with a 5s stat timeout. A stale mount causes stat to hang or return ESTALE/EIO
 3. On stale detection: fresh NFS remount over the stale mount at the same staging path
 4. All existing bind mounts (running pods) heal automatically because they share the same VFS path
-5. A k8s Warning event is written on the PVC (`MountAutoHealed` or `MountRemountFailed`)
+5. A k8s event is written on the PVC (`MountRemounted`, `MountRemountFailed`, or `MountHealthy`)
 6. `VOLUME_CONDITION` is reported via `NodeGetVolumeStats` for kubelet visibility
 
 **No pod restarts required.** The remount at the staging path restores I/O for all pods using that volume.
@@ -247,49 +247,71 @@ export AGENT_URL=http://10.0.0.5:8080
 export AGENT_TOKEN=changeme
 
 btrfs-nfs-csi volume list
-btrfs-nfs-csi volume list -o wide
-btrfs-nfs-csi volume list -o json
+btrfs-nfs-csi volume ls -o wide
+btrfs-nfs-csi volume ls -o json
+btrfs-nfs-csi volume ls -c name              # single column, no header (pipeable)
+btrfs-nfs-csi volume ls -c name,size         # selected columns
+btrfs-nfs-csi volume ls -w                   # watch mode (2s refresh)
+btrfs-nfs-csi volume ls -w 500ms             # watch with custom interval
 btrfs-nfs-csi volume get my-vol
 btrfs-nfs-csi volume create my-vol 10Gi --compression zstd
 btrfs-nfs-csi volume create my-vol 10Gi --label env=prod --label team=backend
-btrfs-nfs-csi volume expand my-vol 20Gi
+btrfs-nfs-csi volume expand my-vol 20Gi      # absolute size
+btrfs-nfs-csi volume expand my-vol +5Gi      # relative expand
 btrfs-nfs-csi volume clone source-vol new-vol --label env=staging
-btrfs-nfs-csi volume list --label env=prod  # filter by label
-btrfs-nfs-csi volume delete my-vol --confirm --yes
+btrfs-nfs-csi volume ls -l env=prod          # filter by label
+btrfs-nfs-csi volume ls -l env=prod,team=be  # comma-separated (AND)
+btrfs-nfs-csi volume delete my-vol           # safe: only deletes if created-by matches caller
+btrfs-nfs-csi volume delete my-vol --confirm --yes  # force delete any volume
+
+# xargs pipeline: delete all CLI-created volumes matching a pattern
+btrfs-nfs-csi volume ls -c name | grep '^test-' | xargs btrfs-nfs-csi volume delete
 
 btrfs-nfs-csi snapshot list
-btrfs-nfs-csi snapshot list my-vol          # filter by volume
-btrfs-nfs-csi snapshot list --label env=prod
+btrfs-nfs-csi snapshot ls my-vol             # filter by volume
+btrfs-nfs-csi snapshot ls -l env=prod
 btrfs-nfs-csi snapshot create my-vol snap-1 --label env=prod
 btrfs-nfs-csi snapshot clone snap-1 new-vol --label env=dev
-btrfs-nfs-csi snapshot delete snap-1 --confirm --yes
+btrfs-nfs-csi snapshot delete snap-1
 
 btrfs-nfs-csi export list
 btrfs-nfs-csi export add my-vol 10.1.0.50
 btrfs-nfs-csi export remove my-vol 10.1.0.50
 
 btrfs-nfs-csi task list
-btrfs-nfs-csi task list --type scrub
-btrfs-nfs-csi task list --label created-by=cron
+btrfs-nfs-csi task ls -t scrub
+btrfs-nfs-csi task ls -l created-by=cron
+btrfs-nfs-csi task ls -w                     # watch tasks live
 btrfs-nfs-csi task get <id>
 btrfs-nfs-csi task cancel <id>
 btrfs-nfs-csi task create scrub
-btrfs-nfs-csi task create scrub --wait
+btrfs-nfs-csi task create scrub -W           # wait for completion
 btrfs-nfs-csi task create scrub --label created-by=cron
 btrfs-nfs-csi task create test
-btrfs-nfs-csi task create test --sleep 10s --wait
+btrfs-nfs-csi task create test --sleep 10s -W
 btrfs-nfs-csi stats
-btrfs-nfs-csi stats -o wide                 # per-device IO and error details
+btrfs-nfs-csi stats -o wide                  # per-device IO and error details
+btrfs-nfs-csi stats -w                       # watch stats live
 btrfs-nfs-csi health
 btrfs-nfs-csi version
 ```
 
 **Global flags:** `--agent-url`, `--agent-token`, `--output` / `-o` (table, wide, json).
 
-**Output formats:** `table` (default), `wide` (extra columns), `json` (raw API response). Combine with `-o json,wide` for detailed JSON.
+**Output formats:** `table` (default), `wide` (extra columns), `json` (raw API response). Combine with `-o json,wide` for detailed JSON. `-o json` suppresses output for mutation commands without API response (delete, export add/rm, task cancel).
+
+**Column filter:** `--columns` / `-c` selects which columns to display. Single column omits the header for clean piping to `xargs`, `wc`, etc.
+
+**Watch mode:** `--watch` / `-w` enables live-refresh in an alternate screen. Default 2s, configurable (e.g. `-w 500ms`). Available on all list commands and `stats`.
 
 **Sorting:** `--sort` / `-s` with `--asc` (default descending). Volume default: `used%`. Snapshot default: `created`.
 
-**Size values:** Supports `Ki`, `Mi`, `Gi` (binary) and `K`, `M`, `G` (decimal).
+**Label filter:** `--label` / `-l`, repeatable (AND). Supports comma-separated values: `-l env=prod,team=be`.
 
-**Default labels:** CLI create commands automatically add `created-by=cli`. Override with `--label created-by=myvalue`.
+**Size values:** Supports `Ki`, `Mi`, `Gi` (binary) and `K`, `M`, `G` (decimal). `volume expand` accepts relative sizes with `+`/`-` prefix.
+
+**Delete protection:** Volumes and snapshots with `created-by` != caller identity are protected. Only `--confirm --yes` or `BTRFS_NFS_CSI_FORCE=true` bypasses this. The caller identity defaults to `cli` and can be set via `BTRFS_NFS_CSI_IDENTITY`.
+
+**Default labels:** CLI create commands automatically add `created-by=<identity>` (default `cli`). `created-by` is a reserved label and cannot be overridden via PVC annotations.
+
+**Command aliases:** `volumes`/`vol`, `snapshots`/`snap`, `tasks`, `exports`. `list`/`ls` interchangeable.
