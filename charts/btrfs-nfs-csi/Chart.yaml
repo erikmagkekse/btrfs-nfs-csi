@@ -15,7 +15,7 @@ keywords:
   - storage
   - snapshots
 maintainers:
-  - name: erikmagkekse
+  - name: Erik Groh
     email: me@eriks.life
     url: https://github.com/erikmagkekse
 annotations:
@@ -27,4 +27,4 @@ annotations:
   org.opencontainers.image.source: https://github.com/erikmagkekse/btrfs-nfs-csi
   org.opencontainers.image.documentation: https://github.com/erikmagkekse/btrfs-nfs-csi#readme
   org.opencontainers.image.licenses: Apache-2.0
-  org.opencontainers.image.vendor: erikmagkekse
+  org.opencontainers.image.vendor: Erik Groh <me@eriks.life>

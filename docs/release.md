@@ -9,26 +9,29 @@
 
 ## CI Pipeline
 
-Every push to `edge` or PR against `main`/`edge` runs the CI workflow:
+PRs against `main` or `edge` run the CI workflow:
 
 ```
 ci.yml (Go code, Containerfile, VERSION changes)
   lint         format check + golangci-lint
   test         go test -race ./...
   integration  btrfs + NFS integration tests (needs: test)
-  build        container image (needs: test + integration)
-               - push on edge only -> ghcr.io/.../btrfs-nfs-csi:edge
-               - PR builds are not pushed
+  sanity       CSI sanity tests (planned, not yet implemented)
+  e2e          end-to-end tests (planned, not yet implemented)
+  build        container image build check, no push (needs: test + integration)
 
 ci-helm.yml (charts/** changes)
   lint         helm lint + helm template
 ```
 
+When a PR is merged to `edge`, the edge-build workflow pushes the `:edge` image.
+
 ## Artifacts
 
 | Event | Container Image | Helm Chart |
 |-------|----------------|------------|
-| Push to `edge` | `:edge` (rolling, amd64) | not published |
+| PR to `edge`/`main` | build check (no push) | lint only |
+| PR merged to `edge` | `:edge` (rolling, amd64) | not published |
 | Tag `v0.10.0-edge` on `edge` | `:0.10.0-edge` (amd64 + arm64) | `0.1.2-edge` |
 | Tag `v0.10.0` on `main` | `:0.10.0` (amd64 + arm64) | `0.1.2` |
 
@@ -99,4 +102,4 @@ Edge and stable releases use the same pipeline. The `-edge` suffix is detected a
 - App version (`VERSION`): semver, e.g. `0.10.0`
 - Chart version (`Chart.yaml` `version`): independent semver for Helm chart changes
 - Edge builds append `-edge` to both, e.g. `0.10.0-edge`, `0.1.2-edge`
-- The `:edge` container tag is a rolling tag updated on every push to the `edge` branch
+- The `:edge` container tag is a rolling tag updated on every PR merge to `edge`

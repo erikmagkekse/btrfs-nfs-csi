@@ -19,7 +19,7 @@ LABEL org.opencontainers.image.title="btrfs-nfs-csi" \
       org.opencontainers.image.source="https://github.com/erikmagkekse/btrfs-nfs-csi" \
       org.opencontainers.image.documentation="https://github.com/erikmagkekse/btrfs-nfs-csi#readme" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.vendor="erikmagkekse"
+      org.opencontainers.image.vendor="Erik Groh <me@eriks.life>"
 
 RUN apk add --no-cache btrfs-progs e2fsprogs nfs-utils
 
