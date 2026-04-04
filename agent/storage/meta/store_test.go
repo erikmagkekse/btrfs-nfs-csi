@@ -18,6 +18,15 @@ type testMeta struct {
 func testStore(t *testing.T) (*Store[testMeta], string) {
 	t.Helper()
 	dir := t.TempDir()
+	t.Cleanup(func() {
+		// clear immutable flags so t.TempDir() cleanup can remove files
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				ClearImmutable(path)
+			}
+			return nil
+		})
+	})
 	return NewStore[testMeta](dir), dir
 }
 
@@ -71,6 +80,7 @@ func TestStore_StoreWritesDisk(t *testing.T) {
 	assert.Equal(t, "written", ondisk.Name)
 
 	// verify cache (remove file, still works)
+	ClearImmutable(filepath.Join(entryDir, "metadata.json"))
 	require.NoError(t, os.RemoveAll(entryDir))
 	got, err := s.Get("t", "k1")
 	require.NoError(t, err)

@@ -37,6 +37,14 @@ func qgroupRunFn(referenced, exclusive uint64) func([]string) (string, error) {
 func usageTestStorage(t *testing.T, tenant string) (*Storage, string) {
 	t.Helper()
 	base := t.TempDir()
+	t.Cleanup(func() {
+		_ = filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				meta.ClearImmutable(path)
+			}
+			return nil
+		})
+	})
 	tenantPath := filepath.Join(base, tenant)
 	require.NoError(t, os.MkdirAll(tenantPath, 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tenantPath, config.SnapshotsDir), 0o755))

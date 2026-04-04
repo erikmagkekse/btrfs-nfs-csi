@@ -19,8 +19,10 @@ const (
 	fsImmutableFL = 0x00000010 // FS_IMMUTABLE_FL
 )
 
-func setImmutable(path string)   { toggleImmutable(path, true) }
-func clearImmutable(path string) { toggleImmutable(path, false) }
+func setImmutable(path string) { toggleImmutable(path, true) }
+
+// ClearImmutable removes the immutable flag from a file.
+func ClearImmutable(path string) { toggleImmutable(path, false) }
 
 func toggleImmutable(path string, set bool) {
 	f, err := os.OpenFile(path, os.O_RDONLY, 0)
@@ -136,7 +138,7 @@ func (s *Store[T]) Update(tenant, name string, fn func(*T)) (*T, error) {
 
 // Delete removes an entry from cache and clears the immutable flag on disk.
 func (s *Store[T]) Delete(tenant, name string) {
-	clearImmutable(s.MetaPath(tenant, name))
+	ClearImmutable(s.MetaPath(tenant, name))
 	s.cache.Delete(s.key(tenant, name))
 }
 
@@ -218,7 +220,7 @@ func writeJSONAtomic(path string, v any) error {
 		return err
 	}
 
-	clearImmutable(path)
+	ClearImmutable(path)
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
