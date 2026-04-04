@@ -18,7 +18,6 @@ const (
 	ErrMetadata      = "METADATA_ERROR"
 )
 
-
 type StorageError struct {
 	Code    string
 	Message string

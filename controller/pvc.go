@@ -156,8 +156,8 @@ var reservedLabelKeys = map[string]bool{
 	labelSourcePVCName:         true,
 	labelSourcePVCNamespace:    true,
 	labelSourcePVCStorageClass: true,
-	labelSnapshotName:      true,
-	labelSnapshotNamespace: true,
+	labelSnapshotName:          true,
+	labelSnapshotNamespace:     true,
 }
 
 func init() {
