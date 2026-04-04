@@ -52,4 +52,3 @@ func exportList(ctx context.Context, cmd *cli.Command) error {
 		})
 	})
 }
-

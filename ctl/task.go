@@ -286,4 +286,3 @@ func waitForTask(ctx context.Context, c *v1.Client, id string) error {
 		}
 	}
 }
-

@@ -43,7 +43,7 @@ func listVolumes(ctx context.Context, cmd *cli.Command, c *v1.Client, sortBy str
 		for _, v := range resp.Volumes {
 			tw.writeRow(map[string]string{
 				"NAME": v.Name, "SIZE": utils.FormatBytes(v.SizeBytes), "USED": utils.FormatBytes(v.UsedBytes),
-				"USED%": fmt.Sprintf("%.0f%%", usedPct(v.UsedBytes, v.SizeBytes)),
+				"USED%":   fmt.Sprintf("%.0f%%", usedPct(v.UsedBytes, v.SizeBytes)),
 				"CLIENTS": fmt.Sprintf("%d", v.Clients), "CREATED": v.CreatedAt.Format(timeFmt),
 			})
 		}
@@ -198,4 +198,3 @@ func volumeClone(ctx context.Context, cmd *cli.Command) error {
 		fmt.Printf("volume %q cloned from %q\n", resp.Name, cmd.Args().Get(0))
 	})
 }
-

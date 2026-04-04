@@ -137,4 +137,3 @@ func snapshotClone(ctx context.Context, cmd *cli.Command) error {
 	}
 	return output(cmd, resp, func() { fmt.Printf("clone %q created from snapshot %q\n", resp.Name, resp.SourceSnapshot) })
 }
-
