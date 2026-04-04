@@ -162,4 +162,4 @@ sudo ./scripts/agent-dev-setup.sh down
 
 Contributions are herzlich willkommen! Feel free to open issues or submit PRs.
 
-> **Note:** The project is still getting its structure in place. Issue templates, contribution guidelines, and a proper release process are coming soon.
+See [docs/release.md](docs/release.md) for the release process and CI pipeline.

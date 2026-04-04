@@ -9,28 +9,91 @@ env:
   IMAGE: ghcr.io/erikmagkekse/btrfs-nfs-csi
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
-    if: github.event.base_ref == 'refs/heads/main'
+    if: github.event.base_ref == 'refs/heads/main' || github.event.base_ref == 'refs/heads/edge'
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      commit: ${{ steps.version.outputs.commit }}
+      suffix: ${{ steps.version.outputs.suffix }}
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Determine version
         id: version
         run: |
           VERSION=$(cat VERSION)
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            TAG_VERSION="${GITHUB_REF_NAME#v}"
-            if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
-              echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION file (${VERSION})"
+          SUFFIX=""
+          if [[ "${GITHUB_REF_NAME}" == *-edge ]]; then
+            SUFFIX="-edge"
+          fi
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${TAG_VERSION}" != "${VERSION}${SUFFIX}" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION file (${VERSION}${SUFFIX})"
+            exit 1
+          fi
+          echo "version=${VERSION}${SUFFIX}" >> "$GITHUB_OUTPUT"
+          echo "commit=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "suffix=${SUFFIX}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version bump
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-edge ]]; then
+            PREV_TAG=$(git describe --tags --abbrev=0 --match 'v*-edge' "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          else
+            PREV_TAG=$(git describe --tags --abbrev=0 --exclude '*-edge' "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          fi
+          if [[ -z "$PREV_TAG" ]]; then
+            echo "No previous tag found, skipping version check"
+            exit 0
+          fi
+          echo "Comparing against: ${PREV_TAG}"
+
+          PREV_VERSION=$(git show "${PREV_TAG}:VERSION")
+          CURR_VERSION=$(cat VERSION)
+          if [[ "$(printf '%s\n' "$PREV_VERSION" "$CURR_VERSION" | sort -V | head -1)" == "$CURR_VERSION" ]]; then
+            echo "::error::VERSION (${CURR_VERSION}) must be greater than ${PREV_VERSION} (${PREV_TAG})"
+            exit 1
+          fi
+
+          PREV_CHART=$(git show "${PREV_TAG}:charts/btrfs-nfs-csi/Chart.yaml" | grep '^version:' | awk '{print $2}')
+          CURR_CHART=$(grep '^version:' charts/btrfs-nfs-csi/Chart.yaml | awk '{print $2}')
+          if [[ "$(printf '%s\n' "$PREV_CHART" "$CURR_CHART" | sort -V | head -1)" == "$CURR_CHART" ]]; then
+            echo "::error::Chart version (${CURR_CHART}) must be greater than ${PREV_CHART} (${PREV_TAG})"
+            exit 1
+          fi
+
+          APP_VERSION=$(grep '^appVersion:' charts/btrfs-nfs-csi/Chart.yaml | sed 's/.*"\(.*\)"/\1/')
+          if [[ "$APP_VERSION" != "$CURR_VERSION" ]]; then
+            echo "::error::Chart appVersion (${APP_VERSION}) does not match VERSION (${CURR_VERSION})"
+            exit 1
+          fi
+
+          if git diff "${PREV_TAG}" -- go.mod go.sum | grep -q .; then
+            PREV_HASH=$(git show "${PREV_TAG}:package.nix" 2>/dev/null | grep 'vendorHash' | awk -F'"' '{print $2}')
+            CURR_HASH=$(grep 'vendorHash' package.nix | awk -F'"' '{print $2}')
+            if [[ -n "$PREV_HASH" && "$PREV_HASH" == "$CURR_HASH" ]]; then
+              echo "::error::go.mod/go.sum changed but vendorHash in package.nix is unchanged"
               exit 1
             fi
+            echo "vendorHash: ${PREV_HASH:-new} -> ${CURR_HASH}"
           fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "commit=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+          echo "VERSION: ${PREV_VERSION} -> ${CURR_VERSION}"
+          echo "Chart version: ${PREV_CHART} -> ${CURR_CHART}"
+
+  build:
+    runs-on: ubuntu-latest
+    needs: check
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -52,16 +115,21 @@ jobs:
           file: Containerfile
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+          tags: ${{ env.IMAGE }}:${{ needs.check.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION=${{ steps.version.outputs.version }}
-            COMMIT=${{ steps.version.outputs.commit }}
+            VERSION=${{ needs.check.outputs.version }}
+            COMMIT=${{ needs.check.outputs.commit }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.check.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
   helm:
-    if: github.event.base_ref == 'refs/heads/main'
+    needs: check
     uses: ./.github/workflows/helm-release.yml
+    with:
+      suffix: ${{ needs.check.outputs.suffix }}
     permissions:
       contents: read
       packages: write

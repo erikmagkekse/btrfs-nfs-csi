@@ -13,6 +13,14 @@ RUN CGO_ENABLED=0 go build \
 
 FROM alpine:3.21
 
+LABEL org.opencontainers.image.title="btrfs-nfs-csi" \
+      org.opencontainers.image.description="Kubernetes CSI driver that turns any btrfs filesystem into a full-featured NFS storage backend with instant snapshots, clones, and quotas" \
+      org.opencontainers.image.url="https://github.com/erikmagkekse/btrfs-nfs-csi" \
+      org.opencontainers.image.source="https://github.com/erikmagkekse/btrfs-nfs-csi" \
+      org.opencontainers.image.documentation="https://github.com/erikmagkekse/btrfs-nfs-csi#readme" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.vendor="Erik Groh <me@eriks.life>"
+
 RUN apk add --no-cache btrfs-progs e2fsprogs nfs-utils
 
 COPY --from=build /build/btrfs-nfs-csi /usr/local/bin/btrfs-nfs-csi
