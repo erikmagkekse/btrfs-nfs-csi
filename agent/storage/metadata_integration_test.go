@@ -59,6 +59,15 @@ func (s *UtilsIntegrationSuite) SetupSuite() {
 		snapshots:       meta.NewStore[SnapshotMetadata](s.mnt, config.SnapshotsDir),
 	}
 	_ = taskDir
+
+	s.T().Cleanup(func() {
+		_ = filepath.WalkDir(s.mnt, func(path string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				meta.ClearImmutable(path)
+			}
+			return nil
+		})
+	})
 }
 
 func (s *UtilsIntegrationSuite) TestStoreWriteAndRead() {
