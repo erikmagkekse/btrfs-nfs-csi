@@ -88,8 +88,8 @@ func (c *Client) DeleteSnapshot(ctx context.Context, name string) error {
 	return c.do(ctx, http.MethodDelete, "/v1/snapshots/"+name, nil, nil)
 }
 
-func (c *Client) CreateClone(ctx context.Context, req CloneCreateRequest) (*CloneResponse, error) {
-	var resp CloneResponse
+func (c *Client) CreateClone(ctx context.Context, req CloneCreateRequest) (*VolumeDetailResponse, error) {
+	var resp VolumeDetailResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/clones", req, &resp); err != nil {
 		if IsConflict(err) {
 			return &resp, err

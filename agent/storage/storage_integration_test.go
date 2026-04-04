@@ -4,6 +4,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/meta"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -27,6 +29,17 @@ type StorageIntegrationSuite struct {
 	loopDev   string
 	storage   *Storage
 	tenantDir string
+}
+
+func writeTestJSONFile(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestStorageIntegration(t *testing.T) {
@@ -96,6 +109,8 @@ func (s *StorageIntegrationSuite) SetupSuite() {
 		defaultDirMode:  0o755,
 		defaultDataMode: "2770",
 		tasks:           task.NewManager(taskDir, 0, 0),
+		volumes:         meta.NewStore[VolumeMetadata](s.mnt),
+		snapshots:       meta.NewStore[SnapshotMetadata](s.mnt, config.SnapshotsDir),
 	}
 }
 
@@ -304,7 +319,6 @@ func (s *StorageIntegrationSuite) TestCloneLifecycle() {
 	})
 	s.Require().NoError(err)
 	s.Assert().Equal("my-clone", clone.Name)
-	s.Assert().Equal("clone-snap", clone.SourceSnapshot)
 
 	// Verify data exists in clone
 	cloneDataDir := filepath.Join(s.tenantDir, "my-clone", config.DataDir)
@@ -336,7 +350,7 @@ func (s *StorageIntegrationSuite) TestExportMetadataPersistence() {
 	s.Require().NoError(err)
 
 	var meta VolumeMetadata
-	s.Require().NoError(ReadMetadata(filepath.Join(volDir, config.MetadataFile), &meta))
+	readTestJSON(s.T(), filepath.Join(volDir, config.MetadataFile), &meta)
 	s.Assert().Contains(meta.Clients, "10.0.0.1")
 	s.Assert().NotNil(meta.LastAttachAt)
 
@@ -345,7 +359,7 @@ func (s *StorageIntegrationSuite) TestExportMetadataPersistence() {
 	s.Require().NoError(err)
 
 	var afterUnexport VolumeMetadata
-	s.Require().NoError(ReadMetadata(filepath.Join(volDir, config.MetadataFile), &afterUnexport))
+	readTestJSON(s.T(), filepath.Join(volDir, config.MetadataFile), &afterUnexport)
 	s.Assert().NotContains(afterUnexport.Clients, "10.0.0.1")
 
 	exporter.AssertExpectations(s.T())
@@ -450,7 +464,7 @@ func (s *StorageIntegrationSuite) TestTaskPersistence() {
 
 	// read the file and verify
 	var persisted task.Task
-	s.Require().NoError(ReadMetadata(taskFile, &persisted))
+	readTestJSON(s.T(), taskFile, &persisted)
 	s.Assert().Equal(id, persisted.ID)
 	s.Assert().Equal(task.TaskCompleted, persisted.Status)
 	s.Assert().NotNil(persisted.Result)
@@ -465,7 +479,7 @@ func (s *StorageIntegrationSuite) TestTaskLoadFromDisk() {
 		Type:   "test",
 		Status: task.TaskRunning,
 	}
-	s.Require().NoError(writeMetadataAtomic(filepath.Join(taskDir, "stale-task-123.json"), &staleTask))
+	writeTestJSONFile(s.T(), filepath.Join(taskDir, "stale-task-123.json"), &staleTask)
 
 	// create new TaskManager (triggers loadFromDisk)
 	tm := task.NewManager(taskDir, 0, 0)
@@ -528,7 +542,7 @@ func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
 		Type:   string(task.TypeScrub),
 		Status: task.TaskRunning,
 	}
-	s.Require().NoError(writeMetadataAtomic(filepath.Join(taskDir, "stale-scrub.json"), &staleTask))
+	writeTestJSONFile(s.T(), filepath.Join(taskDir, "stale-scrub.json"), &staleTask)
 
 	// create new TaskManager (simulates agent restart)
 	tm := task.NewManager(taskDir, 0, 0)

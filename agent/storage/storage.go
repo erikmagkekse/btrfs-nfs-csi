@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/meta"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -32,6 +33,9 @@ type Storage struct {
 	tasks              *task.Manager
 	taskDefaultTimeout time.Duration
 	taskScrubTimeout   time.Duration
+
+	volumes   *meta.Store[VolumeMetadata]
+	snapshots *meta.Store[SnapshotMetadata]
 
 	// cachedDevices is written by both the IO poller (5s) and btrfs stats poller (1m).
 	// Each poller loads the current state, updates its own fields (IO or Errors),
@@ -114,23 +118,61 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 		initialStates[i] = DeviceState{BTRFSDevice: d}
 	}
 	taskDir := filepath.Join(basePath, config.TasksDir)
-	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, tasks: task.NewManager(taskDir, taskMaxConcurrent, taskPollInterval), taskDefaultTimeout: taskDefaultTimeout, taskScrubTimeout: taskScrubTimeout}
+	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, tasks: task.NewManager(taskDir, taskMaxConcurrent, taskPollInterval), taskDefaultTimeout: taskDefaultTimeout, taskScrubTimeout: taskScrubTimeout, volumes: meta.NewStore[VolumeMetadata](basePath), snapshots: meta.NewStore[SnapshotMetadata](basePath, config.SnapshotsDir)}
 	s.cachedDevices.Store(&initialStates)
+	s.loadCache()
 	return s
+}
+
+func (s *Storage) loadCache() {
+	for _, tenant := range s.tenants {
+		tenantDir := filepath.Join(s.basePath, tenant)
+		volCount, snapCount := 0, 0
+
+		if entries, err := os.ReadDir(tenantDir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() || e.Name() == config.SnapshotsDir {
+					continue
+				}
+				if _, err := s.volumes.LoadFromDisk(tenant, e.Name()); err != nil {
+					log.Warn().Err(err).Str("tenant", tenant).Str("volume", e.Name()).Msg("cache: corrupt metadata, skipping")
+					continue
+				}
+				log.Debug().Str("tenant", tenant).Str("volume", e.Name()).Msg("cache: loaded volume")
+				volCount++
+			}
+		}
+
+		snapDir := filepath.Join(tenantDir, config.SnapshotsDir)
+		if entries, err := os.ReadDir(snapDir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					continue
+				}
+				if _, err := s.snapshots.LoadFromDisk(tenant, e.Name()); err != nil {
+					log.Warn().Err(err).Str("tenant", tenant).Str("snapshot", e.Name()).Msg("cache: corrupt metadata, skipping")
+					continue
+				}
+				log.Debug().Str("tenant", tenant).Str("snapshot", e.Name()).Msg("cache: loaded snapshot")
+				snapCount++
+			}
+		}
+
+		log.Info().Str("tenant", tenant).Int("volumes", volCount).Int("snapshots", snapCount).Msg("metadata cache loaded")
+	}
 }
 
 func (s *Storage) StartWorkers(ctx context.Context, usageInterval, reconcileInterval, deviceIOInterval, deviceStatsInterval, taskCleanupInterval time.Duration) {
 	for _, tenant := range s.tenants {
-		bp := filepath.Join(s.basePath, tenant)
 		if s.quotaEnabled {
-			StartUsageUpdater(ctx, s.btrfs, bp, usageInterval, tenant)
+			s.startUsageUpdater(ctx, s.btrfs, usageInterval, tenant)
 		}
 		if reconcileInterval > 0 {
-			s.StartNFSReconciler(ctx, bp, reconcileInterval, tenant)
+			s.startNFSReconciler(ctx, reconcileInterval, tenant)
 		}
 	}
-	s.StartDeviceIOUpdater(ctx, deviceIOInterval)
-	s.StartDeviceStatsUpdater(ctx, deviceStatsInterval)
+	s.startDeviceIOUpdater(ctx, deviceIOInterval)
+	s.startDeviceStatsUpdater(ctx, deviceStatsInterval)
 	s.tasks.StartCleanup(ctx, taskCleanupInterval)
 }
 

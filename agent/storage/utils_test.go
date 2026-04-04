@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/meta"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
@@ -24,6 +25,14 @@ import (
 func testStorageWithRunner(t *testing.T, runner *utils.MockRunner, exporter *nfs.MockExporter) (*Storage, string) {
 	t.Helper()
 	base := t.TempDir()
+	t.Cleanup(func() {
+		_ = filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				meta.ClearImmutable(path)
+			}
+			return nil
+		})
+	})
 	tenant := "test"
 	tenantPath := filepath.Join(base, tenant)
 	require.NoError(t, os.MkdirAll(tenantPath, 0o755))
@@ -38,6 +47,8 @@ func testStorageWithRunner(t *testing.T, runner *utils.MockRunner, exporter *nfs
 		tenants:         []string{tenant},
 		defaultDirMode:  0o755,
 		defaultDataMode: "2770",
+		volumes:         meta.NewStore[VolumeMetadata](base),
+		snapshots:       meta.NewStore[SnapshotMetadata](base, config.SnapshotsDir),
 	}
 	return s, tenantPath
 }
@@ -52,11 +63,14 @@ func newTestStorage(t *testing.T) (*Storage, string, *utils.MockRunner, *nfs.Moc
 	return s, bp, runner, exporter
 }
 
-func writeSnapshotMetadata(t *testing.T, snapDir string, meta SnapshotMetadata) {
+func writeSnapshotMetadata(t *testing.T, s *Storage, snapDir string, meta SnapshotMetadata) {
 	t.Helper()
 	data, err := json.MarshalIndent(meta, "", "  ")
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(snapDir, config.MetadataFile), data, 0o644))
+	if s != nil {
+		s.snapshots.Seed("test", meta.Name, &meta)
+	}
 }
 
 func requireStorageError(t *testing.T, err error, code string) {
@@ -77,12 +91,44 @@ func containsCall(calls [][]string, args ...string) bool {
 	return false
 }
 
-// readVolumeMeta reads VolumeMetadata from disk into a fresh struct (avoids omitempty pitfalls).
+// readTestJSON reads and unmarshals a JSON file (test-only disk read helper).
+func readTestJSON(t *testing.T, path string, v any) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, v))
+}
+
+// readVolumeMeta reads VolumeMetadata from disk into a fresh struct.
 func readVolumeMeta(t *testing.T, volDir string) VolumeMetadata {
 	t.Helper()
-	var meta VolumeMetadata
-	require.NoError(t, ReadMetadata(filepath.Join(volDir, config.MetadataFile), &meta))
-	return meta
+	var m VolumeMetadata
+	readTestJSON(t, filepath.Join(volDir, config.MetadataFile), &m)
+	return m
+}
+
+// seedVolume writes volume metadata to disk AND seeds the cache.
+func seedVolume(t *testing.T, s *Storage, tenant, bp string, meta VolumeMetadata) string {
+	t.Helper()
+	dir := filepath.Join(bp, meta.Name)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	data, err := json.MarshalIndent(meta, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.MetadataFile), data, 0o644))
+	s.volumes.Seed(tenant, meta.Name, &meta)
+	return dir
+}
+
+// seedSnapshot writes snapshot metadata to disk AND seeds the cache.
+func seedSnapshot(t *testing.T, s *Storage, tenant, bp string, meta SnapshotMetadata) string {
+	t.Helper()
+	dir := filepath.Join(bp, config.SnapshotsDir, meta.Name)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	data, err := json.MarshalIndent(meta, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, config.MetadataFile), data, 0o644))
+	s.snapshots.Seed(tenant, meta.Name, &meta)
+	return dir
 }
 
 func ptrUint64(v uint64) *uint64 { return &v }

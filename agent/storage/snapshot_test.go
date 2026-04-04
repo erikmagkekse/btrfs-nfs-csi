@@ -20,12 +20,12 @@ func TestCreateSnapshot(t *testing.T) {
 	ctx := context.Background()
 
 	// setupSrcVol creates a source volume with data/ dir and metadata.
-	setupSrcVol := func(t *testing.T, bp, name string) {
+	setupSrcVol := func(t *testing.T, s *Storage, bp, name string) {
 		t.Helper()
 		volDir := filepath.Join(bp, name)
 		dataDir := filepath.Join(volDir, config.DataDir)
 		require.NoError(t, os.MkdirAll(dataDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{Name: name, Path: volDir, SizeBytes: 1024})
+		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: name, Path: volDir, SizeBytes: 1024})
 	}
 
 	t.Run("validation", func(t *testing.T) {
@@ -44,11 +44,10 @@ func TestCreateSnapshot(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				s, bp, _, _ := newTestStorage(t)
 				if tt.setup || tt.req.Volume == "srcvol" {
-					setupSrcVol(t, bp, "srcvol")
+					setupSrcVol(t, s, bp, "srcvol")
 				}
 				if tt.name == "already_exists" {
-					snapDir := filepath.Join(bp, config.SnapshotsDir, "existing")
-					require.NoError(t, os.MkdirAll(snapDir, 0o755))
+					seedSnapshot(t, s, "test", bp, SnapshotMetadata{Name: "existing", Volume: "srcvol"})
 				}
 				_, err := s.CreateSnapshot(ctx, "test", tt.req)
 				requireStorageError(t, err, tt.code)
@@ -58,7 +57,7 @@ func TestCreateSnapshot(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		s, bp, runner, _ := newTestStorage(t)
-		setupSrcVol(t, bp, "srcvol")
+		setupSrcVol(t, s, bp, "srcvol")
 
 		meta, err := s.CreateSnapshot(ctx, "test", SnapshotCreateRequest{
 			Name: "mysnap", Volume: "srcvol",
@@ -72,7 +71,7 @@ func TestCreateSnapshot(t *testing.T) {
 
 		snapDir := filepath.Join(bp, config.SnapshotsDir, "mysnap")
 		var ondisk SnapshotMetadata
-		require.NoError(t, ReadMetadata(filepath.Join(snapDir, config.MetadataFile), &ondisk))
+		readTestJSON(t, filepath.Join(snapDir, config.MetadataFile), &ondisk)
 		assert.Equal(t, "mysnap", ondisk.Name)
 		assert.True(t, ondisk.ReadOnly, "on-disk snapshot should be readonly")
 
@@ -87,7 +86,7 @@ func TestCreateSnapshot(t *testing.T) {
 		runner := &utils.MockRunner{Err: fmt.Errorf("snapshot error")}
 		exporter := &nfs.MockExporter{}
 		s, bp := testStorageWithRunner(t, runner, exporter)
-		setupSrcVol(t, bp, "srcvol")
+		setupSrcVol(t, s, bp, "srcvol")
 
 		_, err := s.CreateSnapshot(ctx, "test", SnapshotCreateRequest{
 			Name: "failsnap", Volume: "srcvol",
@@ -119,7 +118,7 @@ func TestListSnapshots(t *testing.T) {
 		for _, name := range []string{"snap1", "snap2"} {
 			dir := filepath.Join(snapBase, name)
 			require.NoError(t, os.MkdirAll(dir, 0o755))
-			writeSnapshotMetadata(t, dir, SnapshotMetadata{Name: name, Volume: "vol1"})
+			writeSnapshotMetadata(t, s, dir, SnapshotMetadata{Name: name, Volume: "vol1"})
 		}
 
 		snaps, err := s.ListSnapshots("test", "")
@@ -134,7 +133,7 @@ func TestListSnapshots(t *testing.T) {
 		for _, pair := range [][2]string{{"snap-a", "vol1"}, {"snap-b", "vol2"}, {"snap-c", "vol1"}} {
 			dir := filepath.Join(snapBase, pair[0])
 			require.NoError(t, os.MkdirAll(dir, 0o755))
-			writeSnapshotMetadata(t, dir, SnapshotMetadata{Name: pair[0], Volume: pair[1]})
+			writeSnapshotMetadata(t, s, dir, SnapshotMetadata{Name: pair[0], Volume: pair[1]})
 		}
 
 		snaps, err := s.ListSnapshots("test", "vol1")
@@ -152,7 +151,7 @@ func TestListSnapshots(t *testing.T) {
 
 		goodDir := filepath.Join(snapBase, "good")
 		require.NoError(t, os.MkdirAll(goodDir, 0o755))
-		writeSnapshotMetadata(t, goodDir, SnapshotMetadata{Name: "good", Volume: "vol1"})
+		writeSnapshotMetadata(t, s, goodDir, SnapshotMetadata{Name: "good", Volume: "vol1"})
 
 		badDir := filepath.Join(snapBase, "bad")
 		require.NoError(t, os.MkdirAll(badDir, 0o755))
@@ -183,7 +182,7 @@ func TestGetSnapshot(t *testing.T) {
 
 	snapDir := filepath.Join(bp, config.SnapshotsDir, "mysnap")
 	require.NoError(t, os.MkdirAll(snapDir, 0o755))
-	writeSnapshotMetadata(t, snapDir, SnapshotMetadata{Name: "mysnap", Volume: "vol1", ReadOnly: true})
+	writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: "mysnap", Volume: "vol1", ReadOnly: true})
 
 	tests := []struct {
 		name   string
@@ -219,7 +218,7 @@ func TestDeleteSnapshot(t *testing.T) {
 
 		snapDir := filepath.Join(bp, config.SnapshotsDir, "mysnap")
 		require.NoError(t, os.MkdirAll(snapDir, 0o755))
-		writeSnapshotMetadata(t, snapDir, SnapshotMetadata{Name: "mysnap"})
+		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: "mysnap"})
 
 		err := s.DeleteSnapshot(ctx, "test", "mysnap")
 		require.NoError(t, err, "DeleteSnapshot")
@@ -246,7 +245,7 @@ func TestDeleteSnapshot(t *testing.T) {
 
 		snapDir := filepath.Join(bp, config.SnapshotsDir, "mysnap")
 		require.NoError(t, os.MkdirAll(snapDir, 0o755))
-		writeSnapshotMetadata(t, snapDir, SnapshotMetadata{Name: "mysnap"})
+		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: "mysnap"})
 
 		err := s.DeleteSnapshot(ctx, "test", "mysnap")
 		require.Error(t, err)

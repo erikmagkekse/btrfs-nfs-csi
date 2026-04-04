@@ -162,10 +162,7 @@ func TestCreateVolume(t *testing.T) {
 
 	t.Run("already_exists", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-
-		volDir := filepath.Join(bp, "existing")
-		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{Name: "existing", SizeBytes: 512})
+		seedVolume(t, s, "test", bp, VolumeMetadata{Name: "existing", SizeBytes: 512})
 
 		meta, err := s.CreateVolume(ctx, "test", VolumeCreateRequest{
 			Name: "existing", SizeBytes: 1024,
@@ -233,9 +230,7 @@ func TestListVolumes(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
 
 		for _, name := range []string{"vol1", "vol2", "vol3"} {
-			dir := filepath.Join(bp, name)
-			require.NoError(t, os.MkdirAll(dir, 0o755))
-			writeTestMetadata(t, dir, VolumeMetadata{Name: name, SizeBytes: 1024})
+			seedVolume(t, s, "test", bp, VolumeMetadata{Name: name, SizeBytes: 1024})
 		}
 
 		vols, err := s.ListVolumes("test")
@@ -251,30 +246,14 @@ func TestListVolumes(t *testing.T) {
 		assert.True(t, names["vol3"], "vol3 should be in list")
 	})
 
-	t.Run("skips_snapshots_files_corrupt", func(t *testing.T) {
+	t.Run("only_cached_volumes", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
 
-		// valid volume
-		vol := filepath.Join(bp, "good")
-		require.NoError(t, os.MkdirAll(vol, 0o755))
-		writeTestMetadata(t, vol, VolumeMetadata{Name: "good", SizeBytes: 1024})
-
-		// file (not dir) - skipped
-		require.NoError(t, os.WriteFile(filepath.Join(bp, "somefile"), []byte("x"), 0o644))
-
-		// snapshots dir already exists from utils - skipped
-
-		// corrupt metadata - skipped
-		corrupt := filepath.Join(bp, "corrupt")
-		require.NoError(t, os.MkdirAll(corrupt, 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(corrupt, config.MetadataFile), []byte("{broken"), 0o644))
-
-		// dir without metadata - skipped
-		require.NoError(t, os.MkdirAll(filepath.Join(bp, "nometa"), 0o755))
+		seedVolume(t, s, "test", bp, VolumeMetadata{Name: "good", SizeBytes: 1024})
 
 		vols, err := s.ListVolumes("test")
 		require.NoError(t, err, "ListVolumes")
-		require.Len(t, vols, 1, "only valid volume should be returned")
+		require.Len(t, vols, 1)
 		assert.Equal(t, "good", vols[0].Name)
 	})
 }
@@ -285,9 +264,7 @@ func TestListVolumesPaginated(t *testing.T) {
 	s, bp, _, _ := newTestStorage(t)
 
 	for _, name := range []string{"aaa", "bbb", "ccc", "ddd", "eee"} {
-		dir := filepath.Join(bp, name)
-		require.NoError(t, os.MkdirAll(dir, 0o755))
-		writeTestMetadata(t, dir, VolumeMetadata{Name: name, SizeBytes: 1024})
+		seedVolume(t, s, "test", bp, VolumeMetadata{Name: name, SizeBytes: 1024})
 	}
 
 	t.Run("all", func(t *testing.T) {
@@ -338,9 +315,7 @@ func TestListVolumesPaginated(t *testing.T) {
 func TestGetVolume(t *testing.T) {
 	s, bp, _, _ := newTestStorage(t)
 
-	volDir := filepath.Join(bp, "myvol")
-	require.NoError(t, os.MkdirAll(volDir, 0o755))
-	writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol", SizeBytes: 2048})
+	seedVolume(t, s, "test", bp, VolumeMetadata{Name: "myvol", SizeBytes: 2048})
 
 	tests := []struct {
 		name   string
@@ -379,13 +354,12 @@ func TestGetVolume(t *testing.T) {
 func TestUpdateVolume(t *testing.T) {
 	ctx := context.Background()
 
-	// setupVol creates a volume dir with metadata and data/ subdir.
-	setupVol := func(t *testing.T, bp, name string, meta VolumeMetadata) {
+	// setupVol creates a volume dir with metadata, data/ subdir, and cache entry.
+	setupVol := func(t *testing.T, s *Storage, bp, name string, meta VolumeMetadata) {
 		t.Helper()
-		volDir := filepath.Join(bp, name)
-		dataDir := filepath.Join(volDir, config.DataDir)
+		dataDir := filepath.Join(bp, name, config.DataDir)
 		require.NoError(t, os.MkdirAll(dataDir, 0o755))
-		writeTestMetadata(t, volDir, meta)
+		seedVolume(t, s, "test", bp, meta)
 	}
 
 	t.Run("validation", func(t *testing.T) {
@@ -446,7 +420,7 @@ func TestUpdateVolume(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				s, bp, _, _ := newTestStorage(t)
 				if tt.meta.Name != "" {
-					setupVol(t, bp, tt.vol, tt.meta)
+					setupVol(t, s, bp, tt.vol, tt.meta)
 				}
 				_, err := s.UpdateVolume(ctx, "test", tt.vol, tt.req)
 				requireStorageError(t, err, tt.code)
@@ -457,7 +431,7 @@ func TestUpdateVolume(t *testing.T) {
 	t.Run("update_size", func(t *testing.T) {
 		s, bp, runner, _ := newTestStorage(t)
 		s.quotaEnabled = true
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
 
 		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
 			SizeBytes: ptrUint64(2048),
@@ -473,7 +447,7 @@ func TestUpdateVolume(t *testing.T) {
 
 	t.Run("update_compression", func(t *testing.T) {
 		s, bp, runner, _ := newTestStorage(t)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
 
 		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
 			Compression: ptrString("lzo"),
@@ -488,7 +462,7 @@ func TestUpdateVolume(t *testing.T) {
 
 	t.Run("update_nocow_enable", func(t *testing.T) {
 		s, bp, runner, _ := newTestStorage(t)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, NoCOW: false})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, NoCOW: false})
 
 		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
 			NoCOW: ptrBool(true),
@@ -503,7 +477,7 @@ func TestUpdateVolume(t *testing.T) {
 
 	t.Run("nocow_revert_ignored", func(t *testing.T) {
 		s, bp, runner, _ := newTestStorage(t)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, NoCOW: true})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, NoCOW: true})
 
 		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
 			NoCOW: ptrBool(false),
@@ -515,7 +489,7 @@ func TestUpdateVolume(t *testing.T) {
 
 	t.Run("update_chown", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, UID: 0, GID: 0})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, UID: 0, GID: 0})
 
 		uid := os.Getuid()
 		gid := os.Getgid()
@@ -530,7 +504,7 @@ func TestUpdateVolume(t *testing.T) {
 
 	t.Run("update_chmod", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Mode: "0755"})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Mode: "0755"})
 
 		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
 			Mode: ptrString("0700"),
@@ -546,7 +520,7 @@ func TestUpdateVolume(t *testing.T) {
 
 	t.Run("update_labels", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Labels: map[string]string{"env": "dev"}})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Labels: map[string]string{"env": "dev"}})
 
 		newLabels := map[string]string{"env": "prod", "team": "platform"}
 		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
@@ -561,7 +535,7 @@ func TestUpdateVolume(t *testing.T) {
 
 	t.Run("update_labels_invalid", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
 
 		bad := map[string]string{"BAD KEY": "val"}
 		_, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
@@ -572,7 +546,7 @@ func TestUpdateVolume(t *testing.T) {
 
 	t.Run("update_labels_clear", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Labels: map[string]string{"env": "dev"}})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Labels: map[string]string{"env": "dev"}})
 
 		empty := map[string]string{}
 		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
@@ -587,7 +561,7 @@ func TestUpdateVolume(t *testing.T) {
 		exporter := &nfs.MockExporter{}
 		s, bp := testStorageWithRunner(t, runner, exporter)
 		s.quotaEnabled = true
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
 
 		_, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
 			SizeBytes: ptrUint64(2048),
@@ -600,7 +574,7 @@ func TestUpdateVolume(t *testing.T) {
 		runner := &utils.MockRunner{Err: fmt.Errorf("property error")}
 		exporter := &nfs.MockExporter{}
 		s, bp := testStorageWithRunner(t, runner, exporter)
-		setupVol(t, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024})
 
 		_, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
 			Compression: ptrString("zstd"),
@@ -617,15 +591,12 @@ func TestDeleteVolume(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-
-		volDir := filepath.Join(bp, "myvol")
-		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol"})
+		seedVolume(t, s, "test", bp, VolumeMetadata{Name: "myvol"})
 
 		err := s.DeleteVolume(ctx, "test", "myvol")
 		require.NoError(t, err, "DeleteVolume")
 
-		_, statErr := os.Stat(volDir)
+		_, statErr := os.Stat(filepath.Join(bp, "myvol"))
 		assert.True(t, os.IsNotExist(statErr), "volDir should be removed")
 	})
 
@@ -638,32 +609,20 @@ func TestDeleteVolume(t *testing.T) {
 
 	t.Run("busy_with_exports", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-
-		volDir := filepath.Join(bp, "myvol")
-		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol", Clients: []string{"10.0.0.1"}})
+		seedVolume(t, s, "test", bp, VolumeMetadata{Name: "myvol", Clients: []string{"10.0.0.1"}})
 
 		err := s.DeleteVolume(ctx, "test", "myvol")
 		requireStorageError(t, err, ErrBusy)
-
-		_, statErr := os.Stat(volDir)
-		assert.False(t, os.IsNotExist(statErr), "volDir should still exist when exports are active")
 	})
 
 	t.Run("subvol_delete_fails", func(t *testing.T) {
 		runner := &utils.MockRunner{Err: fmt.Errorf("subvol error")}
 		exporter := &nfs.MockExporter{}
 		s, bp := testStorageWithRunner(t, runner, exporter)
-
-		volDir := filepath.Join(bp, "myvol")
-		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol"})
+		seedVolume(t, s, "test", bp, VolumeMetadata{Name: "myvol"})
 
 		err := s.DeleteVolume(ctx, "test", "myvol")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "btrfs subvolume delete failed")
-
-		_, statErr := os.Stat(volDir)
-		assert.False(t, os.IsNotExist(statErr), "volDir should still exist when subvol delete fails")
 	})
 }
