@@ -56,6 +56,7 @@ func (t *AgentTracker) Track(url string, client *agentAPI.Client) {
 	t.agents[url] = client
 }
 
+// Client returns the cached agent client for the given StorageClass, or nil if not yet discovered.
 func (t *AgentTracker) Client(scName string) *agentAPI.Client {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
