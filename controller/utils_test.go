@@ -3,7 +3,7 @@ package controller
 import (
 	"testing"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,8 +35,8 @@ func TestPageToken(t *testing.T) {
 // --- TestMakeVolumeID / TestParseVolumeID ---
 
 func TestMakeVolumeID(t *testing.T) {
-	id := utils.MakeVolumeID("my-sc", "my-vol")
-	sc, name, err := utils.ParseVolumeID(id)
+	id := csiserver.MakeVolumeID("my-sc", "my-vol")
+	sc, name, err := csiserver.ParseVolumeID(id)
 	require.NoError(t, err)
 	assert.Equal(t, "my-sc", sc)
 	assert.Equal(t, "my-vol", name)
@@ -58,7 +58,7 @@ func TestParseVolumeID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc, name, err := utils.ParseVolumeID(tt.id)
+			sc, name, err := csiserver.ParseVolumeID(tt.id)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -72,32 +72,28 @@ func TestParseVolumeID(t *testing.T) {
 
 // --- TestParseNodeIP ---
 
-func TestParseNodeIP(t *testing.T) {
+func TestParseNodeID(t *testing.T) {
 	tests := []struct {
-		name    string
-		nodeID  string
-		wantIP  string
-		wantErr bool
+		name         string
+		nodeID       string
+		wantHostname string
+		wantIP       string
+		wantErr      bool
 	}{
-		{name: "valid", nodeID: "node1|10.0.0.1", wantIP: "10.0.0.1"},
+		{name: "valid", nodeID: "node1|10.0.0.1", wantHostname: "node1", wantIP: "10.0.0.1"},
 		{name: "no_separator", nodeID: "node1", wantErr: true},
 		{name: "empty_ip", nodeID: "node1|", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ip, err := parseNodeIP(tt.nodeID)
+			hostname, ip, err := csiserver.ParseNodeID(tt.nodeID)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
+			assert.Equal(t, tt.wantHostname, hostname)
 			assert.Equal(t, tt.wantIP, ip)
 		})
 	}
-}
-
-func TestParseNodeHostname(t *testing.T) {
-	assert.Equal(t, "worker-1", parseNodeHostname("worker-1|10.0.0.1"))
-	assert.Equal(t, "node", parseNodeHostname("node|"))
-	assert.Equal(t, "single", parseNodeHostname("single"))
 }

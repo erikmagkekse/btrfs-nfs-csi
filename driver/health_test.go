@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -153,7 +153,7 @@ func TestReportVolumeEvent_CreatesK8sEvent(t *testing.T) {
 	assert.Equal(t, "my-pvc", ev.InvolvedObject.Name)
 	assert.Equal(t, "default", ev.InvolvedObject.Namespace)
 	assert.Equal(t, corev1.EventTypeNormal, ev.Type)
-	assert.Equal(t, config.DriverName+"-node", ev.Source.Component)
+	assert.Equal(t, csiserver.DriverName+"-node", ev.Source.Component)
 }
 
 func TestReportVolumeEvent_RemountFailedEvent(t *testing.T) {

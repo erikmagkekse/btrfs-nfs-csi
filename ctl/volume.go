@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/urfave/cli/v3"
 )
@@ -101,7 +102,7 @@ func volumeCreate(ctx context.Context, cmd *cli.Command) error {
 		UID:         int(cmd.Int("uid")),
 		GID:         int(cmd.Int("gid")),
 		Mode:        cmd.String("mode"),
-		Labels:      labelsWithDefault(cmd, "created-by", cliIdentity()),
+		Labels:      labelsWithDefault(cmd, config.LabelCreatedBy, cliIdentity()),
 	}
 	resp, err := clientFrom(cmd).CreateVolume(ctx, req)
 	if err != nil {
@@ -127,7 +128,7 @@ func volumeDelete(ctx context.Context, cmd *cli.Command) error {
 			if err != nil {
 				return wrapErr(err, "volume", name)
 			}
-			if vol.Labels["created-by"] != cliIdentity() {
+			if vol.Labels[config.LabelCreatedBy] != cliIdentity() {
 				protected = append(protected, name)
 				continue
 			}

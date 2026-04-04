@@ -120,7 +120,7 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 		initialStates[i] = DeviceState{BTRFSDevice: d}
 	}
 	taskDir := filepath.Join(basePath, config.TasksDir)
-	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, immutableLabelKeys: config.ImmutableLabelKeys(immutableLabels), tasks: task.NewManager(taskDir, taskMaxConcurrent, taskPollInterval), taskDefaultTimeout: taskDefaultTimeout, taskScrubTimeout: taskScrubTimeout, volumes: meta.NewStore[VolumeMetadata](basePath), snapshots: meta.NewStore[SnapshotMetadata](basePath, config.SnapshotsDir)}
+	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, immutableLabelKeys: ImmutableLabelKeys(immutableLabels), tasks: task.NewManager(taskDir, taskMaxConcurrent, taskPollInterval), taskDefaultTimeout: taskDefaultTimeout, taskScrubTimeout: taskScrubTimeout, volumes: meta.NewStore[VolumeMetadata](basePath), snapshots: meta.NewStore[SnapshotMetadata](basePath, config.SnapshotsDir)}
 	s.cachedDevices.Store(&initialStates)
 	s.loadCache()
 	return s

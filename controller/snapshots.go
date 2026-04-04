@@ -5,7 +5,7 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -19,7 +19,7 @@ func (s *Server) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 
 	// single-agent queries (by snapshot or source volume ID)
 	if req.SnapshotId != "" {
-		sc, _, err := utils.ParseVolumeID(req.SnapshotId)
+		sc, _, err := csiserver.ParseVolumeID(req.SnapshotId)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
 		}
@@ -33,14 +33,14 @@ func (s *Server) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 		}
 		var entries []*csi.ListSnapshotsResponse_Entry
 		for _, snap := range snapList.Snapshots {
-			snapID := utils.MakeVolumeID(sc, snap.Name)
+			snapID := csiserver.MakeVolumeID(sc, snap.Name)
 			if snapID != req.SnapshotId {
 				continue
 			}
 			entries = append(entries, &csi.ListSnapshotsResponse_Entry{
 				Snapshot: &csi.Snapshot{
 					SnapshotId:     snapID,
-					SourceVolumeId: utils.MakeVolumeID(sc, snap.Volume),
+					SourceVolumeId: csiserver.MakeVolumeID(sc, snap.Volume),
 					SizeBytes:      int64(snap.SizeBytes),
 					ReadyToUse:     true,
 					CreationTime:   timestamppb.New(snap.CreatedAt),
@@ -51,7 +51,7 @@ func (s *Server) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 	}
 
 	if req.SourceVolumeId != "" {
-		sc, volName, err := utils.ParseVolumeID(req.SourceVolumeId)
+		sc, volName, err := csiserver.ParseVolumeID(req.SourceVolumeId)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
 		}
@@ -67,8 +67,8 @@ func (s *Server) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 		for _, snap := range snapList.Snapshots {
 			entries = append(entries, &csi.ListSnapshotsResponse_Entry{
 				Snapshot: &csi.Snapshot{
-					SnapshotId:     utils.MakeVolumeID(sc, snap.Name),
-					SourceVolumeId: utils.MakeVolumeID(sc, snap.Volume),
+					SnapshotId:     csiserver.MakeVolumeID(sc, snap.Name),
+					SourceVolumeId: csiserver.MakeVolumeID(sc, snap.Volume),
 					SizeBytes:      int64(snap.SizeBytes),
 					ReadyToUse:     true,
 					CreationTime:   timestamppb.New(snap.CreatedAt),
@@ -112,8 +112,8 @@ func (s *Server) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsReques
 		for _, snap := range snapList.Snapshots {
 			entries = append(entries, &csi.ListSnapshotsResponse_Entry{
 				Snapshot: &csi.Snapshot{
-					SnapshotId:     utils.MakeVolumeID(a.sc, snap.Name),
-					SourceVolumeId: utils.MakeVolumeID(a.sc, snap.Volume),
+					SnapshotId:     csiserver.MakeVolumeID(a.sc, snap.Name),
+					SourceVolumeId: csiserver.MakeVolumeID(a.sc, snap.Volume),
 					SizeBytes:      int64(snap.SizeBytes),
 					ReadyToUse:     true,
 					CreationTime:   timestamppb.New(snap.CreatedAt),
@@ -148,7 +148,7 @@ func (s *Server) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 		return nil, status.Error(codes.InvalidArgument, "source volume ID required")
 	}
 
-	sc, volName, err := utils.ParseVolumeID(req.SourceVolumeId)
+	sc, volName, err := csiserver.ParseVolumeID(req.SourceVolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -162,9 +162,11 @@ func (s *Server) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 	log.Debug().Str("snapshot", req.Name).Str("volume", volName).Str("sc", sc).Msg("creating snapshot")
 
 	start := time.Now()
+	labels := s.resolveSnapshotLabels(ctx, req.Parameters, req.SourceVolumeId, sc, volName)
 	snapResp, err := client.CreateSnapshot(ctx, agentAPI.SnapshotCreateRequest{
 		Volume: volName,
 		Name:   req.Name,
+		Labels: labels,
 	})
 	agentDuration.WithLabelValues("create_snapshot", sc).Observe(time.Since(start).Seconds())
 	if err != nil {
@@ -172,7 +174,7 @@ func (s *Server) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 			agentOpsTotal.WithLabelValues("create_snapshot", "conflict", sc).Inc()
 			return &csi.CreateSnapshotResponse{
 				Snapshot: &csi.Snapshot{
-					SnapshotId:     utils.MakeVolumeID(sc, req.Name),
+					SnapshotId:     csiserver.MakeVolumeID(sc, req.Name),
 					SourceVolumeId: req.SourceVolumeId,
 					ReadyToUse:     true,
 					CreationTime:   timestamppb.Now(),
@@ -188,7 +190,7 @@ func (s *Server) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequ
 
 	return &csi.CreateSnapshotResponse{
 		Snapshot: &csi.Snapshot{
-			SnapshotId:     utils.MakeVolumeID(sc, req.Name),
+			SnapshotId:     csiserver.MakeVolumeID(sc, req.Name),
 			SourceVolumeId: req.SourceVolumeId,
 			SizeBytes:      int64(snapResp.SizeBytes),
 			ReadyToUse:     true,
@@ -202,7 +204,7 @@ func (s *Server) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequ
 		return nil, status.Error(codes.InvalidArgument, "snapshot ID required")
 	}
 
-	sc, name, err := utils.ParseVolumeID(req.SnapshotId)
+	sc, name, err := csiserver.ParseVolumeID(req.SnapshotId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}

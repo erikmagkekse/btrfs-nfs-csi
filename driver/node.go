@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -16,10 +17,6 @@ import (
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
 )
-
-const staleCheckTimeout = 5 * time.Second
-
-var errStatTimeout = errors.New("stat timed out (likely stale NFS mount)")
 
 func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	if req.VolumeId == "" || req.StagingTargetPath == "" {
@@ -32,8 +29,8 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	defer unlock()
 
 	vc := req.VolumeContext
-	nfsServer := vc[config.ParamNFSServer]
-	nfsSharePath := vc[config.ParamNFSSharePath]
+	nfsServer := vc[csiserver.ParamNFSServer]
+	nfsSharePath := vc[csiserver.ParamNFSSharePath]
 	if nfsServer == "" || nfsSharePath == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing nfsServer or nfsSharePath in volume context")
 	}
@@ -62,7 +59,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 			opts = []string{"ro"}
 		}
 	}
-	if extra := vc[config.ParamNFSMountOptions]; extra != "" {
+	if extra := vc[csiserver.ParamNFSMountOptions]; extra != "" {
 		opts = append(opts, strings.Split(extra, ",")...)
 	}
 

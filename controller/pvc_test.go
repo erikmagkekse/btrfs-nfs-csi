@@ -4,8 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
-
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -15,88 +14,67 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// --- TestVolumeParamsValidate ---
+// --- TestApplyStringParams ---
 
-func TestVolumeParamsValidate(t *testing.T) {
-	tests := []struct {
-		name    string
-		vp      volumeParams
-		wantErr bool
-	}{
-		{name: "all_empty", vp: volumeParams{}},
-		{name: "valid_all", vp: volumeParams{UID: "1000", GID: "1000", Mode: "0755"}},
-		{name: "invalid_uid", vp: volumeParams{UID: "abc"}, wantErr: true},
-		{name: "invalid_gid", vp: volumeParams{GID: "-1.5"}, wantErr: true},
-		{name: "invalid_mode_not_octal", vp: volumeParams{Mode: "999"}, wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.vp.validate()
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-		})
-	}
-}
-
-// --- TestToUpdateRequest ---
-
-func TestToUpdateRequest(t *testing.T) {
-	t.Run("empty_no_change", func(t *testing.T) {
-		vp := volumeParams{}
-		_, changed := vp.toUpdateRequest()
-		assert.False(t, changed)
+func TestApplyStringParams(t *testing.T) {
+	t.Run("all_empty", func(t *testing.T) {
+		var vp volumeParams
+		require.NoError(t, vp.applyStringParams(map[string]string{}))
+		assert.False(t, vp.hasUpdates())
 	})
 
-	t.Run("uid_gid_set", func(t *testing.T) {
-		vp := volumeParams{UID: "1000", GID: "2000"}
-		req, changed := vp.toUpdateRequest()
-		require.True(t, changed)
+	t.Run("valid_all", func(t *testing.T) {
+		var vp volumeParams
+		require.NoError(t, vp.applyStringParams(map[string]string{
+			paramUID: "1000", paramGID: "2000", paramMode: "0755",
+			paramNoCOW: "true", paramCompression: "zstd",
+		}))
+		assert.True(t, vp.hasUpdates())
+		assert.Equal(t, 1000, *vp.UID)
+		assert.Equal(t, 2000, *vp.GID)
+		assert.Equal(t, "0755", *vp.Mode)
+		assert.True(t, *vp.NoCOW)
+		assert.Equal(t, "zstd", *vp.Compression)
+	})
+
+	t.Run("invalid_uid", func(t *testing.T) {
+		var vp volumeParams
+		require.Error(t, vp.applyStringParams(map[string]string{paramUID: "abc"}))
+	})
+
+	t.Run("invalid_gid", func(t *testing.T) {
+		var vp volumeParams
+		require.Error(t, vp.applyStringParams(map[string]string{paramGID: "-1.5"}))
+	})
+
+	t.Run("invalid_mode", func(t *testing.T) {
+		var vp volumeParams
+		require.Error(t, vp.applyStringParams(map[string]string{paramMode: "999"}))
+	})
+
+	t.Run("invalid_nocow", func(t *testing.T) {
+		var vp volumeParams
+		require.Error(t, vp.applyStringParams(map[string]string{paramNoCOW: "yes"}))
+	})
+
+	t.Run("invalid_compression", func(t *testing.T) {
+		var vp volumeParams
+		require.Error(t, vp.applyStringParams(map[string]string{paramCompression: "bzip2"}))
+	})
+
+	t.Run("update_request", func(t *testing.T) {
+		var vp volumeParams
+		require.NoError(t, vp.applyStringParams(map[string]string{paramUID: "1000"}))
+		req := vp.updateRequest()
 		require.NotNil(t, req.UID)
-		require.NotNil(t, req.GID)
 		assert.Equal(t, 1000, *req.UID)
-		assert.Equal(t, 2000, *req.GID)
 	})
 
-	t.Run("nocow_true", func(t *testing.T) {
-		vp := volumeParams{NoCOW: "true"}
-		req, changed := vp.toUpdateRequest()
-		require.True(t, changed)
-		require.NotNil(t, req.NoCOW)
-		assert.True(t, *req.NoCOW)
-	})
-
-	t.Run("nocow_false", func(t *testing.T) {
-		vp := volumeParams{NoCOW: "false"}
-		req, changed := vp.toUpdateRequest()
-		require.True(t, changed)
-		require.NotNil(t, req.NoCOW)
-		assert.False(t, *req.NoCOW)
-	})
-
-	t.Run("compression", func(t *testing.T) {
-		vp := volumeParams{Compression: "zstd"}
-		req, changed := vp.toUpdateRequest()
-		require.True(t, changed)
-		require.NotNil(t, req.Compression)
-		assert.Equal(t, "zstd", *req.Compression)
-	})
-
-	t.Run("mode", func(t *testing.T) {
-		vp := volumeParams{Mode: "0750"}
-		req, changed := vp.toUpdateRequest()
-		require.True(t, changed)
-		require.NotNil(t, req.Mode)
-		assert.Equal(t, "0750", *req.Mode)
-	})
-
-	t.Run("labels", func(t *testing.T) {
+	t.Run("labels_in_update", func(t *testing.T) {
 		labels := map[string]string{"env": "prod"}
 		vp := volumeParams{Labels: labels}
-		req, changed := vp.toUpdateRequest()
-		require.True(t, changed)
+		assert.True(t, vp.hasUpdates())
+		req := vp.updateRequest()
 		require.NotNil(t, req.Labels)
 		assert.Equal(t, labels, *req.Labels)
 	})
@@ -104,19 +82,13 @@ func TestToUpdateRequest(t *testing.T) {
 
 // --- TestMergeUserLabels ---
 
-func testServer() *Server {
-	return &Server{recorder: record.NewFakeRecorder(10)}
-}
-
 func TestMergeUserLabels(t *testing.T) {
-	srv := testServer()
-	pvc := &corev1.PersistentVolumeClaim{}
-
 	t.Run("basic_merge", func(t *testing.T) {
-		dst := map[string]string{"created-by": "csi"}
+		dst := map[string]string{"created-by": "k8s"}
 		user := map[string]string{"env": "prod", "team": "be"}
-		srv.mergeUserLabels(pvc, dst, user, 4)
-		assert.Equal(t, "csi", dst["created-by"])
+		skipped := mergeUserLabels(dst, user, 4)
+		assert.Empty(t, skipped)
+		assert.Equal(t, "k8s", dst["created-by"])
 		assert.Equal(t, "prod", dst["env"])
 		assert.Equal(t, "be", dst["team"])
 	})
@@ -124,7 +96,8 @@ func TestMergeUserLabels(t *testing.T) {
 	t.Run("reserved_keys_skipped", func(t *testing.T) {
 		dst := map[string]string{"kubernetes.pvc.name": "my-pvc"}
 		user := map[string]string{"kubernetes.pvc.name": "hacked", "env": "prod"}
-		srv.mergeUserLabels(pvc, dst, user, 4)
+		skipped := mergeUserLabels(dst, user, 4)
+		assert.Equal(t, []string{"kubernetes.pvc.name"}, skipped)
 		assert.Equal(t, "my-pvc", dst["kubernetes.pvc.name"])
 		assert.Equal(t, "prod", dst["env"])
 	})
@@ -132,7 +105,9 @@ func TestMergeUserLabels(t *testing.T) {
 	t.Run("max_user_labels", func(t *testing.T) {
 		dst := map[string]string{}
 		user := map[string]string{"a": "1", "b": "2", "c": "3", "d": "4", "e": "5"}
-		srv.mergeUserLabels(pvc, dst, user, 4)
+		skipped := mergeUserLabels(dst, user, 4)
+		assert.Len(t, skipped, 1)
+		assert.Equal(t, "e", skipped[0])
 		assert.Len(t, dst, 4)
 	})
 
@@ -140,20 +115,20 @@ func TestMergeUserLabels(t *testing.T) {
 		dst1 := map[string]string{}
 		dst2 := map[string]string{}
 		user := map[string]string{"z": "1", "a": "2", "m": "3", "b": "4", "x": "5"}
-		srv.mergeUserLabels(pvc, dst1, user, 3)
-		srv.mergeUserLabels(pvc, dst2, user, 3)
+		mergeUserLabels(dst1, user, 3)
+		mergeUserLabels(dst2, user, 3)
 		assert.Equal(t, dst1, dst2)
-		// alphabetically first 3: a, b, m
 		assert.Contains(t, dst1, "a")
 		assert.Contains(t, dst1, "b")
 		assert.Contains(t, dst1, "m")
 	})
 
 	t.Run("created_by_reserved", func(t *testing.T) {
-		dst := map[string]string{"created-by": "csi"}
+		dst := map[string]string{"created-by": "k8s"}
 		user := map[string]string{"created-by": "terraform"}
-		srv.mergeUserLabels(pvc, dst, user, 4)
-		assert.Equal(t, "csi", dst["created-by"])
+		skipped := mergeUserLabels(dst, user, 4)
+		assert.Equal(t, []string{"created-by"}, skipped)
+		assert.Equal(t, "k8s", dst["created-by"])
 	})
 }
 
@@ -197,8 +172,8 @@ func TestResolveVolumeParams(t *testing.T) {
 				Name:      "my-pvc",
 				Namespace: "default",
 				Annotations: map[string]string{
-					config.AnnoPrefix + config.ParamNoCOW: "true",
-					config.AnnoPrefix + config.ParamUID:   "1000",
+					annoPrefix + paramNoCOW: "true",
+					annoPrefix + paramUID:   "1000",
 				},
 			},
 			Spec: corev1.PersistentVolumeClaimSpec{
@@ -208,28 +183,33 @@ func TestResolveVolumeParams(t *testing.T) {
 		srv := &Server{kubeClient: fakekube.NewSimpleClientset(pvc), recorder: record.NewFakeRecorder(10)}
 
 		params := map[string]string{
-			config.PvcNameKey:      "my-pvc",
-			config.PvcNamespaceKey: "default",
+			csiserver.PvcNameKey:      "my-pvc",
+			csiserver.PvcNamespaceKey: "default",
 		}
-		vp := srv.resolveVolumeParams(context.Background(), params)
+		vp, err := srv.resolveVolumeParams(context.Background(), params)
+		require.NoError(t, err)
 
 		assert.Equal(t, "my-sc", vp.StorageClass)
-		assert.Equal(t, "true", vp.NoCOW)
-		assert.Equal(t, "1000", vp.UID)
+		require.NotNil(t, vp.NoCOW)
+		assert.True(t, *vp.NoCOW)
+		require.NotNil(t, vp.UID)
+		assert.Equal(t, 1000, *vp.UID)
 		assert.Equal(t, "my-pvc", vp.Labels["kubernetes.pvc.name"])
 		assert.Equal(t, "default", vp.Labels["kubernetes.pvc.namespace"])
-		assert.Equal(t, "my-sc", vp.Labels["kubernetes.pvc.storageclass"])
-		assert.Equal(t, "csi", vp.Labels["created-by"])
+		assert.Equal(t, "my-sc", vp.Labels["kubernetes.pvc.storageclassname"])
+		assert.Equal(t, "k8s", vp.Labels["created-by"])
 	})
 
 	t.Run("no_pvc_info", func(t *testing.T) {
 		srv := &Server{kubeClient: fakekube.NewSimpleClientset(), recorder: record.NewFakeRecorder(10)}
 
-		vp := srv.resolveVolumeParams(context.Background(), map[string]string{
-			config.ParamNoCOW: "true",
+		vp, err := srv.resolveVolumeParams(context.Background(), map[string]string{
+			paramNoCOW: "true",
 		})
+		require.NoError(t, err)
 
-		assert.Equal(t, "true", vp.NoCOW)
+		require.NotNil(t, vp.NoCOW)
+		assert.True(t, *vp.NoCOW)
 		assert.Empty(t, vp.StorageClass)
 		assert.Nil(t, vp.Labels)
 	})
@@ -237,10 +217,11 @@ func TestResolveVolumeParams(t *testing.T) {
 	t.Run("pvc_not_found", func(t *testing.T) {
 		srv := &Server{kubeClient: fakekube.NewSimpleClientset(), recorder: record.NewFakeRecorder(10)}
 
-		vp := srv.resolveVolumeParams(context.Background(), map[string]string{
-			config.PvcNameKey:      "missing",
-			config.PvcNamespaceKey: "default",
+		vp, err := srv.resolveVolumeParams(context.Background(), map[string]string{
+			csiserver.PvcNameKey:      "missing",
+			csiserver.PvcNamespaceKey: "default",
 		})
+		require.NoError(t, err)
 
 		assert.Empty(t, vp.StorageClass)
 		assert.Nil(t, vp.Labels)

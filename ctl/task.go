@@ -10,6 +10,7 @@ import (
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/urfave/cli/v3"
 )
@@ -211,7 +212,7 @@ func taskCancel(ctx context.Context, cmd *cli.Command) error {
 
 func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
 	c := clientFrom(cmd)
-	req := v1.TaskCreateRequest{Labels: labelsWithDefault(cmd, "created-by", cliIdentity())}
+	req := v1.TaskCreateRequest{Labels: labelsWithDefault(cmd, config.LabelCreatedBy, cliIdentity())}
 	if t := cmd.Duration("timeout"); t > 0 {
 		req.Timeout = t.String()
 	}
@@ -230,7 +231,7 @@ func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
 
 func taskCreateTest(ctx context.Context, cmd *cli.Command) error {
 	c := clientFrom(cmd)
-	req := v1.TaskCreateRequest{Labels: labelsWithDefault(cmd, "created-by", cliIdentity())}
+	req := v1.TaskCreateRequest{Labels: labelsWithDefault(cmd, config.LabelCreatedBy, cliIdentity())}
 	if s := cmd.Duration("sleep"); s > 0 {
 		req.Opts = map[string]string{"sleep": s.String()}
 	}

@@ -6,9 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
-	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -20,7 +18,7 @@ import (
 // parseVolumeLog parses a composite volume ID (sc|name) into separate fields.
 // If parsing fails, emits a warning and returns the raw ID as volume name.
 func parseVolumeLog(volumeID string) (sc, name string) {
-	sc, name, err := utils.ParseVolumeID(volumeID)
+	sc, name, err := csiserver.ParseVolumeID(volumeID)
 	if err != nil {
 		log.Warn().Str("volumeId", volumeID).Msg("unparseable volume ID")
 		return "", volumeID
@@ -99,6 +97,6 @@ func (s *NodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabi
 func (s *NodeServer) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	log.Trace().Str("node", s.nodeID).Msg("NodeGetInfo")
 	return &csi.NodeGetInfoResponse{
-		NodeId: s.nodeID + config.NodeIDSep + s.nodeIP,
+		NodeId: csiserver.MakeNodeID(s.nodeID, s.nodeIP),
 	}, nil
 }

@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
-	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -88,7 +88,7 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 
 // findStagingPath finds the globalmount staging path for a volume by scanning active mounts.
 func (s *NodeServer) findStagingPath(volumeId string) string {
-	_, volName, err := utils.ParseVolumeID(volumeId)
+	_, volName, err := csiserver.ParseVolumeID(volumeId)
 	if err != nil {
 		log.Debug().Err(err).Str("volume", volumeId).Msg("failed to parse volume ID for staging path lookup")
 		return ""

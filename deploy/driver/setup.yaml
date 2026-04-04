@@ -213,6 +213,7 @@ spec:
           args:
             - --csi-address=/csi/csi.sock
             - --leader-election
+            - --extra-create-metadata
           resources:
             requests:
               cpu: 10m

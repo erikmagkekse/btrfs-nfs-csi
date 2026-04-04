@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/urfave/cli/v3"
 )
@@ -87,7 +88,7 @@ func snapshotCreate(ctx context.Context, cmd *cli.Command) error {
 	if cmd.NArg() < 2 {
 		return fmt.Errorf("usage: snapshot create <volume> <name>")
 	}
-	resp, err := clientFrom(cmd).CreateSnapshot(ctx, v1.SnapshotCreateRequest{Volume: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: labelsWithDefault(cmd, "created-by", cliIdentity())})
+	resp, err := clientFrom(cmd).CreateSnapshot(ctx, v1.SnapshotCreateRequest{Volume: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: labelsWithDefault(cmd, config.LabelCreatedBy, cliIdentity())})
 	if err != nil {
 		return wrapErr(err, "snapshot", cmd.Args().Get(1))
 	}
@@ -109,7 +110,7 @@ func snapshotDelete(ctx context.Context, cmd *cli.Command) error {
 			if err != nil {
 				return wrapErr(err, "snapshot", name)
 			}
-			if snap.Labels["created-by"] != cliIdentity() {
+			if snap.Labels[config.LabelCreatedBy] != cliIdentity() {
 				protected = append(protected, name)
 				continue
 			}

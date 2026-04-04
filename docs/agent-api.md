@@ -34,8 +34,8 @@ Volumes, snapshots, clones, tasks, and NFS exports support user-defined labels (
 |---|---|
 | Key format | `^[a-z0-9][a-z0-9._-]{0,62}$` |
 | Value format | `^[a-zA-Z0-9._-]{0,128}$` (empty allowed) |
-| Max labels | 12 per resource |
-| Max user labels | 4 via PVC annotation or CLI `--label` |
+| Max labels | 32 per resource |
+| Max user labels | 8 via PVC annotation or CLI `--label` |
 
 Filter with `?label=key=value` (exact match, repeatable, AND logic) or `?label=key` (key exists, any value).
 
@@ -144,7 +144,15 @@ With `?detail=true`, each volume includes the full detail fields (same as `GET /
     {
       "name": "vol-1",
       "client": "10.1.0.50",
-      "labels": {"created-by": "k8s", "kubernetes.pvc.id": "vol-1", "kubernetes.pvc.storageclass": "btrfs-nfs", "kubernetes.node.name": "worker-1"},
+      "labels": {
+        "created-by": "k8s",
+        "kubernetes.pv.name": "pvc-917a54c3-4a61-4c3a-8597-410f329962e8",
+        "kubernetes.pvc.name": "my-app",
+        "kubernetes.pvc.namespace": "default",
+        "kubernetes.pvc.storageclassname": "btrfs-nfs",
+        "kubernetes.node.name": "worker-1",
+        "kubernetes.volumeattachment.name": "csi-a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+      },
       "created_at": "2025-01-15T11:00:00Z"
     }
   ],
@@ -183,7 +191,14 @@ Exports are reference-counted per client IP. Each export carries labels identify
 ```json
 {
   "client": "10.1.0.50",
-  "labels": {"created-by": "k8s", "kubernetes.pvc.id": "vol-1"}
+  "labels": {
+    "created-by": "k8s",
+    "kubernetes.pv.name": "pvc-917a54c3-4a61-4c3a-8597-410f329962e8",
+    "kubernetes.pvc.name": "my-app",
+    "kubernetes.pvc.namespace": "default",
+    "kubernetes.pvc.storageclassname": "btrfs-nfs",
+    "kubernetes.node.name": "worker-1"
+  }
 }
 ```
 
@@ -194,8 +209,10 @@ Exports are reference-counted per client IP. Each export carries labels identify
 ```json
 {
   "client": "10.1.0.50",
-  "labels": {"kubernetes.pvc.id": "vol-1"}
-}
+  "labels": {
+    "kubernetes.pv.name": "pvc-917a54c3-4a61-4c3a-8597-410f329962e8",
+    "kubernetes.node.name": "worker-1"
+  }
 ```
 
 204 No Content. With `labels`: removes only the matching entry (subset match). Without `labels`: removes all entries for that IP.
@@ -223,9 +240,17 @@ With `?detail=true`, each export includes `labels`:
 {
   "exports": [
     {
-      "name": "vol-1",
+      "name": "pvc-917a54c3-4a61-4c3a-8597-410f329962e8",
       "client": "10.1.0.50",
-      "labels": {"created-by": "k8s", "kubernetes.pvc.id": "vol-1", "kubernetes.pvc.storageclass": "btrfs-nfs"},
+      "labels": {
+        "created-by": "k8s",
+        "kubernetes.pv.name": "pvc-917a54c3-4a61-4c3a-8597-410f329962e8",
+        "kubernetes.pvc.name": "my-app",
+        "kubernetes.pvc.namespace": "default",
+        "kubernetes.pvc.storageclassname": "btrfs-nfs",
+        "kubernetes.node.name": "worker-1",
+        "kubernetes.volumeattachment.name": "csi-a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+      },
       "created_at": "2025-01-15T11:00:00Z"
     }
   ],
@@ -310,7 +335,7 @@ Returns a summary list of snapshots for a specific volume. Same response format 
 
 ### POST /v1/volumes/clone
 
-Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediate snapshot needed. 409 returns existing volume. If `labels` is omitted, source volume labels are inherited.
+Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediate snapshot needed. 409 returns existing volume. `clone.source.type=volume` and `clone.source.name=<source>` are always set automatically.
 
 ```json
 // Request
@@ -343,7 +368,7 @@ Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediat
 
 ### POST /v1/clones
 
-Clone from a read-only snapshot. 409 returns existing clone. If `labels` is omitted, source snapshot labels are inherited.
+Clone from a read-only snapshot. 409 returns existing clone. `clone.source.type=snapshot` and `clone.source.name=<snapshot>` are always set automatically.
 
 ```json
 // Request

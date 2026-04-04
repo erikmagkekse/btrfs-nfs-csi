@@ -7,7 +7,7 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -97,7 +97,7 @@ func (t *AgentTracker) discoverAgents(ctx context.Context) ([]agentInfo, error) 
 
 	var result []agentInfo
 	for _, sc := range scList.Items {
-		if sc.Provisioner != config.DriverName {
+		if sc.Provisioner != csiserver.DriverName {
 			continue
 		}
 		url := sc.Parameters[paramAgentURL]
@@ -115,8 +115,8 @@ func (t *AgentTracker) discoverAgents(ctx context.Context) ([]agentInfo, error) 
 
 // resolveAgentToken reads the agentToken from the K8s Secret referenced by SC parameters.
 func (t *AgentTracker) resolveAgentToken(ctx context.Context, params map[string]string) string {
-	name := params[config.SecretNameKey]
-	ns := params[config.SecretNamespaceKey]
+	name := params[csiserver.SecretNameKey]
+	ns := params[csiserver.SecretNamespaceKey]
 	if name == "" || ns == "" {
 		return ""
 	}

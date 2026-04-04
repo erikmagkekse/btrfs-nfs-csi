@@ -73,12 +73,12 @@ func formatLabelsShort(labels map[string]string) string {
 		return "-"
 	}
 	parts := make([]string, 0, len(labels))
-	if v, ok := labels["created-by"]; ok {
-		parts = append(parts, "created-by="+v)
+	if v, ok := labels[config.LabelCreatedBy]; ok {
+		parts = append(parts, config.LabelCreatedBy+"="+v)
 	}
 	rest := make([]string, 0, len(labels))
 	for k, v := range labels {
-		if k == "created-by" {
+		if k == config.LabelCreatedBy {
 			continue
 		}
 		rest = append(rest, k+"="+v)
