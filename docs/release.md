@@ -10,13 +10,13 @@
 
 ## CI Pipeline
 
-PRs to `edge` and PRs from `release/*` branches to `main` run the CI workflow:
+PRs to `main` and `edge` run the CI workflow:
 
 ```
 ci.yml (Go code, Containerfile, VERSION changes)
   lint         format check + golangci-lint
-  test         go test -race ./...
-  integration  btrfs + NFS integration tests (needs: test)
+  test         go test -race ./... (needs: lint)
+  integration  btrfs + NFS integration tests (needs: lint, parallel with test)
   sanity       CSI sanity tests (planned, not yet implemented)
   e2e          end-to-end tests (planned, not yet implemented)
   build        container image build check, no push (needs: test + integration)
@@ -25,7 +25,7 @@ ci-helm.yml (charts/** changes)
   lint         helm lint + helm template
 ```
 
-When a PR is merged to `edge`, the edge-build workflow pushes the `:edge` image.
+When code is pushed to `edge`, the edge-build workflow runs tests and pushes the `:edge` image.
 
 ## Artifacts
 
@@ -93,8 +93,8 @@ If any check fails, the build and Helm publish are skipped.
 ```
 release.yml (on tag v*)
   check    version validation + bump verification
-  build    container image (needs: check, parallel with helm)
-  helm     chart package + push (needs: check, parallel with build)
+  build    container image (needs: check)
+  helm     chart package + push (needs: check + build)
 ```
 
 Edge and stable releases use the same pipeline. The `-edge` suffix is detected automatically and applied to image tags and chart versions.
