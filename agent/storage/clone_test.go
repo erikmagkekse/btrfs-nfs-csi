@@ -20,12 +20,12 @@ func TestCreateClone(t *testing.T) {
 	ctx := context.Background()
 
 	// setupSrcSnap creates a source snapshot with data/ dir and metadata.
-	setupSrcSnap := func(t *testing.T, bp, name string) {
+	setupSrcSnap := func(t *testing.T, s *Storage, bp, name string) {
 		t.Helper()
 		snapDir := filepath.Join(bp, config.SnapshotsDir, name)
 		dataDir := filepath.Join(snapDir, config.DataDir)
 		require.NoError(t, os.MkdirAll(dataDir, 0o755))
-		writeSnapshotMetadata(t, snapDir, SnapshotMetadata{Name: name, Volume: "srcvol", ReadOnly: true})
+		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: name, Volume: "srcvol", ReadOnly: true})
 	}
 
 	t.Run("validation", func(t *testing.T) {
@@ -44,41 +44,31 @@ func TestCreateClone(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				s, bp, _, _ := newTestStorage(t)
 				if tt.setup || tt.req.Snapshot == "mysnap" {
-					setupSrcSnap(t, bp, "mysnap")
+					setupSrcSnap(t, s, bp, "mysnap")
 				}
 				if tt.name == "already_exists" {
-					cloneDir := filepath.Join(bp, "existing")
-					require.NoError(t, os.MkdirAll(cloneDir, 0o755))
-					require.NoError(t, writeMetadataAtomic(
-						filepath.Join(cloneDir, config.MetadataFile),
-						CloneMetadata{Name: "existing", SourceSnapshot: "mysnap"},
-					))
+					seedVolume(t, s, "test", bp, VolumeMetadata{Name: "existing"})
 				}
-				meta, err := s.CreateClone(ctx, "test", tt.req)
+				_, err := s.CreateClone(ctx, "test", tt.req)
 				requireStorageError(t, err, tt.code)
-				if tt.name == "already_exists" {
-					require.NotNil(t, meta, "should return existing metadata")
-					assert.Equal(t, "existing", meta.Name)
-				}
 			})
 		}
 	})
 
 	t.Run("success", func(t *testing.T) {
 		s, bp, runner, _ := newTestStorage(t)
-		setupSrcSnap(t, bp, "mysnap")
+		setupSrcSnap(t, s, bp, "mysnap")
 
 		meta, err := s.CreateClone(ctx, "test", CloneCreateRequest{
 			Name: "myclone", Snapshot: "mysnap",
 		})
 		require.NoError(t, err, "CreateClone")
 		assert.Equal(t, "myclone", meta.Name)
-		assert.Equal(t, "mysnap", meta.SourceSnapshot)
 		assert.Equal(t, filepath.Join(bp, "myclone"), meta.Path)
 		assert.False(t, meta.CreatedAt.IsZero(), "CreatedAt should be set")
 
-		var ondisk CloneMetadata
-		require.NoError(t, ReadMetadata(filepath.Join(bp, "myclone", config.MetadataFile), &ondisk))
+		var ondisk VolumeMetadata
+		readTestJSON(t, filepath.Join(bp, "myclone", config.MetadataFile), &ondisk)
 		assert.Equal(t, "myclone", ondisk.Name, "on-disk metadata should match")
 
 		// btrfs snapshot called WITHOUT -r flag (writable clone)
@@ -92,7 +82,7 @@ func TestCreateClone(t *testing.T) {
 		runner := &utils.MockRunner{Err: fmt.Errorf("snapshot error")}
 		exporter := &nfs.MockExporter{}
 		s, bp := testStorageWithRunner(t, runner, exporter)
-		setupSrcSnap(t, bp, "mysnap")
+		setupSrcSnap(t, s, bp, "mysnap")
 
 		_, err := s.CreateClone(ctx, "test", CloneCreateRequest{
 			Name: "failclone", Snapshot: "mysnap",

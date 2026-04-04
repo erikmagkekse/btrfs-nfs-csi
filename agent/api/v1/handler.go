@@ -394,22 +394,12 @@ func (h *Handler) CreateClone(c *echo.Context) error {
 	meta, err := h.Store.CreateClone(c.Request().Context(), tenant, req)
 	if err != nil {
 		if meta != nil {
-			return c.JSON(http.StatusConflict, cloneResponseFrom(meta))
+			return c.JSON(http.StatusConflict, volumeDetailResponseFrom(meta))
 		}
 		return StorageError(c, err)
 	}
 
-	return c.JSON(http.StatusCreated, cloneResponseFrom(meta))
-}
-
-func cloneResponseFrom(meta *storage.CloneMetadata) CloneResponse {
-	return CloneResponse{
-		Name:           meta.Name,
-		SourceSnapshot: meta.SourceSnapshot,
-		Path:           meta.Path,
-		Labels:         meta.Labels,
-		CreatedAt:      meta.CreatedAt,
-	}
+	return c.JSON(http.StatusCreated, volumeDetailResponseFrom(meta))
 }
 
 // --- Tasks ---

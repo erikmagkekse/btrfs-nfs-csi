@@ -4,33 +4,25 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"github.com/rs/zerolog/log"
 )
 
 func (s *Storage) ExportVolume(ctx context.Context, tenant, name, client string) error {
-	bp, err := s.tenantPath(tenant)
-	if err != nil {
+	if _, err := s.tenantPath(tenant); err != nil {
 		return err
 	}
 	if err := validateName(name); err != nil {
 		return err
 	}
 
-	volDir := filepath.Join(bp, name)
-	if _, err := os.Stat(volDir); os.IsNotExist(err) {
-		return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
-	}
+	volDir := s.volumes.Dir(tenant, name)
 
 	// metadata first - if export fails, reconciler will re-export
-	metaPath := filepath.Join(volDir, config.MetadataFile)
-	if err := UpdateMetadata(metaPath, func(meta *VolumeMetadata) {
+	if _, err := s.volumes.Update(tenant, name, func(meta *VolumeMetadata) {
 		found := false
 		for _, c := range meta.Clients {
 			if c == client {
@@ -45,6 +37,9 @@ func (s *Storage) ExportVolume(ctx context.Context, tenant, name, client string)
 			meta.Clients = append(meta.Clients, client)
 		}
 	}); err != nil {
+		if os.IsNotExist(err) {
+			return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
+		}
 		log.Error().Err(err).Msg("failed to persist client in metadata")
 		return fmt.Errorf("failed to persist client in metadata: %w", err)
 	}
@@ -59,22 +54,17 @@ func (s *Storage) ExportVolume(ctx context.Context, tenant, name, client string)
 }
 
 func (s *Storage) UnexportVolume(ctx context.Context, tenant, name, client string) error {
-	bp, err := s.tenantPath(tenant)
-	if err != nil {
+	if _, err := s.tenantPath(tenant); err != nil {
 		return err
 	}
 	if err := validateName(name); err != nil {
 		return err
 	}
 
-	volDir := filepath.Join(bp, name)
-	if _, err := os.Stat(volDir); os.IsNotExist(err) {
-		return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
-	}
+	volDir := s.volumes.Dir(tenant, name)
 
 	// metadata first - if unexport fails, reconciler will clean up
-	metaPath := filepath.Join(volDir, config.MetadataFile)
-	if err := UpdateMetadata(metaPath, func(meta *VolumeMetadata) {
+	if _, err := s.volumes.Update(tenant, name, func(meta *VolumeMetadata) {
 		filtered := meta.Clients[:0]
 		for _, c := range meta.Clients {
 			if c != client {
@@ -84,6 +74,9 @@ func (s *Storage) UnexportVolume(ctx context.Context, tenant, name, client strin
 		meta.Clients = filtered
 		meta.UpdatedAt = time.Now().UTC()
 	}); err != nil {
+		if os.IsNotExist(err) {
+			return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
+		}
 		log.Error().Err(err).Msg("failed to update client list in metadata")
 		return fmt.Errorf("failed to update client list in metadata: %w", err)
 	}
@@ -129,28 +122,5 @@ func (s *Storage) ListExportsPaginated(ctx context.Context, tenant, after string
 		}
 		return entries[i].Client < entries[j].Client
 	})
-
-	total := len(entries)
-	if after != "" {
-		for i, e := range entries {
-			key := e.Path + "|" + e.Client
-			if key > after {
-				entries = entries[i:]
-				break
-			}
-			if i == len(entries)-1 {
-				return &PaginatedResult[ExportEntry]{Total: total}, nil
-			}
-		}
-	}
-
-	result := &PaginatedResult[ExportEntry]{Total: total}
-	if limit > 0 && len(entries) > limit {
-		last := entries[limit-1]
-		result.Next = last.Path + "|" + last.Client
-		result.Items = entries[:limit]
-	} else {
-		result.Items = entries
-	}
-	return result, nil
+	return paginateSlice(entries, func(e ExportEntry) string { return e.Path + "|" + e.Client }, after, limit), nil
 }

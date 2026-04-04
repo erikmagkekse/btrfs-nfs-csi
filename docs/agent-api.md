@@ -325,10 +325,19 @@ Clone from a read-only snapshot. 409 returns existing clone. If `labels` is omit
 // Response 201
 {
   "name": "clone-1",
-  "source_snapshot": "snap-1",
   "path": "/srv/csi/default/clone-1",
+  "size_bytes": 0,
+  "nocow": false,
+  "compression": "",
+  "quota_bytes": 0,
+  "used_bytes": 0,
+  "uid": 0,
+  "gid": 0,
+  "mode": "",
   "labels": {"env": "dev"},
-  "created_at": "2025-01-15T12:30:00Z"
+  "clients": [],
+  "created_at": "2025-01-15T12:30:00Z",
+  "updated_at": "2025-01-15T12:30:00Z"
 }
 ```
 

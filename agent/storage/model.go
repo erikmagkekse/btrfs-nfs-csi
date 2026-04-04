@@ -35,14 +35,6 @@ type SnapshotMetadata struct {
 	UpdatedAt      time.Time         `json:"updated_at"`
 }
 
-type CloneMetadata struct {
-	Name           string            `json:"name"`
-	SourceSnapshot string            `json:"source_snapshot"`
-	Path           string            `json:"path"`
-	Labels         map[string]string `json:"labels,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
-}
-
 // Request types
 
 type VolumeCreateRequest struct {
@@ -87,12 +79,34 @@ type VolumeCloneRequest struct {
 
 func (m VolumeMetadata) GetLabels() map[string]string   { return m.Labels }
 func (m SnapshotMetadata) GetLabels() map[string]string { return m.Labels }
-func (m CloneMetadata) GetLabels() map[string]string    { return m.Labels }
 
 type PaginatedResult[T any] struct {
 	Items []T
 	Total int
 	Next  string // cursor for next page, empty = end of list
+}
+
+func paginateSlice[T any](items []T, keyFn func(T) string, after string, limit int) *PaginatedResult[T] {
+	total := len(items)
+	if after != "" {
+		for i, item := range items {
+			if keyFn(item) > after {
+				items = items[i:]
+				break
+			}
+			if i == len(items)-1 {
+				return &PaginatedResult[T]{Total: total}
+			}
+		}
+	}
+	result := &PaginatedResult[T]{Total: total}
+	if limit > 0 && len(items) > limit {
+		result.Next = keyFn(items[limit-1])
+		result.Items = items[:limit]
+	} else {
+		result.Items = items
+	}
+	return result
 }
 
 type ExportEntry struct {

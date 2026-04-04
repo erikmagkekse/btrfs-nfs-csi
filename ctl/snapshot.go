@@ -25,7 +25,7 @@ func snapshotCloneCmd() *cli.Command {
 			if err != nil {
 				return wrapErr(err, "clone", cmd.Args().Get(1))
 			}
-			return output(cmd, resp, func() { fmt.Printf("clone %q created from snapshot %q\n", resp.Name, resp.SourceSnapshot) })
+			return output(cmd, resp, func() { fmt.Printf("clone %q created from snapshot %q\n", resp.Name, cmd.Args().Get(0)) })
 		},
 	}
 }

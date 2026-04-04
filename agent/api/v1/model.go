@@ -18,7 +18,6 @@ type (
 	VolumeCloneRequest    = storage.VolumeCloneRequest
 	VolumeMetadata        = storage.VolumeMetadata
 	SnapshotMetadata      = storage.SnapshotMetadata
-	CloneMetadata         = storage.CloneMetadata
 	ExportEntry           = storage.ExportEntry
 )
 
@@ -113,14 +112,6 @@ type SnapshotDetailListResponse struct {
 	Snapshots []SnapshotDetailResponse `json:"snapshots"`
 	Total     int                      `json:"total"`
 	Next      string                   `json:"next,omitempty"`
-}
-
-type CloneResponse struct {
-	Name           string            `json:"name"`
-	SourceSnapshot string            `json:"source_snapshot"`
-	Path           string            `json:"path"`
-	Labels         map[string]string `json:"labels,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
 }
 
 type ExportListResponse struct {

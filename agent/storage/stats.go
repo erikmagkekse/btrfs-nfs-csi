@@ -82,7 +82,7 @@ func parseDeviceIOStats(data string) (*DeviceIOStats, error) {
 }
 
 // StartDeviceIOUpdater polls sysfs IO counters at a high frequency (default 5s).
-func (s *Storage) StartDeviceIOUpdater(ctx context.Context, interval time.Duration) {
+func (s *Storage) startDeviceIOUpdater(ctx context.Context, interval time.Duration) {
 	go func() {
 		s.updateDeviceIO(ctx)
 		ticker := time.NewTicker(interval)
@@ -197,7 +197,7 @@ func (s *Storage) updateDeviceIO(ctx context.Context) {
 }
 
 // StartDeviceStatsUpdater polls btrfs device errors and filesystem usage (default 1m).
-func (s *Storage) StartDeviceStatsUpdater(ctx context.Context, interval time.Duration) {
+func (s *Storage) startDeviceStatsUpdater(ctx context.Context, interval time.Duration) {
 	go func() {
 		s.updateBtrfsStats(ctx)
 		ticker := time.NewTicker(interval)

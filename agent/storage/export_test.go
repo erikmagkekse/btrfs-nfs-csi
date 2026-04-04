@@ -23,7 +23,7 @@ func TestExportVolume(t *testing.T) {
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol"})
+		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
 
 		exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(nil)
 
@@ -41,7 +41,7 @@ func TestExportVolume(t *testing.T) {
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{
+		writeTestMetadata(t, s, volDir, VolumeMetadata{
 			Name: "myvol", Clients: []string{"10.0.0.1"},
 		})
 
@@ -73,7 +73,7 @@ func TestExportVolume(t *testing.T) {
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{Name: "myvol"})
+		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
 
 		exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(fmt.Errorf("nfs error"))
 
@@ -100,7 +100,7 @@ func TestUnexportVolume(t *testing.T) {
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{
+		writeTestMetadata(t, s, volDir, VolumeMetadata{
 			Name: "myvol", Clients: []string{"10.0.0.1", "10.0.0.2"},
 		})
 
@@ -120,7 +120,7 @@ func TestUnexportVolume(t *testing.T) {
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{
+		writeTestMetadata(t, s, volDir, VolumeMetadata{
 			Name: "myvol", Clients: []string{"10.0.0.1"},
 		})
 
@@ -138,7 +138,7 @@ func TestUnexportVolume(t *testing.T) {
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		writeTestMetadata(t, volDir, VolumeMetadata{
+		writeTestMetadata(t, s, volDir, VolumeMetadata{
 			Name: "myvol", Clients: []string{"10.0.0.1"},
 		})
 

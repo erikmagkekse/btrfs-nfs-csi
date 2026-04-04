@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/meta"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -20,7 +21,6 @@ import (
 // --- utils ---
 
 // qgroupRunFn returns a RunFn that responds to btrfs subvolume show + qgroup show.
-// The same referenced/exclusive values are returned for all volumes/snapshots.
 func qgroupRunFn(referenced, exclusive uint64) func([]string) (string, error) {
 	return func(args []string) (string, error) {
 		if len(args) >= 1 && args[0] == "subvolume" {
@@ -33,37 +33,48 @@ func qgroupRunFn(referenced, exclusive uint64) func([]string) (string, error) {
 	}
 }
 
-// setupUsageVol creates a volume dir with data/ subdir (chmod 0755) and metadata.
-// Returns volDir. The data dir is owned by the current process user.
-func setupUsageVol(t *testing.T, bp string, name string, meta VolumeMetadata) string {
+// usageTestStorage creates a Storage with proper base/tenant structure for usage tests.
+func usageTestStorage(t *testing.T, tenant string) (*Storage, string) {
 	t.Helper()
-	volDir := filepath.Join(bp, name)
+	base := t.TempDir()
+	tenantPath := filepath.Join(base, tenant)
+	require.NoError(t, os.MkdirAll(tenantPath, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tenantPath, config.SnapshotsDir), 0o755))
+	s := &Storage{
+		basePath:  base,
+		volumes:   meta.NewStore[VolumeMetadata](base),
+		snapshots: meta.NewStore[SnapshotMetadata](base, config.SnapshotsDir),
+	}
+	return s, tenantPath
+}
+
+// setupUsageVol creates a volume dir with data/ subdir (chmod 0755) and metadata.
+func setupUsageVol(t *testing.T, s *Storage, tenantPath, tenant, name string, m VolumeMetadata) string {
+	t.Helper()
+	volDir := seedVolume(t, s, tenant, tenantPath, m)
 	dataDir := filepath.Join(volDir, config.DataDir)
 	require.NoError(t, os.MkdirAll(dataDir, 0o755))
-	require.NoError(t, os.Chmod(dataDir, 0o755)) // explicit chmod to ignore umask
-	writeTestMetadata(t, volDir, meta)
+	require.NoError(t, os.Chmod(dataDir, 0o755))
 	return volDir
 }
 
 // setupUsageSnap creates a snapshot dir with data/ subdir and metadata.
-func setupUsageSnap(t *testing.T, bp string, name string, meta SnapshotMetadata) string {
+func setupUsageSnap(t *testing.T, s *Storage, tenantPath, tenant, name string, m SnapshotMetadata) string {
 	t.Helper()
-	snapDir := filepath.Join(bp, config.SnapshotsDir, name)
+	snapDir := seedSnapshot(t, s, tenant, tenantPath, m)
 	dataDir := filepath.Join(snapDir, config.DataDir)
 	require.NoError(t, os.MkdirAll(dataDir, 0o755))
-	writeSnapshotMetadata(t, snapDir, meta)
 	return snapDir
 }
 
-// readSnapMeta reads SnapshotMetadata from disk (fresh struct).
+// readSnapMeta reads SnapshotMetadata from disk.
 func readSnapMeta(t *testing.T, snapDir string) SnapshotMetadata {
 	t.Helper()
 	var meta SnapshotMetadata
-	require.NoError(t, ReadMetadata(filepath.Join(snapDir, config.MetadataFile), &meta))
+	readTestJSON(t, filepath.Join(snapDir, config.MetadataFile), &meta)
 	return meta
 }
 
-// cleanupMetrics removes prometheus label values set during a test.
 func cleanupMetrics(t *testing.T, tenant string, volumes ...string) {
 	t.Helper()
 	t.Cleanup(func() {
@@ -78,12 +89,12 @@ func cleanupMetrics(t *testing.T, tenant string, volumes ...string) {
 // --- Tests ---
 
 func TestUpdateAllEmpty(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "empty"
 	runner := &utils.MockRunner{}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s, _ := usageTestStorage(t, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	assert.Equal(t, float64(0), testutil.ToFloat64(VolumesGauge.WithLabelValues(tenant)))
 	assert.Empty(t, runner.Calls)
@@ -91,14 +102,14 @@ func TestUpdateAllEmpty(t *testing.T) {
 }
 
 func TestUpdateAllNoChanges(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "nochange"
 	uid, gid := os.Getuid(), os.Getgid()
 	runner := &utils.MockRunner{RunFn: qgroupRunFn(1024, 512)}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
+	s, tp := usageTestStorage(t, tenant)
 	initialTime := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	volDir := setupUsageVol(t, bp, "vol1", VolumeMetadata{
+	volDir := setupUsageVol(t, s, tp, tenant, "vol1", VolumeMetadata{
 		Name:       "vol1",
 		UID:        uid,
 		GID:        gid,
@@ -108,7 +119,7 @@ func TestUpdateAllNoChanges(t *testing.T) {
 		UpdatedAt:  initialTime,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	meta := readVolumeMeta(t, volDir)
 	assert.Equal(t, initialTime, meta.UpdatedAt, "UpdatedAt should not change when nothing drifted")
@@ -121,13 +132,13 @@ func TestUpdateAllNoChanges(t *testing.T) {
 }
 
 func TestUpdateAllUIDGIDDrift(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "uiddrift"
 	uid, gid := os.Getuid(), os.Getgid()
-	runner := &utils.MockRunner{} // QuotaBytes=0, no qgroup calls
+	runner := &utils.MockRunner{}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	volDir := setupUsageVol(t, bp, "vol1", VolumeMetadata{
+	s, tp := usageTestStorage(t, tenant)
+	volDir := setupUsageVol(t, s, tp, tenant, "vol1", VolumeMetadata{
 		Name:       "vol1",
 		UID:        9999,
 		GID:        9999,
@@ -135,7 +146,7 @@ func TestUpdateAllUIDGIDDrift(t *testing.T) {
 		QuotaBytes: 0,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	meta := readVolumeMeta(t, volDir)
 	assert.Equal(t, uid, meta.UID, "UID should be updated to match FS")
@@ -145,22 +156,22 @@ func TestUpdateAllUIDGIDDrift(t *testing.T) {
 }
 
 func TestUpdateAllModeDrift(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "modedrift"
 	uid, gid := os.Getuid(), os.Getgid()
 	runner := &utils.MockRunner{}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	volDir := setupUsageVol(t, bp, "vol1", VolumeMetadata{
+	s, tp := usageTestStorage(t, tenant)
+	volDir := setupUsageVol(t, s, tp, tenant, "vol1", VolumeMetadata{
 		Name:       "vol1",
 		UID:        uid,
 		GID:        gid,
 		Mode:       "755",
 		QuotaBytes: 0,
 	})
-	require.NoError(t, os.Chmod(filepath.Join(volDir, config.DataDir), 0o700)) // intentional drift
+	require.NoError(t, os.Chmod(filepath.Join(volDir, config.DataDir), 0o700))
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	meta := readVolumeMeta(t, volDir)
 	assert.Equal(t, "700", meta.Mode, "Mode should be updated to match FS")
@@ -168,13 +179,13 @@ func TestUpdateAllModeDrift(t *testing.T) {
 }
 
 func TestUpdateAllUsageDrift(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "usagedrift"
 	uid, gid := os.Getuid(), os.Getgid()
 	runner := &utils.MockRunner{RunFn: qgroupRunFn(2048, 1024)}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	volDir := setupUsageVol(t, bp, "vol1", VolumeMetadata{
+	s, tp := usageTestStorage(t, tenant)
+	volDir := setupUsageVol(t, s, tp, tenant, "vol1", VolumeMetadata{
 		Name:       "vol1",
 		UID:        uid,
 		GID:        gid,
@@ -183,7 +194,7 @@ func TestUpdateAllUsageDrift(t *testing.T) {
 		UsedBytes:  0,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	meta := readVolumeMeta(t, volDir)
 	assert.Equal(t, uint64(2048), meta.UsedBytes, "UsedBytes should be updated from qgroup")
@@ -191,13 +202,13 @@ func TestUpdateAllUsageDrift(t *testing.T) {
 }
 
 func TestUpdateAllNoQuota(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "noquota"
 	uid, gid := os.Getuid(), os.Getgid()
 	runner := &utils.MockRunner{}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	setupUsageVol(t, bp, "vol1", VolumeMetadata{
+	s, tp := usageTestStorage(t, tenant)
+	setupUsageVol(t, s, tp, tenant, "vol1", VolumeMetadata{
 		Name:       "vol1",
 		UID:        uid,
 		GID:        gid,
@@ -205,14 +216,13 @@ func TestUpdateAllNoQuota(t *testing.T) {
 		QuotaBytes: 0,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	assert.Empty(t, runner.Calls, "no qgroup calls when QuotaBytes=0")
 	cleanupMetrics(t, tenant, "vol1")
 }
 
 func TestUpdateAllQgroupError(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "qgerr"
 	uid, gid := os.Getuid(), os.Getgid()
 
@@ -233,7 +243,8 @@ func TestUpdateAllQgroupError(t *testing.T) {
 	runner := &utils.MockRunner{RunFn: runFn}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	setupUsageVol(t, bp, "vol1", VolumeMetadata{
+	s, tp := usageTestStorage(t, tenant)
+	setupUsageVol(t, s, tp, tenant, "vol1", VolumeMetadata{
 		Name:       "vol1",
 		UID:        uid,
 		GID:        gid,
@@ -241,7 +252,7 @@ func TestUpdateAllQgroupError(t *testing.T) {
 		QuotaBytes: 4096,
 		UsedBytes:  0,
 	})
-	volDir2 := setupUsageVol(t, bp, "vol2", VolumeMetadata{
+	volDir2 := setupUsageVol(t, s, tp, tenant, "vol2", VolumeMetadata{
 		Name:       "vol2",
 		UID:        uid,
 		GID:        gid,
@@ -250,7 +261,7 @@ func TestUpdateAllQgroupError(t *testing.T) {
 		UsedBytes:  0,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	meta2 := readVolumeMeta(t, volDir2)
 	assert.Equal(t, uint64(2048), meta2.UsedBytes, "vol2 should be updated despite vol1 qgroup error")
@@ -258,19 +269,19 @@ func TestUpdateAllQgroupError(t *testing.T) {
 }
 
 func TestUpdateAllSnapshots(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "snaps"
 	runner := &utils.MockRunner{RunFn: qgroupRunFn(2048, 512)}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	snapDir := setupUsageSnap(t, bp, "snap1", SnapshotMetadata{
+	s, tp := usageTestStorage(t, tenant)
+	snapDir := setupUsageSnap(t, s, tp, tenant, "snap1", SnapshotMetadata{
 		Name:           "snap1",
 		Volume:         "vol1",
 		UsedBytes:      0,
 		ExclusiveBytes: 0,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	meta := readSnapMeta(t, snapDir)
 	assert.Equal(t, uint64(2048), meta.UsedBytes, "UsedBytes should be updated")
@@ -280,13 +291,13 @@ func TestUpdateAllSnapshots(t *testing.T) {
 }
 
 func TestUpdateAllSnapshotNoChanges(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "snapnoch"
 	runner := &utils.MockRunner{RunFn: qgroupRunFn(1024, 512)}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
+	s, tp := usageTestStorage(t, tenant)
 	initialTime := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	snapDir := setupUsageSnap(t, bp, "snap1", SnapshotMetadata{
+	snapDir := setupUsageSnap(t, s, tp, tenant, "snap1", SnapshotMetadata{
 		Name:           "snap1",
 		Volume:         "vol1",
 		UsedBytes:      1024,
@@ -294,7 +305,7 @@ func TestUpdateAllSnapshotNoChanges(t *testing.T) {
 		UpdatedAt:      initialTime,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	meta := readSnapMeta(t, snapDir)
 	assert.Equal(t, initialTime, meta.UpdatedAt, "UpdatedAt should not change when nothing drifted")
@@ -302,19 +313,19 @@ func TestUpdateAllSnapshotNoChanges(t *testing.T) {
 }
 
 func TestUpdateAllSnapshotQgroupError(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "snaperr"
 	runner := &utils.MockRunner{Err: fmt.Errorf("qgroup error")}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	snapDir := setupUsageSnap(t, bp, "snap1", SnapshotMetadata{
+	s, tp := usageTestStorage(t, tenant)
+	snapDir := setupUsageSnap(t, s, tp, tenant, "snap1", SnapshotMetadata{
 		Name:           "snap1",
 		Volume:         "vol1",
 		UsedBytes:      100,
 		ExclusiveBytes: 50,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	meta := readSnapMeta(t, snapDir)
 	assert.Equal(t, uint64(100), meta.UsedBytes, "UsedBytes should be unchanged on error")
@@ -323,25 +334,34 @@ func TestUpdateAllSnapshotQgroupError(t *testing.T) {
 }
 
 func TestUpdateAllNoSnapshotsDir(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "nosnapdir"
 	runner := &utils.MockRunner{}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
+	// Create without snapshots dir
+	base := t.TempDir()
+	tenantPath := filepath.Join(base, tenant)
+	require.NoError(t, os.MkdirAll(tenantPath, 0o755))
+	s := &Storage{
+		basePath:  base,
+		volumes:   meta.NewStore[VolumeMetadata](base),
+		snapshots: meta.NewStore[SnapshotMetadata](base, config.SnapshotsDir),
+	}
+
 	assert.NotPanics(t, func() {
-		updateAll(context.Background(), mgr, bp, tenant)
+		s.updateAll(context.Background(), mgr, tenant)
 	})
 	cleanupMetrics(t, tenant)
 }
 
 func TestUpdateAllMetrics(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "metrics"
 	uid, gid := os.Getuid(), os.Getgid()
 	runner := &utils.MockRunner{RunFn: qgroupRunFn(500, 200)}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	setupUsageVol(t, bp, "vol1", VolumeMetadata{
+	s, tp := usageTestStorage(t, tenant)
+	setupUsageVol(t, s, tp, tenant, "vol1", VolumeMetadata{
 		Name:       "vol1",
 		UID:        uid,
 		GID:        gid,
@@ -349,7 +369,7 @@ func TestUpdateAllMetrics(t *testing.T) {
 		QuotaBytes: 4096,
 		UsedBytes:  500,
 	})
-	setupUsageVol(t, bp, "vol2", VolumeMetadata{
+	setupUsageVol(t, s, tp, tenant, "vol2", VolumeMetadata{
 		Name:       "vol2",
 		UID:        uid,
 		GID:        gid,
@@ -358,7 +378,7 @@ func TestUpdateAllMetrics(t *testing.T) {
 		UsedBytes:  500,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	assert.Equal(t, float64(2), testutil.ToFloat64(VolumesGauge.WithLabelValues(tenant)))
 	assert.Equal(t, float64(4096), testutil.ToFloat64(VolumeSizeBytes.WithLabelValues(tenant, "vol1")))
@@ -369,19 +389,18 @@ func TestUpdateAllMetrics(t *testing.T) {
 }
 
 func TestUpdateAllStatError(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "staterr"
 	uid, gid := os.Getuid(), os.Getgid()
 	runner := &utils.MockRunner{RunFn: qgroupRunFn(2048, 1024)}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	// vol1: no data/ dir, os.Stat fails
-	volDir1 := filepath.Join(bp, "vol1")
-	require.NoError(t, os.MkdirAll(volDir1, 0o755))
-	writeTestMetadata(t, volDir1, VolumeMetadata{Name: "vol1", QuotaBytes: 4096})
+	s, tp := usageTestStorage(t, tenant)
+
+	// vol1: no data/ dir, os.Stat fails -- but must be in cache
+	seedVolume(t, s, tenant, tp, VolumeMetadata{Name: "vol1", QuotaBytes: 4096})
 
 	// vol2: valid, should still be processed
-	volDir2 := setupUsageVol(t, bp, "vol2", VolumeMetadata{
+	setupUsageVol(t, s, tp, tenant, "vol2", VolumeMetadata{
 		Name:       "vol2",
 		UID:        uid,
 		GID:        gid,
@@ -390,31 +409,24 @@ func TestUpdateAllStatError(t *testing.T) {
 		UsedBytes:  0,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
-	// vol2 should still be updated despite vol1 stat error
-	meta2 := readVolumeMeta(t, volDir2)
+	meta2 := readVolumeMeta(t, filepath.Join(tp, "vol2"))
 	assert.Equal(t, uint64(2048), meta2.UsedBytes, "vol2 should be updated despite vol1 stat error")
-	// Both volumes are counted (count++ happens before stat)
 	assert.Equal(t, float64(2), testutil.ToFloat64(VolumesGauge.WithLabelValues(tenant)))
 	cleanupMetrics(t, tenant, "vol1", "vol2")
 }
 
 func TestUpdateAllSkipsNonDirsAndSnapshots(t *testing.T) {
-	bp := t.TempDir()
 	tenant := "skiptest"
 	uid, gid := os.Getuid(), os.Getgid()
 	runner := &utils.MockRunner{}
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 
-	// regular file, should be skipped
-	require.NoError(t, os.WriteFile(filepath.Join(bp, "somefile"), []byte("x"), 0o644))
+	s, tp := usageTestStorage(t, tenant)
 
-	// snapshots dir, should be skipped as volume
-	require.NoError(t, os.MkdirAll(filepath.Join(bp, config.SnapshotsDir), 0o755))
-
-	// Valid volume
-	setupUsageVol(t, bp, "vol1", VolumeMetadata{
+	// Valid volume (only volumes in cache are iterated now)
+	setupUsageVol(t, s, tp, tenant, "vol1", VolumeMetadata{
 		Name:       "vol1",
 		UID:        uid,
 		GID:        gid,
@@ -422,7 +434,7 @@ func TestUpdateAllSkipsNonDirsAndSnapshots(t *testing.T) {
 		QuotaBytes: 0,
 	})
 
-	updateAll(context.Background(), mgr, bp, tenant)
+	s.updateAll(context.Background(), mgr, tenant)
 
 	assert.Equal(t, float64(1), testutil.ToFloat64(VolumesGauge.WithLabelValues(tenant)))
 	cleanupMetrics(t, tenant, "vol1")
