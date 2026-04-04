@@ -48,6 +48,27 @@ func validateLabels(labels map[string]string) error {
 	return nil
 }
 
+func requireImmutableLabels(keys []string, labels map[string]string) error {
+	for _, k := range keys {
+		if labels[k] == "" {
+			return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("label %q is required", k)}
+		}
+	}
+	return nil
+}
+
+func protectImmutableLabels(keys []string, cur, updated map[string]string) error {
+	for _, k := range keys {
+		if v, ok := updated[k]; ok && v != cur[k] {
+			return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("label %q cannot be changed", k)}
+		}
+		if v := cur[k]; v != "" {
+			updated[k] = v
+		}
+	}
+	return nil
+}
+
 // --- File mode ---
 
 // fileMode converts a traditional Unix octal mode (e.g. 0o2750) to an os.FileMode.

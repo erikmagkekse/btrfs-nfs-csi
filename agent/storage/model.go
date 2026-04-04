@@ -1,6 +1,13 @@
 package storage
 
-import "time"
+import (
+	"encoding/json"
+	"maps"
+	"sort"
+	"time"
+
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+)
 
 // Persisted metadata types
 
@@ -16,7 +23,7 @@ type VolumeMetadata struct {
 	GID          int               `json:"gid"`
 	Mode         string            `json:"mode"`
 	Labels       map[string]string `json:"labels,omitempty"`
-	Clients      []string          `json:"clients,omitempty"`
+	Exports      []ExportMetadata  `json:"clients,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 	LastAttachAt *time.Time        `json:"last_attach_at,omitempty"`
@@ -110,6 +117,98 @@ func paginateSlice[T any](items []T, keyFn func(T) string, after string, limit i
 }
 
 type ExportEntry struct {
-	Path   string `json:"path"`
-	Client string `json:"client"`
+	Name      string
+	Client    string
+	Labels    map[string]string
+	CreatedAt time.Time
+}
+
+func (e ExportEntry) GetLabels() map[string]string { return e.Labels }
+
+type ExportMetadata struct {
+	IP        string            `json:"ip"`
+	Labels    map[string]string `json:"labels,omitempty"`
+	CreatedAt time.Time         `json:"created_at"`
+}
+
+func uniqueExportIPs(clients []ExportMetadata) []string {
+	seen := map[string]struct{}{}
+	for _, c := range clients {
+		seen[c.IP] = struct{}{}
+	}
+	ips := make([]string, 0, len(seen))
+	for ip := range seen {
+		ips = append(ips, ip)
+	}
+	sort.Strings(ips)
+	return ips
+}
+
+func CountUniqueExportIPs(clients []ExportMetadata) int {
+	seen := map[string]struct{}{}
+	for _, c := range clients {
+		seen[c.IP] = struct{}{}
+	}
+	return len(seen)
+}
+
+func hasExport(clients []ExportMetadata, ip string, labels map[string]string) bool {
+	for _, c := range clients {
+		if c.IP == ip && maps.Equal(c.Labels, labels) {
+			return true
+		}
+	}
+	return false
+}
+
+func exportsForIP(clients []ExportMetadata, ip string) int {
+	n := 0
+	for _, c := range clients {
+		if c.IP == ip {
+			n++
+		}
+	}
+	return n
+}
+
+// labelsContain reports whether stored contains all key-value pairs from match.
+func labelsContain(stored, match map[string]string) bool {
+	for k, v := range match {
+		if stored[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *VolumeMetadata) UnmarshalJSON(data []byte) error {
+	type Alias VolumeMetadata
+	aux := &struct {
+		Exports json.RawMessage `json:"clients,omitempty"`
+		*Alias
+	}{Alias: (*Alias)(m)}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	if len(aux.Exports) == 0 {
+		return nil
+	}
+	var refs []ExportMetadata
+	if err := json.Unmarshal(aux.Exports, &refs); err == nil {
+		m.Exports = refs
+		return nil
+	}
+	var ips []string
+	if err := json.Unmarshal(aux.Exports, &ips); err != nil {
+		return err
+	}
+	m.Exports = make([]ExportMetadata, len(ips))
+	for i, ip := range ips {
+		m.Exports[i] = ExportMetadata{
+			IP:        ip,
+			Labels:    map[string]string{config.LabelCreatedBy: "migrated"},
+			CreatedAt: time.Now().UTC(),
+		}
+	}
+	return nil
 }

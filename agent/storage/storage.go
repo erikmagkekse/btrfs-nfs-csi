@@ -34,6 +34,8 @@ type Storage struct {
 	taskDefaultTimeout time.Duration
 	taskScrubTimeout   time.Duration
 
+	immutableLabelKeys []string
+
 	volumes   *meta.Store[VolumeMetadata]
 	snapshots *meta.Store[SnapshotMetadata]
 
@@ -47,7 +49,7 @@ type Storage struct {
 	cachedFilesystem atomic.Pointer[btrfs.FilesystemUsage]
 }
 
-func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode, btrfsBin string, taskMaxConcurrent int, taskDefaultTimeout, taskScrubTimeout, taskPollInterval time.Duration) *Storage {
+func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode, btrfsBin, immutableLabels string, taskMaxConcurrent int, taskDefaultTimeout, taskScrubTimeout, taskPollInterval time.Duration) *Storage {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -118,7 +120,7 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 		initialStates[i] = DeviceState{BTRFSDevice: d}
 	}
 	taskDir := filepath.Join(basePath, config.TasksDir)
-	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, tasks: task.NewManager(taskDir, taskMaxConcurrent, taskPollInterval), taskDefaultTimeout: taskDefaultTimeout, taskScrubTimeout: taskScrubTimeout, volumes: meta.NewStore[VolumeMetadata](basePath), snapshots: meta.NewStore[SnapshotMetadata](basePath, config.SnapshotsDir)}
+	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, immutableLabelKeys: config.ImmutableLabelKeys(immutableLabels), tasks: task.NewManager(taskDir, taskMaxConcurrent, taskPollInterval), taskDefaultTimeout: taskDefaultTimeout, taskScrubTimeout: taskScrubTimeout, volumes: meta.NewStore[VolumeMetadata](basePath), snapshots: meta.NewStore[SnapshotMetadata](basePath, config.SnapshotsDir)}
 	s.cachedDevices.Store(&initialStates)
 	s.loadCache()
 	return s

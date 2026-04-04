@@ -110,12 +110,12 @@ func (c *Client) CloneVolume(ctx context.Context, req VolumeCloneRequest) (*Volu
 	return &resp, nil
 }
 
-func (c *Client) ExportVolume(ctx context.Context, name string, cl string) error {
-	return c.do(ctx, http.MethodPost, "/v1/volumes/"+name+"/export", ExportRequest{Client: cl}, nil)
+func (c *Client) CreateVolumeExport(ctx context.Context, name string, cl string, labels map[string]string) error {
+	return c.do(ctx, http.MethodPost, "/v1/volumes/"+name+"/export", VolumeExportCreateRequest{Client: cl, Labels: labels}, nil)
 }
 
-func (c *Client) UnexportVolume(ctx context.Context, name string, cl string) error {
-	return c.do(ctx, http.MethodDelete, "/v1/volumes/"+name+"/export", ExportRequest{Client: cl}, nil)
+func (c *Client) DeleteVolumeExport(ctx context.Context, name string, cl string, labels map[string]string) error {
+	return c.do(ctx, http.MethodDelete, "/v1/volumes/"+name+"/export", VolumeExportDeleteRequest{Client: cl, Labels: labels}, nil)
 }
 
 func (c *Client) ListVolumes(ctx context.Context, opts ListOpts) (*VolumeListResponse, error) {
@@ -188,9 +188,19 @@ func (c *Client) GetSnapshot(ctx context.Context, name string) (*SnapshotDetailR
 	return &resp, nil
 }
 
-func (c *Client) ListExports(ctx context.Context) (*ExportListResponse, error) {
+func (c *Client) ListVolumeExports(ctx context.Context, opts ListOpts) (*ExportListResponse, error) {
 	var resp ExportListResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/exports", nil, &resp); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/v1/exports?"+opts.query().Encode(), nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) ListVolumeExportsDetail(ctx context.Context, opts ListOpts) (*ExportDetailListResponse, error) {
+	var resp ExportDetailListResponse
+	q := opts.query()
+	q.Set("detail", "true")
+	if err := c.do(ctx, http.MethodGet, "/v1/exports?"+q.Encode(), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

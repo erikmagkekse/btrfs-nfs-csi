@@ -3,6 +3,7 @@ package v1
 import (
 	"testing"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,6 +36,26 @@ func TestMatchLabels(t *testing.T) {
 			assert.Equal(t, tt.want, matchLabels(tt.labels, tt.filters))
 		})
 	}
+}
+
+func TestFilterByLabels_ExportEntry(t *testing.T) {
+	items := []storage.ExportEntry{
+		{Name: "vol1", Client: "10.0.0.1", Labels: map[string]string{"created-by": "csi", "kubernetes.volume.id": "vol1"}},
+		{Name: "vol1", Client: "10.0.0.2", Labels: map[string]string{"created-by": "cli"}},
+		{Name: "vol2", Client: "10.0.0.3", Labels: map[string]string{"created-by": "csi", "kubernetes.volume.id": "vol2"}},
+	}
+
+	filtered := filterByLabels(items, []string{"created-by=csi"})
+	assert.Len(t, filtered, 2)
+	assert.Equal(t, "10.0.0.1", filtered[0].Client)
+	assert.Equal(t, "10.0.0.3", filtered[1].Client)
+
+	filtered = filterByLabels(items, []string{"kubernetes.volume.id=vol1"})
+	assert.Len(t, filtered, 1)
+	assert.Equal(t, "10.0.0.1", filtered[0].Client)
+
+	filtered = filterByLabels(items, []string{"created-by"})
+	assert.Len(t, filtered, 3, "bare key should match all")
 }
 
 func TestGenerateLabelQuery(t *testing.T) {

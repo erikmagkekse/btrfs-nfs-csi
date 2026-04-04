@@ -53,6 +53,11 @@ func parseNodeIP(nodeID string) (string, error) {
 	return parts[1], nil
 }
 
+func parseNodeHostname(nodeID string) string {
+	parts := strings.SplitN(nodeID, config.NodeIDSep, 2)
+	return parts[0]
+}
+
 func agentClientFromSecrets(agentURL string, secrets map[string]string) (*agentAPI.Client, error) {
 	token := secrets[secretAgentToken]
 	if token == "" {

@@ -28,7 +28,7 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
 
 ## Labels
 
-Volumes, snapshots, clones, and tasks support user-defined labels (`map[string]string`). Labels are optional on create requests and returned in detail responses.
+Volumes, snapshots, clones, tasks, and NFS exports support user-defined labels (`map[string]string`). Labels are optional on create requests and returned in detail responses.
 
 | Constraint | Rule |
 |---|---|
@@ -123,7 +123,7 @@ Returns a summary list. Supports pagination (`?after=&limit=`), label filtering 
 }
 ```
 
-With `?detail=true`, each volume includes the full detail fields (same as `GET /v1/volumes/:name`): `path`, `quota_bytes`, `compression`, `nocow`, `uid`, `gid`, `mode`, `labels`, `clients` (as array), `updated_at`, `last_attach_at`.
+With `?detail=true`, each volume includes the full detail fields (same as `GET /v1/volumes/:name`): `path`, `quota_bytes`, `compression`, `nocow`, `uid`, `gid`, `mode`, `labels`, `clients` (as array of `{name, client, labels, created_at}`), `updated_at`, `last_attach_at`.
 
 ### GET /v1/volumes/:name
 
@@ -140,7 +140,14 @@ With `?detail=true`, each volume includes the full detail fields (same as `GET /
   "gid": 1000,
   "mode": "0750",
   "labels": {"env": "prod", "team": "backend"},
-  "clients": ["10.1.0.50"],
+  "clients": [
+    {
+      "name": "vol-1",
+      "client": "10.1.0.50",
+      "labels": {"created-by": "k8s", "kubernetes.pvc.id": "vol-1", "kubernetes.pvc.storageclass": "btrfs-nfs", "kubernetes.node.name": "worker-1"},
+      "created_at": "2025-01-15T11:00:00Z"
+    }
+  ],
   "created_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T10:30:00Z",
   "last_attach_at": "2025-01-15T11:00:00Z"
@@ -169,36 +176,60 @@ All fields optional. `size_bytes` must be larger than current. `labels` replaces
 
 ## NFS Exports
 
+Exports are reference-counted per client IP. Each export carries labels identifying who created it. The NFS kernel export is only created on the first reference for an IP and removed when the last reference is gone.
+
 ### POST /v1/volumes/:name/export
 
 ```json
 {
-  "client": "10.1.0.50"
+  "client": "10.1.0.50",
+  "labels": {"created-by": "k8s", "kubernetes.pvc.id": "vol-1"}
 }
 ```
 
-204 No Content. Reconciler retries on failure.
+204 No Content. `labels` is optional. Duplicate entries (same IP + labels) are idempotent. Reconciler retries on failure.
 
 ### DELETE /v1/volumes/:name/export
 
 ```json
 {
-  "client": "10.1.0.50"
+  "client": "10.1.0.50",
+  "labels": {"kubernetes.pvc.id": "vol-1"}
 }
 ```
 
-204 No Content.
+204 No Content. With `labels`: removes only the matching entry (subset match). Without `labels`: removes all entries for that IP.
 
 ### GET /v1/exports
+
+Returns exports from metadata. Supports pagination (`?after=&limit=`) and `?detail=true`.
 
 ```json
 {
   "exports": [
     {
-      "path": "/srv/csi/default/vol-1",
-      "client": "10.1.0.50"
+      "name": "vol-1",
+      "client": "10.1.0.50",
+      "created_at": "2025-01-15T11:00:00Z"
     }
-  ]
+  ],
+  "total": 1
+}
+```
+
+With `?detail=true`, each export includes `labels`:
+
+```json
+{
+  "exports": [
+    {
+      "name": "vol-1",
+      "client": "10.1.0.50",
+      "labels": {"created-by": "k8s", "kubernetes.pvc.id": "vol-1", "kubernetes.pvc.storageclass": "btrfs-nfs"},
+      "created_at": "2025-01-15T11:00:00Z"
+    }
+  ],
+  "total": 1
 }
 ```
 

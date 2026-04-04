@@ -29,7 +29,7 @@ const (
 	sortUsed    = "used"
 	sortUsedPct = "used%"
 	sortCreated = "created"
-	sortClients = "clients"
+	sortExports = "clients"
 	sortVolume  = "volume"
 )
 
@@ -90,6 +90,21 @@ func formatLabelsShort(labels map[string]string) string {
 		return s[:45] + "..."
 	}
 	return s
+}
+
+func formatExports(refs []v1.ExportDetailResponse) string {
+	parts := make([]string, 0, len(refs))
+	for _, r := range refs {
+		s := r.Client
+		if len(r.Labels) > 0 {
+			s += " (" + formatLabelsShort(r.Labels) + ")"
+		}
+		if !r.CreatedAt.IsZero() {
+			s += " since " + r.CreatedAt.Format(timeFmt)
+		}
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func splitLabelsFlag(cmd *cli.Command) []string {
@@ -269,8 +284,8 @@ func sortVolumes(vols []v1.VolumeResponse, field string, reverse bool) {
 			less = usedPct(vols[i].UsedBytes, vols[i].SizeBytes) < usedPct(vols[j].UsedBytes, vols[j].SizeBytes)
 		case sortCreated:
 			less = vols[i].CreatedAt.Before(vols[j].CreatedAt)
-		case sortClients:
-			less = vols[i].Clients < vols[j].Clients
+		case sortExports:
+			less = vols[i].Exports < vols[j].Exports
 		default:
 			less = vols[i].Name < vols[j].Name
 		}
@@ -293,8 +308,8 @@ func sortVolumesDetail(vols []v1.VolumeDetailResponse, field string, reverse boo
 			less = usedPct(vols[i].UsedBytes, vols[i].SizeBytes) < usedPct(vols[j].UsedBytes, vols[j].SizeBytes)
 		case sortCreated:
 			less = vols[i].CreatedAt.Before(vols[j].CreatedAt)
-		case sortClients:
-			less = len(vols[i].Clients) < len(vols[j].Clients)
+		case sortExports:
+			less = len(vols[i].Exports) < len(vols[j].Exports)
 		default:
 			less = vols[i].Name < vols[j].Name
 		}
@@ -341,6 +356,42 @@ func sortSnapshotsDetail(snaps []v1.SnapshotDetailResponse, field string, revers
 			less = snaps[i].Volume < snaps[j].Volume
 		default:
 			less = snaps[i].Name < snaps[j].Name
+		}
+		if reverse {
+			return !less
+		}
+		return less
+	})
+}
+
+func sortExportsList(exports []v1.ExportResponse, field string, reverse bool) {
+	sort.Slice(exports, func(i, j int) bool {
+		var less bool
+		switch field {
+		case "client":
+			less = exports[i].Client < exports[j].Client
+		case sortCreated:
+			less = exports[i].CreatedAt.Before(exports[j].CreatedAt)
+		default:
+			less = exports[i].Name < exports[j].Name
+		}
+		if reverse {
+			return !less
+		}
+		return less
+	})
+}
+
+func sortExportsDetailList(exports []v1.ExportDetailResponse, field string, reverse bool) {
+	sort.Slice(exports, func(i, j int) bool {
+		var less bool
+		switch field {
+		case "client":
+			less = exports[i].Client < exports[j].Client
+		case sortCreated:
+			less = exports[i].CreatedAt.Before(exports[j].CreatedAt)
+		default:
+			less = exports[i].Name < exports[j].Name
 		}
 		if reverse {
 			return !less

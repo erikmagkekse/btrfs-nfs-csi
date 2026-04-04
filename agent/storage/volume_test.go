@@ -609,7 +609,7 @@ func TestDeleteVolume(t *testing.T) {
 
 	t.Run("busy_with_exports", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
-		seedVolume(t, s, "test", bp, VolumeMetadata{Name: "myvol", Clients: []string{"10.0.0.1"}})
+		seedVolume(t, s, "test", bp, VolumeMetadata{Name: "myvol", Exports: []ExportMetadata{{IP: "10.0.0.1"}}})
 
 		err := s.DeleteVolume(ctx, "test", "myvol")
 		requireStorageError(t, err, ErrBusy)

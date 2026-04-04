@@ -18,7 +18,6 @@ type (
 	VolumeCloneRequest    = storage.VolumeCloneRequest
 	VolumeMetadata        = storage.VolumeMetadata
 	SnapshotMetadata      = storage.SnapshotMetadata
-	ExportEntry           = storage.ExportEntry
 )
 
 const (
@@ -37,8 +36,14 @@ const (
 
 // request models (HTTP-layer only)
 
-type ExportRequest struct {
-	Client string `json:"client"`
+type VolumeExportCreateRequest struct {
+	Client string            `json:"client"`
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
+type VolumeExportDeleteRequest struct {
+	Client string            `json:"client"`
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // response models
@@ -47,26 +52,26 @@ type VolumeResponse struct {
 	Name      string    `json:"name"`
 	SizeBytes uint64    `json:"size_bytes"`
 	UsedBytes uint64    `json:"used_bytes"`
-	Clients   int       `json:"clients"`
+	Exports   int       `json:"clients"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type VolumeDetailResponse struct {
-	Name         string            `json:"name"`
-	Path         string            `json:"path"`
-	SizeBytes    uint64            `json:"size_bytes"`
-	NoCOW        bool              `json:"nocow"`
-	Compression  string            `json:"compression"`
-	QuotaBytes   uint64            `json:"quota_bytes"`
-	UsedBytes    uint64            `json:"used_bytes"`
-	UID          int               `json:"uid"`
-	GID          int               `json:"gid"`
-	Mode         string            `json:"mode"`
-	Labels       map[string]string `json:"labels,omitempty"`
-	Clients      []string          `json:"clients"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
-	LastAttachAt *time.Time        `json:"last_attach_at,omitempty"`
+	Name         string                 `json:"name"`
+	Path         string                 `json:"path"`
+	SizeBytes    uint64                 `json:"size_bytes"`
+	NoCOW        bool                   `json:"nocow"`
+	Compression  string                 `json:"compression"`
+	QuotaBytes   uint64                 `json:"quota_bytes"`
+	UsedBytes    uint64                 `json:"used_bytes"`
+	UID          int                    `json:"uid"`
+	GID          int                    `json:"gid"`
+	Mode         string                 `json:"mode"`
+	Labels       map[string]string      `json:"labels,omitempty"`
+	Exports      []ExportDetailResponse `json:"clients"`
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+	LastAttachAt *time.Time             `json:"last_attach_at,omitempty"`
 }
 
 type VolumeListResponse struct {
@@ -114,10 +119,29 @@ type SnapshotDetailListResponse struct {
 	Next      string                   `json:"next,omitempty"`
 }
 
+type ExportResponse struct {
+	Name      string    `json:"name"`
+	Client    string    `json:"client"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ExportDetailResponse struct {
+	Name      string            `json:"name"`
+	Client    string            `json:"client"`
+	Labels    map[string]string `json:"labels,omitempty"`
+	CreatedAt time.Time         `json:"created_at"`
+}
+
 type ExportListResponse struct {
-	Exports []ExportEntry `json:"exports"`
-	Total   int           `json:"total"`
-	Next    string        `json:"next,omitempty"`
+	Exports []ExportResponse `json:"exports"`
+	Total   int              `json:"total"`
+	Next    string           `json:"next,omitempty"`
+}
+
+type ExportDetailListResponse struct {
+	Exports []ExportDetailResponse `json:"exports"`
+	Total   int                    `json:"total"`
+	Next    string                 `json:"next,omitempty"`
 }
 
 type StatsResponse struct {

@@ -63,7 +63,7 @@ func (a *Agent) Start(ctx context.Context) {
 	// storage layer + handler
 	store := storage.New(
 		a.cfg.BasePath, a.cfg.QuotaEnabled, exp, tenantNames,
-		a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin,
+		a.cfg.DefaultDirMode, a.cfg.DefaultDataMode, a.cfg.BtrfsBin, a.cfg.ImmutableLabels,
 		a.cfg.TaskMaxConcurrent, a.cfg.TaskDefaultTimeout, a.cfg.TaskScrubTimeout, a.cfg.TaskPollInterval,
 	)
 	h := &v1.Handler{Store: store}
@@ -81,9 +81,9 @@ func (a *Agent) Start(ctx context.Context) {
 	api.DELETE("/volumes/:name", h.DeleteVolume)
 
 	api.GET("/volumes/:name/snapshots", h.ListVolumeSnapshots)
-	api.POST("/volumes/:name/export", h.ExportVolume)
-	api.DELETE("/volumes/:name/export", h.UnexportVolume)
-	api.GET("/exports", h.ListExports)
+	api.POST("/volumes/:name/export", h.CreateVolumeExport)
+	api.DELETE("/volumes/:name/export", h.DeleteVolumeExport)
+	api.GET("/exports", h.ListVolumeExports)
 	api.GET("/dashboard", v1.ServeDashboard(a.cfg.DashboardRefresh))
 
 	api.GET("/stats", h.Stats)

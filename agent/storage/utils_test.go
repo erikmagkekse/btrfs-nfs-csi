@@ -47,8 +47,9 @@ func testStorageWithRunner(t *testing.T, runner *utils.MockRunner, exporter *nfs
 		tenants:         []string{tenant},
 		defaultDirMode:  0o755,
 		defaultDataMode: "2770",
-		volumes:         meta.NewStore[VolumeMetadata](base),
-		snapshots:       meta.NewStore[SnapshotMetadata](base, config.SnapshotsDir),
+		// immutableLabelKeys left nil to avoid requiring created-by in every test
+		volumes:   meta.NewStore[VolumeMetadata](base),
+		snapshots: meta.NewStore[SnapshotMetadata](base, config.SnapshotsDir),
 	}
 	return s, tenantPath
 }
@@ -216,6 +217,38 @@ func TestValidateLabels(t *testing.T) {
 			requireStorageError(t, err, ErrInvalid)
 		})
 	}
+}
+
+func TestRequireImmutableLabels(t *testing.T) {
+	keys := []string{"created-by"}
+
+	assert.NoError(t, requireImmutableLabels(keys, map[string]string{"created-by": "csi"}))
+	assert.NoError(t, requireImmutableLabels(keys, map[string]string{"created-by": "cli", "extra": "ok"}))
+	requireStorageError(t, requireImmutableLabels(keys, map[string]string{"extra": "ok"}), ErrInvalid)
+	requireStorageError(t, requireImmutableLabels(keys, map[string]string{}), ErrInvalid)
+	requireStorageError(t, requireImmutableLabels(keys, nil), ErrInvalid)
+	assert.NoError(t, requireImmutableLabels(nil, nil), "nil keys = no requirements")
+}
+
+func TestProtectImmutableLabels(t *testing.T) {
+	keys := []string{"created-by"}
+
+	t.Run("preserves_on_omit", func(t *testing.T) {
+		updated := map[string]string{"env": "prod"}
+		require.NoError(t, protectImmutableLabels(keys, map[string]string{"created-by": "csi"}, updated))
+		assert.Equal(t, "csi", updated["created-by"], "should be preserved")
+	})
+
+	t.Run("rejects_change", func(t *testing.T) {
+		updated := map[string]string{"created-by": "hacker"}
+		err := protectImmutableLabels(keys, map[string]string{"created-by": "csi"}, updated)
+		requireStorageError(t, err, ErrInvalid)
+	})
+
+	t.Run("allows_same_value", func(t *testing.T) {
+		updated := map[string]string{"created-by": "csi", "env": "prod"}
+		require.NoError(t, protectImmutableLabels(keys, map[string]string{"created-by": "csi"}, updated))
+	})
 }
 
 func TestFileMode(t *testing.T) {

@@ -32,7 +32,7 @@ func volumeResponseFrom(meta *storage.VolumeMetadata) VolumeResponse {
 		Name:      meta.Name,
 		SizeBytes: meta.SizeBytes,
 		UsedBytes: meta.UsedBytes,
-		Clients:   len(meta.Clients),
+		Exports:   storage.CountUniqueExportIPs(meta.Exports),
 		CreatedAt: meta.CreatedAt,
 	}
 }
@@ -87,9 +87,14 @@ func (h *Handler) ListVolumes(c *echo.Context) error {
 }
 
 func volumeDetailResponseFrom(meta *storage.VolumeMetadata) VolumeDetailResponse {
-	clients := meta.Clients
-	if clients == nil {
-		clients = []string{}
+	exports := make([]ExportDetailResponse, len(meta.Exports))
+	for i, e := range meta.Exports {
+		exports[i] = ExportDetailResponse{
+			Name:      meta.Name,
+			Client:    e.IP,
+			Labels:    e.Labels,
+			CreatedAt: e.CreatedAt,
+		}
 	}
 	return VolumeDetailResponse{
 		Name:         meta.Name,
@@ -103,7 +108,7 @@ func volumeDetailResponseFrom(meta *storage.VolumeMetadata) VolumeDetailResponse
 		GID:          meta.GID,
 		Mode:         meta.Mode,
 		Labels:       meta.Labels,
-		Clients:      clients,
+		Exports:      exports,
 		CreatedAt:    meta.CreatedAt,
 		UpdatedAt:    meta.UpdatedAt,
 		LastAttachAt: meta.LastAttachAt,
@@ -148,53 +153,75 @@ func (h *Handler) DeleteVolume(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *Handler) ExportVolume(c *echo.Context) error {
+func (h *Handler) CreateVolumeExport(c *echo.Context) error {
 	tenant := c.Get("tenant").(string)
 	name := c.Param("name")
 
-	var req ExportRequest
+	var req VolumeExportCreateRequest
 	if err := c.Bind(&req); err != nil || req.Client == "" {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "client is required", Code: "BAD_REQUEST"})
 	}
 
-	if err := h.Store.ExportVolume(c.Request().Context(), tenant, name, req.Client); err != nil {
+	if err := h.Store.CreateVolumeExport(c.Request().Context(), tenant, name, req.Client, req.Labels); err != nil {
 		return StorageError(c, err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *Handler) UnexportVolume(c *echo.Context) error {
+func (h *Handler) DeleteVolumeExport(c *echo.Context) error {
 	tenant := c.Get("tenant").(string)
 	name := c.Param("name")
 
-	var req ExportRequest
+	var req VolumeExportDeleteRequest
 	if err := c.Bind(&req); err != nil || req.Client == "" {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "client is required", Code: "BAD_REQUEST"})
 	}
 
-	if err := h.Store.UnexportVolume(c.Request().Context(), tenant, name, req.Client); err != nil {
+	if err := h.Store.DeleteVolumeExport(c.Request().Context(), tenant, name, req.Client, req.Labels); err != nil {
 		return StorageError(c, err)
 	}
 
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *Handler) ListExports(c *echo.Context) error {
+func exportResponseFrom(e *storage.ExportEntry) ExportResponse {
+	return ExportResponse{Name: e.Name, Client: e.Client, CreatedAt: e.CreatedAt}
+}
+
+func exportDetailResponseFrom(e *storage.ExportEntry) ExportDetailResponse {
+	return ExportDetailResponse{Name: e.Name, Client: e.Client, Labels: e.Labels, CreatedAt: e.CreatedAt}
+}
+
+func (h *Handler) ListVolumeExports(c *echo.Context) error {
 	tenant := c.Get("tenant").(string)
 	after, limit := parsePageParams(c)
 
-	page, err := h.Store.ListExportsPaginated(c.Request().Context(), tenant, after, limit)
+	page, err := h.Store.ListVolumeExportsPaginated(tenant, after, limit)
 	if err != nil {
 		return StorageError(c, err)
 	}
 
-	exports := page.Items
-	if exports == nil {
-		exports = []storage.ExportEntry{}
+	items := page.Items
+	total := page.Total
+	if filters := c.QueryParams()["label"]; len(filters) > 0 {
+		items = filterByLabels(items, filters)
+		total = len(items)
 	}
 
-	return c.JSON(http.StatusOK, ExportListResponse{Exports: exports, Total: page.Total, Next: page.Next})
+	if c.QueryParam("detail") == "true" {
+		resp := make([]ExportDetailResponse, len(items))
+		for i := range items {
+			resp[i] = exportDetailResponseFrom(&items[i])
+		}
+		return c.JSON(http.StatusOK, ExportDetailListResponse{Exports: resp, Total: total, Next: page.Next})
+	}
+
+	resp := make([]ExportResponse, len(items))
+	for i := range items {
+		resp[i] = exportResponseFrom(&items[i])
+	}
+	return c.JSON(http.StatusOK, ExportListResponse{Exports: resp, Total: total, Next: page.Next})
 }
 
 func (h *Handler) Stats(c *echo.Context) error {

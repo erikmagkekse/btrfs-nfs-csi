@@ -2,6 +2,7 @@ package config
 
 import (
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -41,7 +42,35 @@ const (
 
 	VolumeIDSep = "|"
 	NodeIDSep   = "|"
+
+	LabelCreatedBy              = "created-by"
+	LabelKubernetesNodeName     = "kubernetes.node.name"
+	LabelKubernetesVolumeID     = "kubernetes.pvc.id"
+	LabelKubernetesStorageClass = "kubernetes.pvc.storageclass"
 )
+
+// DefaultImmutableLabelKeys are always immutable. Additional keys can be added via AGENT_IMMUTABLE_LABELS.
+var DefaultImmutableLabelKeys = []string{LabelCreatedBy}
+
+// ImmutableLabelKeys returns the merged list of default + configured immutable label keys.
+func ImmutableLabelKeys(extra string) []string {
+	seen := map[string]bool{}
+	var keys []string
+	for _, k := range DefaultImmutableLabelKeys {
+		if !seen[k] {
+			keys = append(keys, k)
+			seen[k] = true
+		}
+	}
+	for _, k := range strings.Split(extra, ",") {
+		k = strings.TrimSpace(k)
+		if k != "" && !seen[k] {
+			keys = append(keys, k)
+			seen[k] = true
+		}
+	}
+	return keys
+}
 
 // Storage engine settings
 const (
@@ -63,8 +92,9 @@ type AgentConfig struct {
 	NFSExporter          string        `env:"AGENT_NFS_EXPORTER" envDefault:"kernel"`
 	ExportfsBin          string        `env:"AGENT_EXPORTFS_BIN" envDefault:"exportfs"`
 	KernelExportOptions  string        `env:"AGENT_KERNEL_EXPORT_OPTIONS" envDefault:"rw,nohide,crossmnt,no_root_squash,no_subtree_check"`
+	ImmutableLabels      string        `env:"AGENT_IMMUTABLE_LABELS"`
 	BtrfsBin             string        `env:"AGENT_BTRFS_BIN" envDefault:"btrfs"`
-	NFSReconcileInterval time.Duration `env:"AGENT_NFS_RECONCILE_INTERVAL" envDefault:"10m"`
+	NFSReconcileInterval time.Duration `env:"AGENT_NFS_RECONCILE_INTERVAL" envDefault:"60s"`
 	DeviceIOInterval     time.Duration `env:"AGENT_DEVICE_IO_INTERVAL" envDefault:"5s"`
 	DeviceStatsInterval  time.Duration `env:"AGENT_DEVICE_STATS_INTERVAL" envDefault:"1m"`
 	DashboardRefresh     int           `env:"AGENT_DASHBOARD_REFRESH_SECONDS" envDefault:"5"`

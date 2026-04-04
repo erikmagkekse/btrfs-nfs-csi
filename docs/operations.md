@@ -134,9 +134,11 @@ Default mode: `2770` (configurable via `AGENT_DEFAULT_DATA_MODE`). Applied at cr
 
 Export options: `rw,nohide,crossmnt,no_root_squash,no_subtree_check,fsid=<crc32>`
 
-**Lifecycle:** ControllerPublish → `exportfs` add → NodeStage (NFS mount) → NodePublish (bind mount) → reverse on detach.
+**Lifecycle:** ControllerPublish → agent CreateVolumeExport (with labels: `created-by`, `kubernetes.pvc.id`, `kubernetes.pvc.storageclass`, `kubernetes.node.name`) → `exportfs` add → NodeStage (NFS mount) → NodePublish (bind mount) → reverse on detach.
 
-**Reconciler** (every `AGENT_NFS_RECONCILE_INTERVAL`):
+Exports are reference-counted per client IP. The NFS kernel export is only created on the first reference for an IP and removed when the last reference is gone. Each export carries labels identifying who created it (`created-by` is immutable).
+
+**Reconciler** (every `AGENT_NFS_RECONCILE_INTERVAL`, default 60s):
 - Removes orphaned exports (path deleted)
 - Re-adds missing exports from metadata (agent restart recovery)
 
