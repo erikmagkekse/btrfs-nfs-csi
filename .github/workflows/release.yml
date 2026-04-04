@@ -126,7 +126,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
   helm:
-    needs: check
+    needs: [check, build]
     uses: ./.github/workflows/helm-release.yml
     with:
       suffix: ${{ needs.check.outputs.suffix }}
