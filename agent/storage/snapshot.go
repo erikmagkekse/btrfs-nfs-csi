@@ -129,7 +129,7 @@ func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error
 		return err
 	}
 
-	if _, err := s.snapshots.Get(tenant, name); err != nil {
+	if !s.snapshots.Exists(tenant, name) {
 		return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("snapshot %q not found", name)}
 	}
 

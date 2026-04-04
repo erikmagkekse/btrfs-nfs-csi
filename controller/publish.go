@@ -2,11 +2,13 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
-	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
@@ -22,12 +24,12 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 		return nil, status.Error(codes.InvalidArgument, "volume ID and node ID required")
 	}
 
-	nodeIP, err := parseNodeIP(req.NodeId)
+	nodeHostname, nodeIP, err := csiserver.ParseNodeID(req.NodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	sc, name, err := utils.ParseVolumeID(req.VolumeId)
+	sc, name, err := csiserver.ParseVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -39,18 +41,18 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	}
 
 	// apply PVC annotation changes to agent
-	vp := s.resolveVolumeParams(ctx, req.VolumeContext)
-	if err := vp.validate(); err != nil {
+	vp, err := s.resolveVolumeParams(ctx, req.VolumeContext)
+	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "volume %s: %v", name, err)
 	}
-	if update, changed := vp.toUpdateRequest(); changed {
-		log.Debug().Str("volume", name).Str("sc", sc).Msg("applying annotation updates")
+	if vp.hasUpdates() {
+		log.Debug().Str("volume", name).Str("sc", sc).Msg("applying PVC annotation updates to agent")
 		start := time.Now()
-		_, updateErr := client.UpdateVolume(ctx, name, update)
+		_, updateErr := client.UpdateVolume(ctx, name, vp.updateRequest())
 		agentDuration.WithLabelValues("update_volume", sc).Observe(time.Since(start).Seconds())
 		if updateErr != nil {
 			agentOpsTotal.WithLabelValues("update_volume", "error", sc).Inc()
-			log.Warn().Err(updateErr).Str("volume", name).Str("sc", sc).Msg("failed to apply annotation updates")
+			log.Warn().Err(updateErr).Str("volume", name).Str("sc", sc).Msg("failed to apply PVC annotation updates")
 		} else {
 			agentOpsTotal.WithLabelValues("update_volume", "success", sc).Inc()
 		}
@@ -61,11 +63,19 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	exportCtx, cancel := context.WithTimeout(ctx, exportTimeout)
 	defer cancel()
 	start := time.Now()
+	vaName := fmt.Sprintf("csi-%x", sha256.Sum256([]byte(req.VolumeId+csiserver.DriverName+nodeHostname)))
 	exportLabels := map[string]string{
-		config.LabelCreatedBy:              "k8s",
-		config.LabelKubernetesNodeName:     parseNodeHostname(req.NodeId),
-		config.LabelKubernetesVolumeID:     name,
-		config.LabelKubernetesStorageClass: sc,
+		config.LabelCreatedBy:     controllerIdentity,
+		labelNodeName:             nodeHostname,
+		labelPVName:               name,
+		labelPVStorageClass:       sc,
+		labelVolumeAttachmentName: vaName,
+	}
+	if pvcName := req.VolumeContext[csiserver.PvcNameKey]; pvcName != "" {
+		exportLabels[labelPVCName] = pvcName
+	}
+	if pvcNS := req.VolumeContext[csiserver.PvcNamespaceKey]; pvcNS != "" {
+		exportLabels[labelPVCNamespace] = pvcNS
 	}
 	if err := client.CreateVolumeExport(exportCtx, name, nodeIP, exportLabels); err != nil {
 		agentDuration.WithLabelValues("export", sc).Observe(time.Since(start).Seconds())
@@ -85,12 +95,12 @@ func (s *Server) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 		return nil, status.Error(codes.InvalidArgument, "volume ID and node ID required")
 	}
 
-	nodeIP, err := parseNodeIP(req.NodeId)
+	nodeHostname, nodeIP, err := csiserver.ParseNodeID(req.NodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	sc, name, err := utils.ParseVolumeID(req.VolumeId)
+	sc, name, err := csiserver.ParseVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -107,9 +117,9 @@ func (s *Server) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 	defer cancel2()
 	start2 := time.Now()
 	unexportLabels := map[string]string{
-		config.LabelKubernetesNodeName:     parseNodeHostname(req.NodeId),
-		config.LabelKubernetesVolumeID:     name,
-		config.LabelKubernetesStorageClass: sc,
+		labelNodeName:       nodeHostname,
+		labelPVName:         name,
+		labelPVStorageClass: sc,
 	}
 	unexportErr := client.DeleteVolumeExport(unexportCtx, name, nodeIP, unexportLabels)
 	agentDuration.WithLabelValues("unexport", sc).Observe(time.Since(start2).Seconds())

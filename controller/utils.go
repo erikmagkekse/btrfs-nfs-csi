@@ -3,18 +3,13 @@ package controller
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
-	"strings"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// pageToken encodes/decodes a cursor for multi-agent pagination.
-// Format: base64(json({"sc":"storageclass","after":"last_name"}))
 type pageToken struct {
 	SC    string `json:"sc"`
 	After string `json:"after"`
@@ -38,24 +33,6 @@ func decodePageToken(token string) (pageToken, error) {
 		return pt, status.Errorf(codes.Aborted, "invalid starting_token: %v", err)
 	}
 	return pt, nil
-}
-
-const (
-	paramAgentURL    = "agentURL"
-	secretAgentToken = "agentToken"
-)
-
-func parseNodeIP(nodeID string) (string, error) {
-	parts := strings.SplitN(nodeID, config.NodeIDSep, 2)
-	if len(parts) != 2 || parts[1] == "" {
-		return "", fmt.Errorf("node ID %q missing IP (expected hostname%sip)", nodeID, config.NodeIDSep)
-	}
-	return parts[1], nil
-}
-
-func parseNodeHostname(nodeID string) string {
-	parts := strings.SplitN(nodeID, config.NodeIDSep, 2)
-	return parts[0]
 }
 
 func agentClientFromSecrets(agentURL string, secrets map[string]string) (*agentAPI.Client, error) {

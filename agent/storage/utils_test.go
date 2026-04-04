@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -191,12 +192,13 @@ func TestValidateLabels(t *testing.T) {
 		{"valid_multiple", map[string]string{"env": "prod", "team": "backend"}, false},
 		{"valid_dots_dashes", map[string]string{"app.kubernetes.io": "my-app"}, false},
 		{"empty_value", map[string]string{"env": ""}, false},
-		{"too_many", map[string]string{
-			"a": "1", "b": "2", "c": "3", "d": "4",
-			"e": "5", "f": "6", "g": "7", "h": "8",
-			"i": "9", "j": "10", "k": "11", "l": "12",
-			"m": "13",
-		}, true},
+		{"too_many", func() map[string]string {
+			m := make(map[string]string, config.MaxLabels+1)
+			for i := range config.MaxLabels + 1 {
+				m[fmt.Sprintf("k%d", i)] = "v"
+			}
+			return m
+		}(), true},
 		{"key_uppercase", map[string]string{"Env": "prod"}, true},
 		{"key_starts_with_dash", map[string]string{"-env": "prod"}, true},
 		{"key_empty", map[string]string{"": "prod"}, true},

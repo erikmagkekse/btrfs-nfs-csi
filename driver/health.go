@@ -8,18 +8,12 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	"github.com/rs/zerolog/log"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/mount-utils"
-)
-
-const (
-	eventMountHealthy       = "MountHealthy"
-	eventMountRemounted     = "MountRemounted"
-	eventMountRemountFailed = "MountRemountFailed"
-	apiCallTimeout          = 10 * time.Second
 )
 
 func eventType(reason string) string {
@@ -156,7 +150,7 @@ func (s *NodeServer) reportVolumeEvent(ctx context.Context, vi *volumeInfo, reas
 	if s.kubeClient != nil && vi.pvcName != "" && vi.pvcNamespace != "" {
 		event := &corev1.Event{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: config.DriverName + "-",
+				GenerateName: csiserver.DriverName + "-",
 				Namespace:    vi.pvcNamespace,
 			},
 			InvolvedObject: corev1.ObjectReference{
@@ -168,7 +162,7 @@ func (s *NodeServer) reportVolumeEvent(ctx context.Context, vi *volumeInfo, reas
 			Reason:  reason,
 			Message: message,
 			Type:    eventType(reason),
-			Source:  corev1.EventSource{Component: config.DriverName + "-node"},
+			Source:  corev1.EventSource{Component: csiserver.DriverName + "-node"},
 		}
 		if _, err := s.kubeClient.CoreV1().Events(vi.pvcNamespace).Create(ctx, event, metav1.CreateOptions{}); err != nil {
 			log.Warn().Err(err).Str("pvc", vi.pvcNamespace+"/"+vi.pvcName).Msg("health check: failed to create PVC event")
@@ -202,7 +196,7 @@ func (s *NodeServer) buildVolumeMap(ctx context.Context) map[string]volumeInfo {
 	}
 
 	for _, va := range vaList.Items {
-		if va.Spec.Attacher != config.DriverName || va.Spec.NodeName != s.nodeID || !va.Status.Attached {
+		if va.Spec.Attacher != csiserver.DriverName || va.Spec.NodeName != s.nodeID || !va.Status.Attached {
 			continue
 		}
 		pvName := va.Spec.Source.PersistentVolumeName
@@ -214,12 +208,12 @@ func (s *NodeServer) buildVolumeMap(ctx context.Context) map[string]volumeInfo {
 			log.Warn().Err(err).Str("pv", *pvName).Msg("health check: failed to get PV")
 			continue
 		}
-		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != config.DriverName {
+		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != csiserver.DriverName {
 			continue
 		}
 
-		server := pv.Spec.CSI.VolumeAttributes[config.ParamNFSServer]
-		sharePath := pv.Spec.CSI.VolumeAttributes[config.ParamNFSSharePath]
+		server := pv.Spec.CSI.VolumeAttributes[csiserver.ParamNFSServer]
+		sharePath := pv.Spec.CSI.VolumeAttributes[csiserver.ParamNFSSharePath]
 		nfsSource := server + ":" + sharePath
 
 		vi := volumeInfo{volumeID: pv.Spec.CSI.VolumeHandle}

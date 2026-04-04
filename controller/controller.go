@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	snapshotclient "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
@@ -30,20 +30,24 @@ func Start(ctx context.Context, endpoint, metricsAddr, version, commit, defaultL
 	if err != nil {
 		return fmt.Errorf("k8s client: %w", err)
 	}
+	snapClient, err := snapshotclient.NewForConfig(k8sCfg)
+	if err != nil {
+		return fmt.Errorf("k8s snapshot client: %w", err)
+	}
 
 	agents := NewAgentTracker(kubeClient, version, commit)
 	go agents.Run(ctx)
 
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
-	recorder := broadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: config.DriverName + "-controller"})
+	recorder := broadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: csiserver.DriverName + "-controller"})
 	defer broadcaster.Shutdown()
 
 	srv, err := csiserver.New(endpoint, version, metricsInterceptor)
 	if err != nil {
 		return err
 	}
-	csi.RegisterControllerServer(srv.GRPC(), &Server{agents: agents, kubeClient: kubeClient, recorder: recorder})
+	csi.RegisterControllerServer(srv.GRPC(), &Server{agents: agents, kubeClient: kubeClient, snapClient: snapClient, recorder: recorder})
 	return srv.Run(ctx, "controller")
 }
 
@@ -51,6 +55,7 @@ type Server struct {
 	csi.UnimplementedControllerServer
 	agents     *AgentTracker
 	kubeClient kubernetes.Interface
+	snapClient snapshotclient.Interface
 	recorder   record.EventRecorder
 }
 

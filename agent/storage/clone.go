@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -21,15 +22,20 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	if err := validateName(req.Snapshot); err != nil {
 		return nil, err
 	}
-	if err := validateLabels(req.Labels); err != nil {
+	labels := req.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[config.LabelCloneSourceType] = "snapshot"
+	labels[config.LabelCloneSourceName] = req.Snapshot
+	if err := validateLabels(labels); err != nil {
 		return nil, err
 	}
-	if err := requireImmutableLabels(s.immutableLabelKeys, req.Labels); err != nil {
+	if err := requireImmutableLabels(s.immutableLabelKeys, labels); err != nil {
 		return nil, err
 	}
 	srcData := s.snapshots.DataPath(tenant, req.Snapshot)
-	snapMeta, err := s.snapshots.Get(tenant, req.Snapshot)
-	if err != nil {
+	if !s.snapshots.Exists(tenant, req.Snapshot) {
 		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source snapshot %q not found", req.Snapshot)}
 	}
 	cloneDir := s.volumes.Dir(tenant, req.Name)
@@ -48,11 +54,6 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		_ = os.RemoveAll(cloneDir)
 		log.Error().Err(err).Msg("failed to create clone")
 		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
-	}
-
-	labels := req.Labels
-	if labels == nil {
-		labels = snapMeta.Labels
 	}
 
 	now := time.Now().UTC()

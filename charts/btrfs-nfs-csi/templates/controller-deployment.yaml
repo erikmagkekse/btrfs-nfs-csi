@@ -166,6 +166,7 @@ spec:
           args:
             - --csi-address=/csi/csi.sock
             - --leader-election
+            - --extra-create-metadata
           {{- with $sc.snapshotter.extraArgs }}
             {{- toYaml . | nindent 12 }}
           {{- end }}

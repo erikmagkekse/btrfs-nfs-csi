@@ -2,7 +2,6 @@ package config
 
 import (
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -12,67 +11,21 @@ var (
 	ValidLabelVal = regexp.MustCompile(`^[a-zA-Z0-9._-]{0,128}$`)
 )
 
-const DriverName = "btrfs-nfs-csi"
-
-// K8s settings
 const (
-	AnnoPrefix = DriverName + "/"
-
-	PvcNameKey      = "csi.storage.k8s.io/pvc/name"
-	PvcNamespaceKey = "csi.storage.k8s.io/pvc/namespace"
-
-	SecretNameKey      = "csi.storage.k8s.io/provisioner-secret-name"
-	SecretNamespaceKey = "csi.storage.k8s.io/provisioner-secret-namespace"
-
-	ParamNoCOW       = "nocow"
-	ParamCompression = "compression"
-	ParamUID         = "uid"
-	ParamGID         = "gid"
-	ParamMode        = "mode"
-	ParamLabels      = "labels"
-	MaxUserLabels    = 4
-
-	// MaxLabels caps total labels per resource, trying to keep metadata JSON below 4KB (one filesystem block).
-	// Worst case: 12 * (63 + 128 + 6) = ~2.4KB labels + ~500B other fields = ~2.9KB.
-	MaxLabels = 12
-
-	ParamNFSServer       = "nfsServer"
-	ParamNFSMountOptions = "nfsMountOptions"
-	ParamNFSSharePath    = "nfsSharePath"
-
-	VolumeIDSep = "|"
-	NodeIDSep   = "|"
-
-	LabelCreatedBy              = "created-by"
-	LabelKubernetesNodeName     = "kubernetes.node.name"
-	LabelKubernetesVolumeID     = "kubernetes.pvc.id"
-	LabelKubernetesStorageClass = "kubernetes.pvc.storageclass"
+	MaxLabels      = 32
+	MaxUserLabels  = 8
+	LabelCreatedBy = "created-by"
 )
 
-// DefaultImmutableLabelKeys are always immutable. Additional keys can be added via AGENT_IMMUTABLE_LABELS.
-var DefaultImmutableLabelKeys = []string{LabelCreatedBy}
+const (
+	LabelCloneSourceType = "clone.source.type"
+	LabelCloneSourceName = "clone.source.name"
+)
 
-// ImmutableLabelKeys returns the merged list of default + configured immutable label keys.
-func ImmutableLabelKeys(extra string) []string {
-	seen := map[string]bool{}
-	var keys []string
-	for _, k := range DefaultImmutableLabelKeys {
-		if !seen[k] {
-			keys = append(keys, k)
-			seen[k] = true
-		}
-	}
-	for _, k := range strings.Split(extra, ",") {
-		k = strings.TrimSpace(k)
-		if k != "" && !seen[k] {
-			keys = append(keys, k)
-			seen[k] = true
-		}
-	}
-	return keys
-}
+// SoftReservedLabelKeys are set automatically by the system (e.g. clone source tracking).
+// Reserved in the K8s controller (cannot be set via annotations) but allowed via agent API/CLI.
+var SoftReservedLabelKeys = []string{LabelCloneSourceType, LabelCloneSourceName}
 
-// Storage engine settings
 const (
 	DataDir      = "data"
 	MetadataFile = "metadata.json"

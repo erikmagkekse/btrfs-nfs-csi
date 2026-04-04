@@ -87,26 +87,62 @@ Each StorageClass binds one agent + one tenant. The SC name is used in volume ID
 | `btrfs-nfs-csi/uid` | integer |
 | `btrfs-nfs-csi/gid` | integer |
 | `btrfs-nfs-csi/mode` | octal string |
-| `btrfs-nfs-csi/labels` | `key=value,key=value` (max 4 user labels, see below) |
+| `btrfs-nfs-csi/labels` | `key=value,key=value` (max 8 user labels, see below) |
 
 Annotations override StorageClass defaults. Applied at create and on every attach.
 
 ### Default Labels
 
-The CSI controller automatically sets these labels on every PVC volume:
+The CSI controller automatically sets these labels on every volume:
 
 | Label | Value | Reserved |
 |---|---|---|
 | `kubernetes.pvc.name` | PVC name | yes |
 | `kubernetes.pvc.namespace` | PVC namespace | yes |
-| `kubernetes.pvc.storageclass` | StorageClass name | yes |
-| `created-by` | `csi` | no (overridable) |
+| `kubernetes.pvc.storageclassname` | StorageClass name | yes |
+| `created-by` | `k8s` | yes |
 
-Reserved keys cannot be overridden via PVC annotation (set by user will be skipped with a warning). This restriction only applies to the CSI controller, the agent API and CLI have no reserved keys. The `created-by` label can be overridden. Max 4 user labels via annotation (max 12 total).
+On snapshots, the controller sets:
+
+| Label | Value | Reserved |
+|---|---|---|
+| `kubernetes.source.pvc.name` | Source PVC name | yes |
+| `kubernetes.source.pvc.namespace` | Source PVC namespace | yes |
+| `kubernetes.source.pvc.storageclassname` | Source StorageClass name | yes |
+| `kubernetes.snapshot.name` | VolumeSnapshot name | yes |
+| `kubernetes.snapshot.namespace` | VolumeSnapshot namespace | yes |
+| `created-by` | `k8s` | yes |
+
+On NFS exports, the controller sets:
+
+| Label | Value | Reserved |
+|---|---|---|
+| `kubernetes.pv.name` | PV name (CSI volume handle) | yes |
+| `kubernetes.pvc.name` | PVC name | yes |
+| `kubernetes.pvc.namespace` | PVC namespace | yes |
+| `kubernetes.pvc.storageclassname` | StorageClass name | yes |
+| `kubernetes.node.name` | Node hostname | yes |
+| `kubernetes.volumeattachment.name` | VolumeAttachment name (`csi-<sha256>`) | yes |
+| `created-by` | `k8s` | yes |
+
+Additionally, clones always receive `clone.source.type` (`volume` or `snapshot`) and `clone.source.name` automatically. These keys are also reserved in PVC/VolumeSnapshot annotations.
+
+Reserved keys cannot be overridden via PVC or VolumeSnapshot annotations (set by user will be skipped with a warning). Max 8 user labels via annotation (max 32 total).
+
+### User Labels via Annotations
+
+Add `btrfs-nfs-csi/labels` as an annotation on PVCs or VolumeSnapshots:
+
+```yaml
+annotations:
+  btrfs-nfs-csi/labels: "env=prod,team=backend"
+```
+
+User labels are never inherited. Each resource reads only its own annotation: PVCs for volumes, VolumeSnapshots for snapshots.
 
 ### Custom Default Labels
 
-Set `DRIVER_DEFAULT_LABELS` on the controller to add custom defaults to every volume:
+Set `DRIVER_DEFAULT_LABELS` on the controller to add custom defaults to every volume and snapshot:
 
 ```yaml
 env:
@@ -114,7 +150,7 @@ env:
     value: "kubernetes.cluster=my-cluster,env=prod"
 ```
 
-These are merged after the built-in defaults but before user annotation labels. Reserved keys (`kubernetes.pvc.*`) are ignored. User annotation labels override env defaults on key conflict.
+These are merged after the built-in defaults but before user annotation labels. Reserved keys are ignored. User annotation labels override env defaults on key conflict.
 
 ## Secret
 

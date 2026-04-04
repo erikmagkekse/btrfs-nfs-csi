@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 )
@@ -101,4 +102,25 @@ func unixMode(m os.FileMode) uint64 {
 		mode |= 0o1000
 	}
 	return mode
+}
+
+var defaultImmutableLabelKeys = []string{config.LabelCreatedBy}
+
+func ImmutableLabelKeys(extra string) []string {
+	seen := map[string]bool{}
+	var keys []string
+	for _, k := range defaultImmutableLabelKeys {
+		if !seen[k] {
+			keys = append(keys, k)
+			seen[k] = true
+		}
+	}
+	for _, k := range strings.Split(extra, ",") {
+		k = strings.TrimSpace(k)
+		if k != "" && !seen[k] {
+			keys = append(keys, k)
+			seen[k] = true
+		}
+	}
+	return keys
 }

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	"github.com/rs/zerolog/log"
@@ -312,10 +313,16 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		return nil, err
 	}
 
-	if err := validateLabels(req.Labels); err != nil {
+	labels := req.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[config.LabelCloneSourceType] = "volume"
+	labels[config.LabelCloneSourceName] = req.Source
+	if err := validateLabels(labels); err != nil {
 		return nil, err
 	}
-	if err := requireImmutableLabels(s.immutableLabelKeys, req.Labels); err != nil {
+	if err := requireImmutableLabels(s.immutableLabelKeys, labels); err != nil {
 		return nil, err
 	}
 
@@ -356,11 +363,6 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 			cleanup()
 			return nil, fmt.Errorf("qgroup limit failed: %w", err)
 		}
-	}
-
-	labels := req.Labels
-	if labels == nil {
-		labels = src.Labels
 	}
 
 	now := time.Now().UTC()

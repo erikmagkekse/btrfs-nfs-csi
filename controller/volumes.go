@@ -3,17 +3,16 @@ package controller
 import (
 	"context"
 	"sort"
-	"strconv"
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
-	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
+	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/utils/ptr"
 )
 
 type agentEntry struct {
@@ -66,7 +65,7 @@ func (s *Server) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
 		for _, vol := range volList.Volumes {
 			entries = append(entries, &csi.ListVolumesResponse_Entry{
 				Volume: &csi.Volume{
-					VolumeId:      utils.MakeVolumeID(a.sc, vol.Name),
+					VolumeId:      csiserver.MakeVolumeID(a.sc, vol.Name),
 					CapacityBytes: int64(vol.SizeBytes),
 				},
 			})
@@ -97,7 +96,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	params := req.Parameters
-	nfsServer := params[config.ParamNFSServer]
+	nfsServer := params[csiserver.ParamNFSServer]
 	agentURL := params[paramAgentURL]
 	if nfsServer == "" || agentURL == "" {
 		return nil, status.Error(codes.InvalidArgument, "nfsServer and agentURL parameters required")
@@ -111,7 +110,10 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 
 	s.agents.Track(agentURL, client)
 
-	vp := s.resolveVolumeParams(ctx, params)
+	vp, err := s.resolveVolumeParams(ctx, params)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 	sc := vp.StorageClass
 	if sc == "" {
 		return nil, status.Errorf(codes.Internal, "failed to resolve StorageClass name for volume %s", req.Name)
@@ -127,24 +129,24 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	}
 
 	volCtx := map[string]string{
-		config.ParamNFSServer: nfsServer,
-		paramAgentURL:         agentURL,
+		csiserver.ParamNFSServer: nfsServer,
+		paramAgentURL:            agentURL,
 	}
-	if opts := params[config.ParamNFSMountOptions]; opts != "" {
-		volCtx[config.ParamNFSMountOptions] = opts
+	if opts := params[csiserver.ParamNFSMountOptions]; opts != "" {
+		volCtx[csiserver.ParamNFSMountOptions] = opts
 	}
-	if n := params[config.PvcNameKey]; n != "" {
-		volCtx[config.PvcNameKey] = n
+	if n := params[csiserver.PvcNameKey]; n != "" {
+		volCtx[csiserver.PvcNameKey] = n
 	}
-	if ns := params[config.PvcNamespaceKey]; ns != "" {
-		volCtx[config.PvcNamespaceKey] = ns
+	if ns := params[csiserver.PvcNamespaceKey]; ns != "" {
+		volCtx[csiserver.PvcNamespaceKey] = ns
 	}
 
 	// Clone from volume or snapshot
 	if req.VolumeContentSource != nil {
 		// PVC-to-PVC clone
 		if srcVol := req.VolumeContentSource.GetVolume(); srcVol != nil {
-			_, srcName, err := utils.ParseVolumeID(srcVol.VolumeId)
+			_, srcName, err := csiserver.ParseVolumeID(srcVol.VolumeId)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "invalid source volume ID: %v", err)
 			}
@@ -171,13 +173,13 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			} else {
 				agentOpsTotal.WithLabelValues("clone_volume", "success", sc).Inc()
 			}
-			volCtx[config.ParamNFSSharePath] = cloneResp.Path
+			volCtx[csiserver.ParamNFSSharePath] = cloneResp.Path
 
 			log.Info().Str("volume", req.Name).Str("source", srcName).Str("sc", sc).Str("agent", agentURL).Msg("volume cloned from volume")
 
 			return &csi.CreateVolumeResponse{
 				Volume: &csi.Volume{
-					VolumeId:      utils.MakeVolumeID(sc, req.Name),
+					VolumeId:      csiserver.MakeVolumeID(sc, req.Name),
 					CapacityBytes: int64(sizeBytes),
 					VolumeContext: volCtx,
 					ContentSource: req.VolumeContentSource,
@@ -190,7 +192,7 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		if snap == nil {
 			return nil, status.Error(codes.InvalidArgument, "unsupported content source")
 		}
-		_, snapName, err := utils.ParseVolumeID(snap.SnapshotId)
+		_, snapName, err := csiserver.ParseVolumeID(snap.SnapshotId)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid snapshot ID: %v", err)
 		}
@@ -217,13 +219,13 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		} else {
 			agentOpsTotal.WithLabelValues("create_clone", "success", sc).Inc()
 		}
-		volCtx[config.ParamNFSSharePath] = cloneResp.Path
+		volCtx[csiserver.ParamNFSSharePath] = cloneResp.Path
 
 		log.Info().Str("volume", req.Name).Str("snapshot", snapName).Str("sc", sc).Str("agent", agentURL).Msg("volume cloned from snapshot")
 
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId:      utils.MakeVolumeID(sc, req.Name),
+				VolumeId:      csiserver.MakeVolumeID(sc, req.Name),
 				CapacityBytes: int64(sizeBytes),
 				VolumeContext: volCtx,
 				ContentSource: req.VolumeContentSource,
@@ -231,24 +233,17 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 		}, nil
 	}
 
-	if err := vp.validate(); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-
-	uid, _ := strconv.Atoi(vp.UID)
-	gid, _ := strconv.Atoi(vp.GID)
-
-	log.Debug().Str("volume", req.Name).Uint64("size", sizeBytes).Str("sc", sc).Str("agent", agentURL).Str("compression", vp.Compression).Msg("creating volume")
+	log.Debug().Str("volume", req.Name).Uint64("size", sizeBytes).Str("sc", sc).Str("agent", agentURL).Str("compression", ptr.Deref(vp.Compression, "")).Msg("creating volume")
 
 	start := time.Now()
 	volResp, err := client.CreateVolume(ctx, agentAPI.VolumeCreateRequest{
 		Name:        req.Name,
 		SizeBytes:   sizeBytes,
-		NoCOW:       vp.NoCOW == "true",
-		Compression: vp.Compression,
-		UID:         uid,
-		GID:         gid,
-		Mode:        vp.Mode,
+		NoCOW:       ptr.Deref(vp.NoCOW, false),
+		Compression: ptr.Deref(vp.Compression, ""),
+		UID:         ptr.Deref(vp.UID, 0),
+		GID:         ptr.Deref(vp.GID, 0),
+		Mode:        ptr.Deref(vp.Mode, ""),
 		Labels:      vp.Labels,
 	})
 	agentDuration.WithLabelValues("create_volume", sc).Observe(time.Since(start).Seconds())
@@ -268,13 +263,13 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 	} else {
 		agentOpsTotal.WithLabelValues("create_volume", "success", sc).Inc()
 	}
-	volCtx[config.ParamNFSSharePath] = volResp.Path
+	volCtx[csiserver.ParamNFSSharePath] = volResp.Path
 
 	log.Info().Str("volume", req.Name).Uint64("size", sizeBytes).Str("sc", sc).Str("agent", agentURL).Msg("volume created")
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      utils.MakeVolumeID(sc, req.Name),
+			VolumeId:      csiserver.MakeVolumeID(sc, req.Name),
 			CapacityBytes: int64(sizeBytes),
 			VolumeContext: volCtx,
 		},
@@ -286,7 +281,7 @@ func (s *Server) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest)
 		return nil, status.Error(codes.InvalidArgument, "volume ID required")
 	}
 
-	sc, name, err := utils.ParseVolumeID(req.VolumeId)
+	sc, name, err := csiserver.ParseVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -327,7 +322,7 @@ func (s *Server) ControllerExpandVolume(ctx context.Context, req *csi.Controller
 		return nil, status.Error(codes.InvalidArgument, "volume ID required")
 	}
 
-	sc, name, err := utils.ParseVolumeID(req.VolumeId)
+	sc, name, err := csiserver.ParseVolumeID(req.VolumeId)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
