@@ -124,4 +124,3 @@ func TestLabelsContain(t *testing.T) {
 	assert.True(t, labelsContain(nil, map[string]string{}), "nil stored, empty match")
 	assert.False(t, labelsContain(nil, map[string]string{"a": "b"}), "nil stored, non-empty match")
 }
-

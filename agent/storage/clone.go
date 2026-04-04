@@ -24,7 +24,7 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	if err := validateLabels(req.Labels); err != nil {
 		return nil, err
 	}
-	if err := requireImmutableLabels(s.immutableLabelKeys,req.Labels); err != nil {
+	if err := requireImmutableLabels(s.immutableLabelKeys, req.Labels); err != nil {
 		return nil, err
 	}
 	srcData := s.snapshots.DataPath(tenant, req.Snapshot)

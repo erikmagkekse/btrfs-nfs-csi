@@ -40,16 +40,16 @@ func testStorageWithRunner(t *testing.T, runner *utils.MockRunner, exporter *nfs
 
 	mgr := btrfs.NewManagerWithRunner("btrfs", runner)
 	s := &Storage{
-		basePath:           base,
-		mountPoint:         base,
-		btrfs:              mgr,
-		exporter:           exporter,
-		tenants:            []string{tenant},
-		defaultDirMode:     0o755,
-		defaultDataMode:    "2770",
+		basePath:        base,
+		mountPoint:      base,
+		btrfs:           mgr,
+		exporter:        exporter,
+		tenants:         []string{tenant},
+		defaultDirMode:  0o755,
+		defaultDataMode: "2770",
 		// immutableLabelKeys left nil to avoid requiring created-by in every test
-		volumes:            meta.NewStore[VolumeMetadata](base),
-		snapshots:          meta.NewStore[SnapshotMetadata](base, config.SnapshotsDir),
+		volumes:   meta.NewStore[VolumeMetadata](base),
+		snapshots: meta.NewStore[SnapshotMetadata](base, config.SnapshotsDir),
 	}
 	return s, tenantPath
 }

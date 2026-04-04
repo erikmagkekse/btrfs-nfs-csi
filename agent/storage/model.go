@@ -23,7 +23,7 @@ type VolumeMetadata struct {
 	GID          int               `json:"gid"`
 	Mode         string            `json:"mode"`
 	Labels       map[string]string `json:"labels,omitempty"`
-	Exports      []ExportMetadata       `json:"clients,omitempty"`
+	Exports      []ExportMetadata  `json:"clients,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 	LastAttachAt *time.Time        `json:"last_attach_at,omitempty"`

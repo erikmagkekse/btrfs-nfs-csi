@@ -37,7 +37,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	if err := validateLabels(req.Labels); err != nil {
 		return nil, err
 	}
-	if err := requireImmutableLabels(s.immutableLabelKeys,req.Labels); err != nil {
+	if err := requireImmutableLabels(s.immutableLabelKeys, req.Labels); err != nil {
 		return nil, err
 	}
 	if req.Mode == "" {
@@ -315,7 +315,7 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	if err := validateLabels(req.Labels); err != nil {
 		return nil, err
 	}
-	if err := requireImmutableLabels(s.immutableLabelKeys,req.Labels); err != nil {
+	if err := requireImmutableLabels(s.immutableLabelKeys, req.Labels); err != nil {
 		return nil, err
 	}
 

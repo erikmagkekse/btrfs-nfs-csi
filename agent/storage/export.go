@@ -20,7 +20,7 @@ func (s *Storage) CreateVolumeExport(ctx context.Context, tenant, name, client s
 	if err := validateLabels(labels); err != nil {
 		return err
 	}
-	if err := requireImmutableLabels(s.immutableLabelKeys,labels); err != nil {
+	if err := requireImmutableLabels(s.immutableLabelKeys, labels); err != nil {
 		return err
 	}
 

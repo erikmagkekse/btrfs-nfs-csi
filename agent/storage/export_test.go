@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -257,20 +258,22 @@ func TestListExportsPaginated(t *testing.T) {
 		vol2 := filepath.Join(bp, "vol2")
 		require.NoError(t, os.MkdirAll(vol1, 0o755))
 		require.NoError(t, os.MkdirAll(vol2, 0o755))
+		now := time.Now().UTC()
 		writeTestMetadata(t, s, vol1, VolumeMetadata{
 			Name: "vol1", Exports: []ExportMetadata{
-				{IP: "10.0.0.1", Labels: map[string]string{"created-by": "csi"}},
-				{IP: "10.0.0.2"},
+				{IP: "10.0.0.1", Labels: map[string]string{"created-by": "csi"}, CreatedAt: now},
+				{IP: "10.0.0.2", CreatedAt: now.Add(-time.Minute)},
 			},
 		})
 		writeTestMetadata(t, s, vol2, VolumeMetadata{
-			Name: "vol2", Exports: []ExportMetadata{{IP: "10.0.0.3"}},
+			Name: "vol2", Exports: []ExportMetadata{{IP: "10.0.0.3", CreatedAt: now.Add(-2 * time.Minute)}},
 		})
 
 		page, err := s.ListVolumeExportsPaginated("test", "", 0)
 		require.NoError(t, err)
 		assert.Equal(t, 3, page.Total)
 		require.Len(t, page.Items, 3)
+		// sorted newest first
 		assert.Equal(t, "10.0.0.1", page.Items[0].Client)
 		assert.Equal(t, "csi", page.Items[0].Labels["created-by"])
 		assert.Equal(t, "10.0.0.3", page.Items[2].Client)
