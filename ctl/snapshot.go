@@ -113,8 +113,6 @@ func snapshotDelete(ctx context.Context, cmd *cli.Command) error {
 				protected = append(protected, name)
 				continue
 			}
-			return output(cmd, resp, func() { fmt.Printf("clone %q created from snapshot %q\n", resp.Name, cmd.Args().Get(0)) })
-		},
 		}
 		if err := c.DeleteSnapshot(ctx, name); err != nil {
 			return wrapErr(err, "snapshot", name)
@@ -137,5 +135,5 @@ func snapshotClone(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return wrapErr(err, "clone", cmd.Args().Get(1))
 	}
-	return output(cmd, resp, func() { fmt.Printf("clone %q created from snapshot %q\n", resp.Name, resp.SourceSnapshot) })
+	return output(cmd, resp, func() { fmt.Printf("clone %q created from snapshot %q\n", resp.Name, cmd.Args().Get(0)) })
 }
