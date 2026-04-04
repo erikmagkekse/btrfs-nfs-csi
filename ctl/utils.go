@@ -177,8 +177,8 @@ func runWatch(ctx context.Context, cmd *cli.Command, fn func() error) error {
 	if termios, err := unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TCGETS); err == nil {
 		noEcho := *termios
 		noEcho.Lflag &^= unix.ECHO
-		unix.IoctlSetTermios(int(os.Stdin.Fd()), unix.TCSETS, &noEcho)
-		defer unix.IoctlSetTermios(int(os.Stdin.Fd()), unix.TCSETS, termios)
+		_ = unix.IoctlSetTermios(int(os.Stdin.Fd()), unix.TCSETS, &noEcho)
+		defer func() { _ = unix.IoctlSetTermios(int(os.Stdin.Fd()), unix.TCSETS, termios) }()
 	}
 	fmt.Print("\033[?1049h\033[?25l")
 	defer fmt.Print("\033[?25h\033[?1049l")
