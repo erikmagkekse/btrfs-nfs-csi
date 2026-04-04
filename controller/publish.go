@@ -7,7 +7,6 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -65,7 +64,6 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	start := time.Now()
 	vaName := fmt.Sprintf("csi-%x", sha256.Sum256([]byte(req.VolumeId+csiserver.DriverName+nodeHostname)))
 	exportLabels := map[string]string{
-		config.LabelCreatedBy:     controllerIdentity,
 		labelNodeName:             nodeHostname,
 		labelPVName:               name,
 		labelPVStorageClass:       sc,

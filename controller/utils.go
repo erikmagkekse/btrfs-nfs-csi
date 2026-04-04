@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -40,13 +41,21 @@ func agentClientFromSecrets(agentURL string, secrets map[string]string) (*agentA
 	if token == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing agentToken secret")
 	}
-	return agentAPI.NewClient(agentURL, token), nil
+	return agentAPI.NewClient(agentURL, token, config.IdentityK8sController), nil
 }
 
 func agentClientFromStorageClass(tracker *AgentTracker, scName string, secrets map[string]string) (*agentAPI.Client, error) {
+	if c := tracker.Client(scName); c != nil {
+		return c, nil
+	}
 	agentURL, err := tracker.AgentURL(scName)
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "resolve agent for storage class %q: %v", scName, err)
 	}
-	return agentClientFromSecrets(agentURL, secrets)
+	c, err := agentClientFromSecrets(agentURL, secrets)
+	if err != nil {
+		return nil, err
+	}
+	tracker.Track(agentURL, c)
+	return c, nil
 }

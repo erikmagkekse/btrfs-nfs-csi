@@ -12,9 +12,9 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func listVolumes(ctx context.Context, cmd *cli.Command, c *v1.Client, sortBy string, rev bool, opts v1.ListOpts) error {
+func listVolumes(ctx context.Context, cmd *cli.Command, sortBy string, rev bool, opts v1.ListOpts) error {
 	if isWide(cmd) {
-		resp, err := c.ListVolumesDetail(ctx, opts)
+		resp, err := apiClient.ListVolumesDetail(ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -33,7 +33,7 @@ func listVolumes(ctx context.Context, cmd *cli.Command, c *v1.Client, sortBy str
 			tw.flush()
 		})
 	}
-	resp, err := c.ListVolumes(ctx, opts)
+	resp, err := apiClient.ListVolumes(ctx, opts)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func volumeGet(ctx context.Context, cmd *cli.Command) error {
 	if name == "" {
 		return fmt.Errorf("volume name required")
 	}
-	resp, err := clientFrom(cmd).GetVolume(ctx, name)
+	resp, err := apiClient.GetVolume(ctx, name)
 	if err != nil {
 		return wrapErr(err, "volume", name)
 	}
@@ -102,9 +102,9 @@ func volumeCreate(ctx context.Context, cmd *cli.Command) error {
 		UID:         int(cmd.Int("uid")),
 		GID:         int(cmd.Int("gid")),
 		Mode:        cmd.String("mode"),
-		Labels:      labelsWithDefault(cmd, config.LabelCreatedBy, cliIdentity()),
+		Labels:      parseLabelsFlag(cmd),
 	}
-	resp, err := clientFrom(cmd).CreateVolume(ctx, req)
+	resp, err := apiClient.CreateVolume(ctx, req)
 	if err != nil {
 		return wrapErr(err, "volume", req.Name)
 	}
@@ -120,20 +120,19 @@ func volumeDelete(ctx context.Context, cmd *cli.Command) error {
 	}
 	force := os.Getenv("BTRFS_NFS_CSI_FORCE") == "true"
 	confirmed := force || (cmd.Bool("confirm") && cmd.Bool("yes"))
-	c := clientFrom(cmd)
 	var protected []string
 	for _, name := range names {
 		if !confirmed {
-			vol, err := c.GetVolume(ctx, name)
+			vol, err := apiClient.GetVolume(ctx, name)
 			if err != nil {
 				return wrapErr(err, "volume", name)
 			}
-			if vol.Labels[config.LabelCreatedBy] != cliIdentity() {
+			if vol.Labels[config.LabelCreatedBy] != apiClient.Identity() {
 				protected = append(protected, name)
 				continue
 			}
 		}
-		if err := c.DeleteVolume(ctx, name); err != nil {
+		if err := apiClient.DeleteVolume(ctx, name); err != nil {
 			return wrapErr(err, "volume", name)
 		}
 		if !isJSON(cmd) {
@@ -150,7 +149,6 @@ func volumeExpand(ctx context.Context, cmd *cli.Command) error {
 	if cmd.NArg() < 2 {
 		return fmt.Errorf("usage: volume expand <name> <size|+size>")
 	}
-	c := clientFrom(cmd)
 	name := cmd.Args().Get(0)
 	sizeArg := cmd.Args().Get(1)
 	var size uint64
@@ -159,7 +157,7 @@ func volumeExpand(ctx context.Context, cmd *cli.Command) error {
 		if err != nil {
 			return err
 		}
-		vol, err := c.GetVolume(ctx, name)
+		vol, err := apiClient.GetVolume(ctx, name)
 		if err != nil {
 			return wrapErr(err, "volume", name)
 		}
@@ -178,7 +176,7 @@ func volumeExpand(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 	}
-	resp, err := c.UpdateVolume(ctx, name, v1.VolumeUpdateRequest{SizeBytes: &size})
+	resp, err := apiClient.UpdateVolume(ctx, name, v1.VolumeUpdateRequest{SizeBytes: &size})
 	if err != nil {
 		return wrapErr(err, "volume", name)
 	}
@@ -191,7 +189,7 @@ func volumeClone(ctx context.Context, cmd *cli.Command) error {
 	if cmd.NArg() < 2 {
 		return fmt.Errorf("usage: volume clone <source> <name>")
 	}
-	resp, err := clientFrom(cmd).CloneVolume(ctx, v1.VolumeCloneRequest{Source: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: parseLabelsFlag(cmd)})
+	resp, err := apiClient.CloneVolume(ctx, v1.VolumeCloneRequest{Source: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: parseLabelsFlag(cmd)})
 	if err != nil {
 		return wrapErr(err, "volume", cmd.Args().Get(1))
 	}

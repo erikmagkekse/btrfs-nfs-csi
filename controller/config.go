@@ -3,7 +3,6 @@ package controller
 import "github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 const (
-	controllerIdentity = "k8s"
 	paramAgentURL      = "agentURL"
 	secretAgentToken   = "agentToken"
 

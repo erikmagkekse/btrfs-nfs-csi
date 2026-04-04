@@ -14,7 +14,7 @@ func exportAdd(ctx context.Context, cmd *cli.Command) error {
 	}
 	vol, client := cmd.Args().Get(0), cmd.Args().Get(1)
 	labels := parseLabelsFlag(cmd)
-	if err := clientFrom(cmd).CreateVolumeExport(ctx, vol, client, labels); err != nil {
+	if err := apiClient.CreateVolumeExport(ctx, vol, client, labels); err != nil {
 		return wrapErr(err, "volume", vol)
 	}
 	if !isJSON(cmd) {
@@ -29,7 +29,7 @@ func exportRemove(ctx context.Context, cmd *cli.Command) error {
 	}
 	vol, client := cmd.Args().Get(0), cmd.Args().Get(1)
 	labels := parseLabelsFlag(cmd)
-	if err := clientFrom(cmd).DeleteVolumeExport(ctx, vol, client, labels); err != nil {
+	if err := apiClient.DeleteVolumeExport(ctx, vol, client, labels); err != nil {
 		return wrapErr(err, "volume", vol)
 	}
 	if !isJSON(cmd) {
@@ -38,9 +38,9 @@ func exportRemove(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-func listExports(ctx context.Context, cmd *cli.Command, c *v1.Client, sortBy string, rev bool, opts v1.ListOpts) error {
+func listExports(ctx context.Context, cmd *cli.Command, sortBy string, rev bool, opts v1.ListOpts) error {
 	if isWide(cmd) {
-		resp, err := c.ListVolumeExportsDetail(ctx, opts)
+		resp, err := apiClient.ListVolumeExportsDetail(ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func listExports(ctx context.Context, cmd *cli.Command, c *v1.Client, sortBy str
 			tw.flush()
 		})
 	}
-	resp, err := c.ListVolumeExports(ctx, opts)
+	resp, err := apiClient.ListVolumeExports(ctx, opts)
 	if err != nil {
 		return err
 	}

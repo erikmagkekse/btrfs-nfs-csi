@@ -15,6 +15,9 @@ const (
 	MaxLabels      = 32
 	MaxUserLabels  = 8
 	LabelCreatedBy = "created-by"
+
+	IdentityCLI           = "cli"
+	IdentityK8sController = "k8s"
 )
 
 const (
@@ -22,9 +25,10 @@ const (
 	LabelCloneSourceName = "clone.source.name"
 )
 
-// SoftReservedLabelKeys are set automatically by the system (e.g. clone source tracking).
-// Reserved in the K8s controller (cannot be set via annotations) but allowed via agent API/CLI.
-var SoftReservedLabelKeys = []string{LabelCloneSourceType, LabelCloneSourceName}
+// SoftReservedLabelKeys are managed automatically (identity, clone source tracking).
+// Cannot be set via K8s annotations or CLI flags. Agent API consumers should use v1.Client
+// which handles these automatically.
+var SoftReservedLabelKeys = []string{LabelCreatedBy, LabelCloneSourceType, LabelCloneSourceName}
 
 const (
 	DataDir      = "data"

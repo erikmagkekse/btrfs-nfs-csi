@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/urfave/cli/v3"
@@ -15,9 +16,8 @@ var (
 )
 
 func showStats(ctx context.Context, cmd *cli.Command) error {
-	c := clientFrom(cmd)
 	return runWatch(ctx, cmd, func() error {
-		resp, err := c.Stats(ctx)
+		resp, err := apiClient.Stats(ctx)
 		if err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func showStats(ctx context.Context, cmd *cli.Command) error {
 }
 
 func showHealth(ctx context.Context, cmd *cli.Command) error {
-	resp, err := clientFrom(cmd).Healthz(ctx)
+	resp, err := apiClient.Healthz(ctx)
 	if err != nil {
 		return err
 	}
@@ -89,8 +89,14 @@ func Run(args []string) {
 	app := &cli.Command{
 		Name:  "btrfs-nfs-csi",
 		Usage: "btrfs-nfs-csi agent CLI",
+		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			initClient(cmd)
+			cmdStart = time.Now()
+			return ctx, nil
+		},
 		After: func(ctx context.Context, cmd *cli.Command) error {
-			if !isJSON(cmd) && !cmd.IsSet("watch") {
+			if !isJSON(cmd) && !cmd.IsSet("watch") && cmd.String("columns") == "" {
+				printTiming()
 				fmt.Println()
 			}
 			return nil
@@ -110,6 +116,11 @@ func Run(args []string) {
 				Usage: "show CLI version",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					fmt.Printf("btrfs-nfs-csi %s (%s)\n", Version, Commit)
+					if cmd.Root().String("agent-url") != "" && cmd.Root().String("agent-token") != "" {
+						if h, err := apiClient.Healthz(ctx); err == nil {
+							fmt.Printf("agent         %s (%s)\n", h.Version, h.Commit)
+						}
+					}
 					return nil
 				},
 			},

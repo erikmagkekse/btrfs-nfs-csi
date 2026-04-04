@@ -19,7 +19,6 @@ func volumeCmd() *cli.Command {
 				Usage:   "list all volumes",
 				Flags:   []cli.Flag{sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c := clientFrom(cmd)
 					sortBy := cmd.String("sort")
 					if sortBy == "" {
 						sortBy = sortUsedPct
@@ -27,7 +26,7 @@ func volumeCmd() *cli.Command {
 					rev := !cmd.Bool("asc")
 					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
 					return runWatch(ctx, cmd, func() error {
-						return listVolumes(ctx, cmd, c, sortBy, rev, opts)
+						return listVolumes(ctx, cmd, sortBy, rev, opts)
 					})
 				},
 			},
@@ -92,7 +91,6 @@ func snapshotCmd() *cli.Command {
 				ArgsUsage: "[volume]",
 				Flags:     []cli.Flag{sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c := clientFrom(cmd)
 					sortBy := cmd.String("sort")
 					if sortBy == "" {
 						sortBy = sortCreated
@@ -101,7 +99,7 @@ func snapshotCmd() *cli.Command {
 					vol := cmd.Args().First()
 					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
 					return runWatch(ctx, cmd, func() error {
-						return listSnapshots(ctx, cmd, c, vol, sortBy, rev, opts)
+						return listSnapshots(ctx, cmd, vol, sortBy, rev, opts)
 					})
 				},
 			},
@@ -167,12 +165,11 @@ func exportCmd() *cli.Command {
 				Usage:   "list active NFS exports",
 				Flags:   []cli.Flag{sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c := clientFrom(cmd)
 					sortBy := cmd.String("sort")
 					rev := !cmd.Bool("asc")
 					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
 					return runWatch(ctx, cmd, func() error {
-						return listExports(ctx, cmd, c, sortBy, rev, opts)
+						return listExports(ctx, cmd, sortBy, rev, opts)
 					})
 				},
 			},
@@ -197,11 +194,10 @@ func taskCmd() *cli.Command {
 					watchFlag(),
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c := clientFrom(cmd)
 					taskType := cmd.String("type")
 					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
 					return runWatch(ctx, cmd, func() error {
-						return listTasks(ctx, cmd, c, taskType, opts)
+						return listTasks(ctx, cmd, taskType, opts)
 					})
 				},
 			},

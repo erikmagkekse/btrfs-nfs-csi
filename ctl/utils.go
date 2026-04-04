@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -132,25 +133,11 @@ func parseLabelsFlag(cmd *cli.Command) map[string]string {
 	labels := make(map[string]string, len(raw))
 	for _, pair := range raw {
 		k, v, _ := strings.Cut(pair, "=")
+		if slices.Contains(config.SoftReservedLabelKeys, k) {
+			_, _ = fmt.Fprintf(os.Stderr, "warning: label %q is reserved, skipping\n", k)
+			continue
+		}
 		labels[k] = v
-	}
-	return labels
-}
-
-func cliIdentity() string {
-	if id := os.Getenv("BTRFS_NFS_CSI_IDENTITY"); id != "" {
-		return id
-	}
-	return "cli"
-}
-
-func labelsWithDefault(cmd *cli.Command, key, value string) map[string]string {
-	labels := parseLabelsFlag(cmd)
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-	if _, ok := labels[key]; !ok {
-		labels[key] = value
 	}
 	return labels
 }
@@ -201,10 +188,11 @@ func runWatch(ctx context.Context, cmd *cli.Command, fn func() error) error {
 	defer ticker.Stop()
 	for {
 		fmt.Print("\033[H")
+		start := time.Now()
 		if err := fn(); err != nil {
 			return err
 		}
-		fmt.Printf("\nupdated %s, refresh %s\n", time.Now().Format("15:04:05"), interval)
+		fmt.Fprintf(os.Stderr, "\ntook %s, updated %s, refresh %s\n", fmtDuration(time.Since(start)), time.Now().Format("15:04:05"), interval)
 		fmt.Print("\033[J")
 		select {
 		case <-ctx.Done():
@@ -400,8 +388,17 @@ func sortExportsDetailList(exports []v1.ExportDetailResponse, field string, reve
 	})
 }
 
-func clientFrom(cmd *cli.Command) *v1.Client {
-	return v1.NewClient(cmd.Root().String("agent-url"), cmd.Root().String("agent-token"))
+var (
+	apiClient *v1.Client
+	cmdStart  time.Time
+)
+
+func initClient(cmd *cli.Command) {
+	apiClient = v1.NewClient(cmd.Root().String("agent-url"), cmd.Root().String("agent-token"), config.IdentityCLI)
+}
+
+func printTiming() {
+	fmt.Fprintf(os.Stderr, "took %s, %s\n", fmtDuration(time.Since(cmdStart)), time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func outputFormat(cmd *cli.Command) string {
