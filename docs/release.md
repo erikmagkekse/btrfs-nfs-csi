@@ -6,10 +6,11 @@
 |--------|---------|
 | `main` | Stable releases |
 | `edge` | Development, pre-release testing |
+| `release/vX.Y.Z` | Release preparation (PR to `main`) |
 
 ## CI Pipeline
 
-PRs against `main` or `edge` run the CI workflow:
+PRs to `edge` and PRs from `release/*` branches to `main` run the CI workflow:
 
 ```
 ci.yml (Go code, Containerfile, VERSION changes)
@@ -30,7 +31,8 @@ When a PR is merged to `edge`, the edge-build workflow pushes the `:edge` image.
 
 | Event | Container Image | Helm Chart |
 |-------|----------------|------------|
-| PR to `edge`/`main` | build check (no push) | lint only |
+| PR to `edge` | build check (no push) | lint only |
+| PR `release/vX.Y.Z` to `main` | build check (no push) | lint only |
 | PR merged to `edge` | `:edge` (rolling, amd64) | not published |
 | Tag `v0.10.0-edge` on `edge` | `:0.10.0-edge` (amd64 + arm64) | `0.1.2-edge` |
 | Tag `v0.10.0` on `main` | `:0.10.0` (amd64 + arm64) | `0.1.2` |

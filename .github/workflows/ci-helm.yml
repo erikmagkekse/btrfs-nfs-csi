@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   lint:
+    if: github.base_ref == 'edge' || startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
