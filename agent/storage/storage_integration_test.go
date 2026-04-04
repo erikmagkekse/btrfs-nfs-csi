@@ -346,21 +346,22 @@ func (s *StorageIntegrationSuite) TestExportMetadataPersistence() {
 	exporter.On("Unexport", mock.Anything, volDir, "10.0.0.1").Return(nil)
 
 	// Export
-	err = s.storage.ExportVolume(s.ctx, "test", "export-vol", "10.0.0.1")
+	err = s.storage.CreateVolumeExport(s.ctx, "test", "export-vol", "10.0.0.1", nil)
 	s.Require().NoError(err)
 
 	var meta VolumeMetadata
 	readTestJSON(s.T(), filepath.Join(volDir, config.MetadataFile), &meta)
-	s.Assert().Contains(meta.Clients, "10.0.0.1")
+	s.Require().Len(meta.Exports, 1)
+	s.Assert().Equal("10.0.0.1", meta.Exports[0].IP)
 	s.Assert().NotNil(meta.LastAttachAt)
 
 	// Unexport
-	err = s.storage.UnexportVolume(s.ctx, "test", "export-vol", "10.0.0.1")
+	err = s.storage.DeleteVolumeExport(s.ctx, "test", "export-vol", "10.0.0.1", nil)
 	s.Require().NoError(err)
 
 	var afterUnexport VolumeMetadata
 	readTestJSON(s.T(), filepath.Join(volDir, config.MetadataFile), &afterUnexport)
-	s.Assert().NotContains(afterUnexport.Clients, "10.0.0.1")
+	s.Assert().Empty(afterUnexport.Exports)
 
 	exporter.AssertExpectations(s.T())
 

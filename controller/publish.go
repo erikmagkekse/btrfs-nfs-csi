@@ -5,6 +5,7 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
@@ -60,7 +61,13 @@ func (s *Server) ControllerPublishVolume(ctx context.Context, req *csi.Controlle
 	exportCtx, cancel := context.WithTimeout(ctx, exportTimeout)
 	defer cancel()
 	start := time.Now()
-	if err := client.ExportVolume(exportCtx, name, nodeIP); err != nil {
+	exportLabels := map[string]string{
+		config.LabelCreatedBy:              "k8s",
+		config.LabelKubernetesNodeName:     parseNodeHostname(req.NodeId),
+		config.LabelKubernetesVolumeID:     name,
+		config.LabelKubernetesStorageClass: sc,
+	}
+	if err := client.CreateVolumeExport(exportCtx, name, nodeIP, exportLabels); err != nil {
 		agentDuration.WithLabelValues("export", sc).Observe(time.Since(start).Seconds())
 		agentOpsTotal.WithLabelValues("export", "error", sc).Inc()
 		return nil, status.Errorf(codes.Internal, "export volume %s to node %s via %s: %v", name, nodeIP, sc, err)
@@ -99,7 +106,12 @@ func (s *Server) ControllerUnpublishVolume(ctx context.Context, req *csi.Control
 	unexportCtx, cancel2 := context.WithTimeout(ctx, exportTimeout)
 	defer cancel2()
 	start2 := time.Now()
-	unexportErr := client.UnexportVolume(unexportCtx, name, nodeIP)
+	unexportLabels := map[string]string{
+		config.LabelKubernetesNodeName:     parseNodeHostname(req.NodeId),
+		config.LabelKubernetesVolumeID:     name,
+		config.LabelKubernetesStorageClass: sc,
+	}
+	unexportErr := client.DeleteVolumeExport(unexportCtx, name, nodeIP, unexportLabels)
 	agentDuration.WithLabelValues("unexport", sc).Observe(time.Since(start2).Seconds())
 	if unexportErr != nil {
 		if agentAPI.IsNotFound(unexportErr) {

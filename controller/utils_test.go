@@ -95,3 +95,9 @@ func TestParseNodeIP(t *testing.T) {
 		})
 	}
 }
+
+func TestParseNodeHostname(t *testing.T) {
+	assert.Equal(t, "worker-1", parseNodeHostname("worker-1|10.0.0.1"))
+	assert.Equal(t, "node", parseNodeHostname("node|"))
+	assert.Equal(t, "single", parseNodeHostname("single"))
+}

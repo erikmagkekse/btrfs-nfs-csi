@@ -25,6 +25,9 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	if err := validateLabels(req.Labels); err != nil {
 		return nil, err
 	}
+	if err := requireImmutableLabels(s.immutableLabelKeys,req.Labels); err != nil {
+		return nil, err
+	}
 	volMeta, err := s.volumes.Get(tenant, req.Volume)
 	if err != nil {
 		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source volume %q not found", req.Volume)}

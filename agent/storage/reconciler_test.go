@@ -72,11 +72,11 @@ func TestReconcileExports(t *testing.T) {
 		require.NoError(t, os.MkdirAll(vol2, 0o755))
 		writeTestMetadata(t, s, vol1, VolumeMetadata{
 			Name:    "vol1",
-			Clients: []string{"10.0.0.1", "10.0.0.2"},
+			Exports: []ExportMetadata{{IP: "10.0.0.1"}, {IP: "10.0.0.2"}},
 		})
 		writeTestMetadata(t, s, vol2, VolumeMetadata{
 			Name:    "vol2",
-			Clients: []string{"10.0.0.3"},
+			Exports: []ExportMetadata{{IP: "10.0.0.3"}},
 		})
 
 		exporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{
@@ -101,7 +101,7 @@ func TestReconcileExports(t *testing.T) {
 		require.NoError(t, os.MkdirAll(healthy, 0o755))
 		writeTestMetadata(t, s, healthy, VolumeMetadata{
 			Name:    "healthy",
-			Clients: []string{"10.0.0.1"},
+			Exports: []ExportMetadata{{IP: "10.0.0.1"}},
 		})
 
 		deletedPath := filepath.Join(bp, "deleted-vol")
@@ -128,14 +128,14 @@ func TestReconcileExports(t *testing.T) {
 		require.NoError(t, os.MkdirAll(vol1, 0o755))
 		writeTestMetadata(t, s, vol1, VolumeMetadata{
 			Name:    "vol1",
-			Clients: []string{"10.0.0.1", "10.0.0.2"},
+			Exports: []ExportMetadata{{IP: "10.0.0.1"}, {IP: "10.0.0.2"}},
 		})
 
 		vol2 := filepath.Join(bp, "vol2")
 		require.NoError(t, os.MkdirAll(vol2, 0o755))
 		writeTestMetadata(t, s, vol2, VolumeMetadata{
 			Name:    "vol2",
-			Clients: []string{"10.0.0.3"},
+			Exports: []ExportMetadata{{IP: "10.0.0.3"}},
 		})
 
 		exporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{
@@ -159,7 +159,7 @@ func TestReconcileExports(t *testing.T) {
 		require.NoError(t, os.MkdirAll(healthy, 0o755))
 		writeTestMetadata(t, s, healthy, VolumeMetadata{
 			Name:    "healthy",
-			Clients: []string{"10.0.0.10"},
+			Exports: []ExportMetadata{{IP: "10.0.0.10"}},
 		})
 
 		orphan1 := filepath.Join(bp, "orphan1")
@@ -199,7 +199,7 @@ func TestReconcileExports(t *testing.T) {
 		require.NoError(t, os.MkdirAll(healthy, 0o755))
 		writeTestMetadata(t, s, healthy, VolumeMetadata{
 			Name:    "healthy",
-			Clients: []string{"10.0.0.1"},
+			Exports: []ExportMetadata{{IP: "10.0.0.1"}},
 		})
 
 		exporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{}, nil)
@@ -220,7 +220,7 @@ func TestReconcileExports(t *testing.T) {
 		require.NoError(t, os.MkdirAll(vol1, 0o755))
 		writeTestMetadata(t, s, vol1, VolumeMetadata{
 			Name:    "vol1",
-			Clients: []string{"10.0.0.1"},
+			Exports: []ExportMetadata{{IP: "10.0.0.1"}},
 		})
 
 		exporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{

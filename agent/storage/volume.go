@@ -37,6 +37,9 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	if err := validateLabels(req.Labels); err != nil {
 		return nil, err
 	}
+	if err := requireImmutableLabels(s.immutableLabelKeys,req.Labels); err != nil {
+		return nil, err
+	}
 	if req.Mode == "" {
 		req.Mode = s.defaultDataMode
 	}
@@ -196,6 +199,9 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		if err := validateLabels(*req.Labels); err != nil {
 			return nil, err
 		}
+		if err := protectImmutableLabels(s.immutableLabelKeys, cur.Labels, *req.Labels); err != nil {
+			return nil, err
+		}
 	}
 	if req.SizeBytes != nil && *req.SizeBytes <= cur.SizeBytes {
 		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("new size %d must be larger than current size %d", *req.SizeBytes, cur.SizeBytes)}
@@ -309,6 +315,9 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	if err := validateLabels(req.Labels); err != nil {
 		return nil, err
 	}
+	if err := requireImmutableLabels(s.immutableLabelKeys,req.Labels); err != nil {
+		return nil, err
+	}
 
 	src, err := s.GetVolume(tenant, req.Source)
 	if err != nil {
@@ -394,7 +403,7 @@ func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 		}
 		return fmt.Errorf("failed to read volume metadata: %w", err)
 	}
-	if len(meta.Clients) > 0 {
+	if len(meta.Exports) > 0 {
 		return &StorageError{Code: ErrBusy, Message: fmt.Sprintf("volume %q still has active NFS exports", name)}
 	}
 

@@ -74,13 +74,13 @@ func (s *Storage) reconcileExports(ctx context.Context, tenant string) {
 		}
 		volDir := s.volumes.Dir(tenant, name)
 		actual := actualExports[volDir]
-		for _, client := range meta.Clients {
-			if actual != nil && actual[client] {
+		for _, ip := range uniqueExportIPs(meta.Exports) {
+			if actual != nil && actual[ip] {
 				continue
 			}
-			log.Warn().Str("path", volDir).Str("client", client).Msg("nfs reconciler: re-exporting missing export")
-			if err := s.exporter.Export(ctx, volDir, client); err != nil {
-				log.Error().Err(err).Str("path", volDir).Str("client", client).Msg("nfs reconciler: failed to re-export")
+			log.Warn().Str("path", volDir).Str("client", ip).Msg("nfs reconciler: re-exporting missing export")
+			if err := s.exporter.Export(ctx, volDir, ip); err != nil {
+				log.Error().Err(err).Str("path", volDir).Str("client", ip).Msg("nfs reconciler: failed to re-export")
 				continue
 			}
 			restored++

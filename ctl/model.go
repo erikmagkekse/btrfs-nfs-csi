@@ -150,6 +150,7 @@ func exportCmd() *cli.Command {
 				Name:      "add",
 				Usage:     "add NFS export",
 				ArgsUsage: "<volume> <client-ip>",
+				Flags:     []cli.Flag{labelFlag()},
 				Action:    exportAdd,
 			},
 			{
@@ -157,14 +158,23 @@ func exportCmd() *cli.Command {
 				Aliases:   []string{"rm"},
 				Usage:     "remove NFS export",
 				ArgsUsage: "<volume> <client-ip>",
+				Flags:     []cli.Flag{labelFlag()},
 				Action:    exportRemove,
 			},
 			{
 				Name:    "list",
 				Aliases: []string{"ls"},
 				Usage:   "list active NFS exports",
-				Flags:   []cli.Flag{columnsFlag(), watchFlag()},
-				Action:  exportList,
+				Flags:   []cli.Flag{sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c := clientFrom(cmd)
+					sortBy := cmd.String("sort")
+					rev := !cmd.Bool("asc")
+					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
+					return runWatch(ctx, cmd, func() error {
+						return listExports(ctx, cmd, c, sortBy, rev, opts)
+					})
+				},
 			},
 		},
 	}

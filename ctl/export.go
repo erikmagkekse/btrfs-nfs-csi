@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/urfave/cli/v3"
 )
 
@@ -12,7 +13,8 @@ func exportAdd(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("usage: export add <volume> <client-ip>")
 	}
 	vol, client := cmd.Args().Get(0), cmd.Args().Get(1)
-	if err := clientFrom(cmd).ExportVolume(ctx, vol, client); err != nil {
+	labels := parseLabelsFlag(cmd)
+	if err := clientFrom(cmd).CreateVolumeExport(ctx, vol, client, labels); err != nil {
 		return wrapErr(err, "volume", vol)
 	}
 	if !isJSON(cmd) {
@@ -26,7 +28,8 @@ func exportRemove(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("usage: export remove <volume> <client-ip>")
 	}
 	vol, client := cmd.Args().Get(0), cmd.Args().Get(1)
-	if err := clientFrom(cmd).UnexportVolume(ctx, vol, client); err != nil {
+	labels := parseLabelsFlag(cmd)
+	if err := clientFrom(cmd).DeleteVolumeExport(ctx, vol, client, labels); err != nil {
 		return wrapErr(err, "volume", vol)
 	}
 	if !isJSON(cmd) {
@@ -35,20 +38,50 @@ func exportRemove(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-func exportList(ctx context.Context, cmd *cli.Command) error {
-	c := clientFrom(cmd)
-	return runWatch(ctx, cmd, func() error {
-		resp, err := c.ListExports(ctx)
+func listExports(ctx context.Context, cmd *cli.Command, c *v1.Client, sortBy string, rev bool, opts v1.ListOpts) error {
+	if isWide(cmd) {
+		resp, err := c.ListVolumeExportsDetail(ctx, opts)
 		if err != nil {
 			return err
 		}
+		sortExportsDetailList(resp.Exports, sortBy, rev)
 		return output(cmd, resp, func() {
-			tw := newTableWriter(cmd, []string{"PATH", "CLIENT"})
+			tw := newTableWriter(cmd, []string{"NAME", "CLIENT", "LABELS", "CREATED"})
 			tw.writeHeader()
 			for _, e := range resp.Exports {
-				tw.writeRow(map[string]string{"PATH": e.Path, "CLIENT": e.Client})
+				created := ""
+				if !e.CreatedAt.IsZero() {
+					created = e.CreatedAt.Format(timeFmt)
+				}
+				tw.writeRow(map[string]string{
+					"NAME":    e.Name,
+					"CLIENT":  e.Client,
+					"LABELS":  formatLabelsShort(e.Labels),
+					"CREATED": created,
+				})
 			}
 			tw.flush()
 		})
+	}
+	resp, err := c.ListVolumeExports(ctx, opts)
+	if err != nil {
+		return err
+	}
+	sortExportsList(resp.Exports, sortBy, rev)
+	return output(cmd, resp, func() {
+		tw := newTableWriter(cmd, []string{"NAME", "CLIENT", "CREATED"})
+		tw.writeHeader()
+		for _, e := range resp.Exports {
+			created := ""
+			if !e.CreatedAt.IsZero() {
+				created = e.CreatedAt.Format(timeFmt)
+			}
+			tw.writeRow(map[string]string{
+				"NAME":    e.Name,
+				"CLIENT":  e.Client,
+				"CREATED": created,
+			})
+		}
+		tw.flush()
 	})
 }

@@ -5,37 +5,38 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
-func (s *Storage) ExportVolume(ctx context.Context, tenant, name, client string) error {
+func (s *Storage) CreateVolumeExport(ctx context.Context, tenant, name, client string, labels map[string]string) error {
 	if _, err := s.tenantPath(tenant); err != nil {
 		return err
 	}
 	if err := validateName(name); err != nil {
 		return err
 	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
+	if err := requireImmutableLabels(s.immutableLabelKeys,labels); err != nil {
+		return err
+	}
 
 	volDir := s.volumes.Dir(tenant, name)
 
 	// metadata first - if export fails, reconciler will re-export
+	var firstRef bool
 	if _, err := s.volumes.Update(tenant, name, func(meta *VolumeMetadata) {
-		found := false
-		for _, c := range meta.Clients {
-			if c == client {
-				found = true
-				break
-			}
-		}
 		now := time.Now().UTC()
 		meta.LastAttachAt = &now
 		meta.UpdatedAt = now
-		if !found {
-			meta.Clients = append(meta.Clients, client)
+		if hasExport(meta.Exports, client, labels) {
+			return
 		}
+		firstRef = exportsForIP(meta.Exports, client) == 0
+		meta.Exports = append(meta.Exports, ExportMetadata{IP: client, Labels: labels, CreatedAt: now})
 	}); err != nil {
 		if os.IsNotExist(err) {
 			return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("volume %q not found", name)}
@@ -44,34 +45,50 @@ func (s *Storage) ExportVolume(ctx context.Context, tenant, name, client string)
 		return fmt.Errorf("failed to persist client in metadata: %w", err)
 	}
 
-	if err := s.exporter.Export(ctx, volDir, client); err != nil {
-		log.Error().Err(err).Str("name", name).Str("client", client).Msg("failed to export, reconciler will retry")
-		return fmt.Errorf("nfs export failed: %w", err)
+	if firstRef {
+		if err := s.exporter.Export(ctx, volDir, client); err != nil {
+			log.Error().Err(err).Str("name", name).Str("client", client).Msg("failed to export, reconciler will retry")
+			return fmt.Errorf("nfs export failed: %w", err)
+		}
 	}
 
 	log.Info().Str("tenant", tenant).Str("name", name).Str("client", client).Msg("NFS export added")
 	return nil
 }
 
-func (s *Storage) UnexportVolume(ctx context.Context, tenant, name, client string) error {
+func (s *Storage) DeleteVolumeExport(ctx context.Context, tenant, name, client string, labels map[string]string) error {
 	if _, err := s.tenantPath(tenant); err != nil {
 		return err
 	}
 	if err := validateName(name); err != nil {
 		return err
 	}
+	if err := validateLabels(labels); err != nil {
+		return err
+	}
 
 	volDir := s.volumes.Dir(tenant, name)
 
 	// metadata first - if unexport fails, reconciler will clean up
+	var lastRef bool
 	if _, err := s.volumes.Update(tenant, name, func(meta *VolumeMetadata) {
-		filtered := meta.Clients[:0]
-		for _, c := range meta.Clients {
-			if c != client {
+		var removed bool
+		filtered := meta.Exports[:0]
+		for _, c := range meta.Exports {
+			if c.IP != client {
 				filtered = append(filtered, c)
+				continue
+			}
+			// labels == nil: remove all refs for this IP
+			// labels != nil: remove only matching entry
+			if labels != nil && !labelsContain(c.Labels, labels) {
+				filtered = append(filtered, c)
+			} else {
+				removed = true
 			}
 		}
-		meta.Clients = filtered
+		meta.Exports = filtered
+		lastRef = removed && exportsForIP(filtered, client) == 0
 		meta.UpdatedAt = time.Now().UTC()
 	}); err != nil {
 		if os.IsNotExist(err) {
@@ -81,46 +98,39 @@ func (s *Storage) UnexportVolume(ctx context.Context, tenant, name, client strin
 		return fmt.Errorf("failed to update client list in metadata: %w", err)
 	}
 
-	if err := s.exporter.Unexport(ctx, volDir, client); err != nil {
-		log.Error().Err(err).Str("name", name).Str("client", client).Msg("failed to unexport, reconciler will clean up")
-		return fmt.Errorf("nfs unexport failed: %w", err)
+	if lastRef {
+		if err := s.exporter.Unexport(ctx, volDir, client); err != nil {
+			log.Error().Err(err).Str("name", name).Str("client", client).Msg("failed to unexport, reconciler will clean up")
+			return fmt.Errorf("nfs unexport failed: %w", err)
+		}
 	}
 
 	log.Info().Str("tenant", tenant).Str("name", name).Str("client", client).Msg("NFS export removed")
 	return nil
 }
 
-func (s *Storage) ListExports(ctx context.Context, tenant string) ([]ExportEntry, error) {
-	bp, err := s.tenantPath(tenant)
-	if err != nil {
+func (s *Storage) ListVolumeExportsPaginated(tenant, after string, limit int) (*PaginatedResult[ExportEntry], error) {
+	if _, err := s.tenantPath(tenant); err != nil {
 		return nil, err
-	}
-
-	exports, err := s.exporter.ListExports(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list exports failed: %w", err)
 	}
 
 	var entries []ExportEntry
-	for _, e := range exports {
-		if strings.HasPrefix(e.Path, bp+"/") {
-			entries = append(entries, ExportEntry{Path: e.Path, Client: e.Client})
+	s.volumes.Range(func(t, name string, meta *VolumeMetadata) bool {
+		if t != tenant {
+			return true
 		}
-	}
-	log.Debug().Str("tenant", tenant).Int("count", len(entries)).Msg("exports listed")
-	return entries, nil
-}
-
-func (s *Storage) ListExportsPaginated(ctx context.Context, tenant, after string, limit int) (*PaginatedResult[ExportEntry], error) {
-	entries, err := s.ListExports(ctx, tenant)
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Path != entries[j].Path {
-			return entries[i].Path < entries[j].Path
+		for _, c := range meta.Exports {
+			entries = append(entries, ExportEntry{
+				Name:      name,
+				Client:    c.IP,
+				Labels:    c.Labels,
+				CreatedAt: c.CreatedAt,
+			})
 		}
-		return entries[i].Client < entries[j].Client
+		return true
 	})
-	return paginateSlice(entries, func(e ExportEntry) string { return e.Path + "|" + e.Client }, after, limit), nil
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].CreatedAt.After(entries[j].CreatedAt)
+	})
+	return paginateSlice(entries, func(e ExportEntry) string { return e.Name + "|" + e.Client }, after, limit), nil
 }
