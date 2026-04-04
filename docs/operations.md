@@ -212,7 +212,8 @@ Description=btrfs scrub via CSI agent
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/default/btrfs-nfs-csi
-ExecStart=btrfs-nfs-csi task create scrub --label created-by=systemd-timer --wait
+Environment=AGENT_CSI_IDENTITY=systemd-timer
+ExecStart=btrfs-nfs-csi task create scrub --wait
 ```
 
 ```ini
@@ -288,7 +289,6 @@ btrfs-nfs-csi task get <id>
 btrfs-nfs-csi task cancel <id>
 btrfs-nfs-csi task create scrub
 btrfs-nfs-csi task create scrub -W           # wait for completion
-btrfs-nfs-csi task create scrub --label created-by=cron
 btrfs-nfs-csi task create test
 btrfs-nfs-csi task create test --sleep 10s -W
 btrfs-nfs-csi stats
@@ -312,8 +312,8 @@ btrfs-nfs-csi version
 
 **Size values:** Supports `Ki`, `Mi`, `Gi` (binary) and `K`, `M`, `G` (decimal). `volume expand` accepts relative sizes with `+`/`-` prefix.
 
-**Delete protection:** Volumes and snapshots with `created-by` != caller identity are protected. Only `--confirm --yes` or `BTRFS_NFS_CSI_FORCE=true` bypasses this. The caller identity defaults to `cli` and can be set via `BTRFS_NFS_CSI_IDENTITY`.
+**Delete protection:** Volumes and snapshots with `created-by` != caller identity are protected. Only `--confirm --yes` or `BTRFS_NFS_CSI_FORCE=true` bypasses this. The caller identity defaults to `cli` and can be set via `AGENT_CSI_IDENTITY`.
 
-**Default labels:** CLI create commands automatically add `created-by=<identity>` (default `cli`). `created-by` is a reserved label and cannot be overridden via PVC annotations.
+**Default labels:** Every create command automatically adds `created-by=<identity>` (default `cli`). The `created-by` label cannot be set via `--label` flag or PVC annotations.
 
 **Command aliases:** `volumes`/`vol`, `snapshots`/`snap`, `tasks`, `exports`. `list`/`ls` interchangeable.

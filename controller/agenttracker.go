@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentAPI "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +16,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Just a prive thinggy here
 type agentInfo struct {
 	scName   string
 	agentURL string
@@ -54,6 +54,15 @@ func (t *AgentTracker) Track(url string, client *agentAPI.Client) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.agents[url] = client
+}
+
+func (t *AgentTracker) Client(scName string) *agentAPI.Client {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if url, ok := t.scToURL[scName]; ok {
+		return t.agents[url]
+	}
+	return nil
 }
 
 func (t *AgentTracker) Agents() map[string]*agentAPI.Client {
@@ -149,7 +158,7 @@ func (t *AgentTracker) discoverFromStorageClasses(ctx context.Context) {
 		known[a.agentURL] = true
 
 		if _, exists := t.agents[a.agentURL]; !exists {
-			t.agents[a.agentURL] = agentAPI.NewClient(a.agentURL, a.token)
+			t.agents[a.agentURL] = agentAPI.NewClient(a.agentURL, a.token, config.IdentityK8sController)
 			log.Info().Str("agent", a.agentURL).Str("sc", a.scName).Msg("discovered agent from StorageClass")
 		}
 	}

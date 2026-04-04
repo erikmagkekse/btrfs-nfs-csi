@@ -3,9 +3,8 @@ package controller
 import "github.com/erikmagkekse/btrfs-nfs-csi/csiserver"
 
 const (
-	controllerIdentity = "k8s"
-	paramAgentURL      = "agentURL"
-	secretAgentToken   = "agentToken"
+	paramAgentURL    = "agentURL"
+	secretAgentToken = "agentToken"
 
 	// Volume labels (set on agent volumes from PVC metadata)
 	labelPVCName         = "kubernetes.pvc.name"

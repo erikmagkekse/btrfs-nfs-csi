@@ -12,14 +12,14 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func listSnapshots(ctx context.Context, cmd *cli.Command, c *v1.Client, vol, sortBy string, rev bool, opts v1.ListOpts) error {
+func listSnapshots(ctx context.Context, cmd *cli.Command, vol, sortBy string, rev bool, opts v1.ListOpts) error {
 	if isWide(cmd) {
 		var resp *v1.SnapshotDetailListResponse
 		var err error
 		if vol != "" {
-			resp, err = c.ListVolumeSnapshotsDetail(ctx, vol, opts)
+			resp, err = apiClient.ListVolumeSnapshotsDetail(ctx, vol, opts)
 		} else {
-			resp, err = c.ListSnapshotsDetail(ctx, opts)
+			resp, err = apiClient.ListSnapshotsDetail(ctx, opts)
 		}
 		if err != nil {
 			return err
@@ -41,9 +41,9 @@ func listSnapshots(ctx context.Context, cmd *cli.Command, c *v1.Client, vol, sor
 	var resp *v1.SnapshotListResponse
 	var err error
 	if vol != "" {
-		resp, err = c.ListVolumeSnapshots(ctx, vol, opts)
+		resp, err = apiClient.ListVolumeSnapshots(ctx, vol, opts)
 	} else {
-		resp, err = c.ListSnapshots(ctx, opts)
+		resp, err = apiClient.ListSnapshots(ctx, opts)
 	}
 	if err != nil {
 		return err
@@ -67,7 +67,7 @@ func snapshotGet(ctx context.Context, cmd *cli.Command) error {
 	if name == "" {
 		return fmt.Errorf("snapshot name required")
 	}
-	resp, err := clientFrom(cmd).GetSnapshot(ctx, name)
+	resp, err := apiClient.GetSnapshot(ctx, name)
 	if err != nil {
 		return wrapErr(err, "snapshot", name)
 	}
@@ -88,7 +88,7 @@ func snapshotCreate(ctx context.Context, cmd *cli.Command) error {
 	if cmd.NArg() < 2 {
 		return fmt.Errorf("usage: snapshot create <volume> <name>")
 	}
-	resp, err := clientFrom(cmd).CreateSnapshot(ctx, v1.SnapshotCreateRequest{Volume: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: labelsWithDefault(cmd, config.LabelCreatedBy, cliIdentity())})
+	resp, err := apiClient.CreateSnapshot(ctx, v1.SnapshotCreateRequest{Volume: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: parseLabelsFlag(cmd)})
 	if err != nil {
 		return wrapErr(err, "snapshot", cmd.Args().Get(1))
 	}
@@ -102,20 +102,19 @@ func snapshotDelete(ctx context.Context, cmd *cli.Command) error {
 	}
 	force := os.Getenv("BTRFS_NFS_CSI_FORCE") == "true"
 	confirmed := force || (cmd.Bool("confirm") && cmd.Bool("yes"))
-	c := clientFrom(cmd)
 	var protected []string
 	for _, name := range names {
 		if !confirmed {
-			snap, err := c.GetSnapshot(ctx, name)
+			snap, err := apiClient.GetSnapshot(ctx, name)
 			if err != nil {
 				return wrapErr(err, "snapshot", name)
 			}
-			if snap.Labels[config.LabelCreatedBy] != cliIdentity() {
+			if snap.Labels[config.LabelCreatedBy] != apiClient.Identity() {
 				protected = append(protected, name)
 				continue
 			}
 		}
-		if err := c.DeleteSnapshot(ctx, name); err != nil {
+		if err := apiClient.DeleteSnapshot(ctx, name); err != nil {
 			return wrapErr(err, "snapshot", name)
 		}
 		if !isJSON(cmd) {
@@ -132,7 +131,7 @@ func snapshotClone(ctx context.Context, cmd *cli.Command) error {
 	if cmd.NArg() < 2 {
 		return fmt.Errorf("usage: snapshot clone <snapshot> <name>")
 	}
-	resp, err := clientFrom(cmd).CreateClone(ctx, v1.CloneCreateRequest{Snapshot: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: parseLabelsFlag(cmd)})
+	resp, err := apiClient.CreateClone(ctx, v1.CloneCreateRequest{Snapshot: cmd.Args().Get(0), Name: cmd.Args().Get(1), Labels: parseLabelsFlag(cmd)})
 	if err != nil {
 		return wrapErr(err, "clone", cmd.Args().Get(1))
 	}

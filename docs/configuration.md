@@ -29,13 +29,22 @@
 | `AGENT_TASK_POLL_INTERVAL` | `5s` | Progress update interval for background tasks |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 
+## API Client Environment Variables
+
+Shared by CLI and controller (any `v1.Client` user).
+
+| Variable | Default | Description |
+|---|---|---|
+| `AGENT_CSI_IDENTITY` | `cli` (CLI), `k8s` (controller) | Caller identity for `created-by` label, injected automatically on every create |
+| `AGENT_HTTP_CLIENT_TIMEOUT` | `30s` | API request timeout (Go duration) |
+| `AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY` | `false` | Skip TLS certificate verification |
+
 ## CLI Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `AGENT_URL` | - | Agent API URL |
 | `AGENT_TOKEN` | - | Tenant token |
-| `BTRFS_NFS_CSI_IDENTITY` | `cli` | Caller identity for `created-by` label |
 | `BTRFS_NFS_CSI_FORCE` | `false` | Skip delete protection when `true` |
 
 Also configurable via `--agent-url` and `--agent-token` flags.
@@ -168,3 +177,5 @@ stringData:
 ## TLS
 
 Set `AGENT_TLS_CERT` + `AGENT_TLS_KEY` → agent listens HTTPS (min TLS 1.2). Use `https://` in `agentURL`.
+
+For self-signed certificates, set `AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY=true`.

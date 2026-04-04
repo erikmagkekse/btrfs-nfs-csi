@@ -10,7 +10,6 @@ import (
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/urfave/cli/v3"
 )
@@ -103,9 +102,9 @@ func taskTimeout(t string) string {
 	return "-"
 }
 
-func listTasks(ctx context.Context, cmd *cli.Command, c *v1.Client, taskType string, opts v1.ListOpts) error {
+func listTasks(ctx context.Context, cmd *cli.Command, taskType string, opts v1.ListOpts) error {
 	if isWide(cmd) {
-		resp, err := c.ListTasksDetail(ctx, taskType, opts)
+		resp, err := apiClient.ListTasksDetail(ctx, taskType, opts)
 		if err != nil {
 			return err
 		}
@@ -133,7 +132,7 @@ func listTasks(ctx context.Context, cmd *cli.Command, c *v1.Client, taskType str
 			tw.flush()
 		})
 	}
-	resp, err := c.ListTasks(ctx, taskType, opts)
+	resp, err := apiClient.ListTasks(ctx, taskType, opts)
 	if err != nil {
 		return err
 	}
@@ -159,7 +158,7 @@ func taskGet(ctx context.Context, cmd *cli.Command) error {
 	if id == "" {
 		return fmt.Errorf("task ID required")
 	}
-	resp, err := clientFrom(cmd).GetTask(ctx, id)
+	resp, err := apiClient.GetTask(ctx, id)
 	if err != nil {
 		return wrapErr(err, "task", id)
 	}
@@ -201,7 +200,7 @@ func taskCancel(ctx context.Context, cmd *cli.Command) error {
 	if id == "" {
 		return fmt.Errorf("task ID required")
 	}
-	if err := clientFrom(cmd).CancelTask(ctx, id); err != nil {
+	if err := apiClient.CancelTask(ctx, id); err != nil {
 		return wrapErr(err, "task", id)
 	}
 	if !isJSON(cmd) {
@@ -211,12 +210,11 @@ func taskCancel(ctx context.Context, cmd *cli.Command) error {
 }
 
 func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
-	c := clientFrom(cmd)
-	req := v1.TaskCreateRequest{Labels: labelsWithDefault(cmd, config.LabelCreatedBy, cliIdentity())}
+	req := v1.TaskCreateRequest{Labels: parseLabelsFlag(cmd)}
 	if t := cmd.Duration("timeout"); t > 0 {
 		req.Timeout = t.String()
 	}
-	resp, err := c.CreateTask(ctx, v1.TaskTypeScrub, req)
+	resp, err := apiClient.CreateTask(ctx, v1.TaskTypeScrub, req)
 	if err != nil {
 		return err
 	}
@@ -226,19 +224,18 @@ func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
 		})
 	}
 	fmt.Printf("scrub started (task %s)\n", resp.TaskID)
-	return waitForTask(ctx, c, resp.TaskID)
+	return waitForTask(ctx, resp.TaskID)
 }
 
 func taskCreateTest(ctx context.Context, cmd *cli.Command) error {
-	c := clientFrom(cmd)
-	req := v1.TaskCreateRequest{Labels: labelsWithDefault(cmd, config.LabelCreatedBy, cliIdentity())}
+	req := v1.TaskCreateRequest{Labels: parseLabelsFlag(cmd)}
 	if s := cmd.Duration("sleep"); s > 0 {
 		req.Opts = map[string]string{"sleep": s.String()}
 	}
 	if t := cmd.Duration("timeout"); t > 0 {
 		req.Timeout = t.String()
 	}
-	resp, err := c.CreateTask(ctx, v1.TaskTypeTest, req)
+	resp, err := apiClient.CreateTask(ctx, v1.TaskTypeTest, req)
 	if err != nil {
 		return err
 	}
@@ -248,10 +245,10 @@ func taskCreateTest(ctx context.Context, cmd *cli.Command) error {
 		})
 	}
 	fmt.Printf("test task started (task %s)\n", resp.TaskID)
-	return waitForTask(ctx, c, resp.TaskID)
+	return waitForTask(ctx, resp.TaskID)
 }
 
-func waitForTask(ctx context.Context, c *v1.Client, id string) error {
+func waitForTask(ctx context.Context, id string) error {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -259,7 +256,7 @@ func waitForTask(ctx context.Context, c *v1.Client, id string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			t, err := c.GetTask(ctx, id)
+			t, err := apiClient.GetTask(ctx, id)
 			if err != nil {
 				return wrapErr(err, "task", id)
 			}

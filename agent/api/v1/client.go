@@ -3,13 +3,18 @@ package v1
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
+
+	env "github.com/caarlos0/env/v11"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 )
 
 func generateLabelQuery(labels []string) url.Values {
@@ -37,23 +42,64 @@ func (o ListOpts) query() url.Values {
 	return q
 }
 
-type Client struct {
-	url   string
-	token string
-	http  *http.Client
+const DefaultTimeout = 30 * time.Second
+
+type ClientConfig struct {
+	Timeout       time.Duration `env:"AGENT_HTTP_CLIENT_TIMEOUT" envDefault:"30s"`
+	TLSSkipVerify bool          `env:"AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY"`
+	Identity      string        `env:"AGENT_CSI_IDENTITY"`
 }
 
-func NewClient(url, token string) *Client {
+type Client struct {
+	url      string
+	token    string
+	http     *http.Client
+	identity string
+}
+
+// NewClient creates a client, parsing AGENT_HTTP_CLIENT_* and AGENT_CSI_IDENTITY env vars.
+// identity is the fallback when AGENT_CSI_IDENTITY is unset.
+func NewClient(url, token, identity string) *Client {
+	cfg, err := env.ParseAs[ClientConfig]()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: invalid client env config: %v, using defaults\n", err)
+		cfg = ClientConfig{Timeout: DefaultTimeout}
+	}
+	if cfg.Identity == "" {
+		cfg.Identity = identity
+	}
+	return newClient(url, token, cfg)
+}
+
+func newClient(url, token string, cfg ClientConfig) *Client {
+	hc := &http.Client{Timeout: cfg.Timeout}
+	if cfg.TLSSkipVerify {
+		hc.Transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	}
 	return &Client{
-		url:   url,
-		token: token,
-		http: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		url:      url,
+		token:    token,
+		http:     hc,
+		identity: cfg.Identity,
 	}
 }
 
+func (c *Client) Identity() string {
+	return c.identity
+}
+
+func (c *Client) ensureIdentity(labels map[string]string) map[string]string {
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	if _, ok := labels[config.LabelCreatedBy]; !ok {
+		labels[config.LabelCreatedBy] = c.Identity()
+	}
+	return labels
+}
+
 func (c *Client) CreateVolume(ctx context.Context, req VolumeCreateRequest) (*VolumeDetailResponse, error) {
+	req.Labels = c.ensureIdentity(req.Labels)
 	var resp VolumeDetailResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/volumes", req, &resp); err != nil {
 		if IsConflict(err) {
@@ -77,6 +123,7 @@ func (c *Client) UpdateVolume(ctx context.Context, name string, req VolumeUpdate
 }
 
 func (c *Client) CreateSnapshot(ctx context.Context, req SnapshotCreateRequest) (*SnapshotDetailResponse, error) {
+	req.Labels = c.ensureIdentity(req.Labels)
 	var resp SnapshotDetailResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/snapshots", req, &resp); err != nil {
 		return nil, err
@@ -89,6 +136,7 @@ func (c *Client) DeleteSnapshot(ctx context.Context, name string) error {
 }
 
 func (c *Client) CreateClone(ctx context.Context, req CloneCreateRequest) (*VolumeDetailResponse, error) {
+	req.Labels = c.ensureIdentity(req.Labels)
 	var resp VolumeDetailResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/clones", req, &resp); err != nil {
 		if IsConflict(err) {
@@ -100,6 +148,7 @@ func (c *Client) CreateClone(ctx context.Context, req CloneCreateRequest) (*Volu
 }
 
 func (c *Client) CloneVolume(ctx context.Context, req VolumeCloneRequest) (*VolumeDetailResponse, error) {
+	req.Labels = c.ensureIdentity(req.Labels)
 	var resp VolumeDetailResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/volumes/clone", req, &resp); err != nil {
 		if IsConflict(err) {
@@ -111,7 +160,7 @@ func (c *Client) CloneVolume(ctx context.Context, req VolumeCloneRequest) (*Volu
 }
 
 func (c *Client) CreateVolumeExport(ctx context.Context, name string, cl string, labels map[string]string) error {
-	return c.do(ctx, http.MethodPost, "/v1/volumes/"+name+"/export", VolumeExportCreateRequest{Client: cl, Labels: labels}, nil)
+	return c.do(ctx, http.MethodPost, "/v1/volumes/"+name+"/export", VolumeExportCreateRequest{Client: cl, Labels: c.ensureIdentity(labels)}, nil)
 }
 
 func (c *Client) DeleteVolumeExport(ctx context.Context, name string, cl string, labels map[string]string) error {
@@ -207,6 +256,7 @@ func (c *Client) ListVolumeExportsDetail(ctx context.Context, opts ListOpts) (*E
 }
 
 func (c *Client) CreateTask(ctx context.Context, taskType string, req TaskCreateRequest) (*TaskCreateResponse, error) {
+	req.Labels = c.ensureIdentity(req.Labels)
 	var resp TaskCreateResponse
 	if err := c.do(ctx, http.MethodPost, "/v1/tasks/"+taskType, req, &resp); err != nil {
 		return nil, err

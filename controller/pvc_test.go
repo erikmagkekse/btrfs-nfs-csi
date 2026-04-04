@@ -197,7 +197,6 @@ func TestResolveVolumeParams(t *testing.T) {
 		assert.Equal(t, "my-pvc", vp.Labels["kubernetes.pvc.name"])
 		assert.Equal(t, "default", vp.Labels["kubernetes.pvc.namespace"])
 		assert.Equal(t, "my-sc", vp.Labels["kubernetes.pvc.storageclassname"])
-		assert.Equal(t, "k8s", vp.Labels["created-by"])
 	})
 
 	t.Run("no_pvc_info", func(t *testing.T) {

@@ -112,10 +112,9 @@ func (s *Server) resolveVolumeParams(ctx context.Context, params map[string]stri
 	scName := ptr.Deref(pvc.Spec.StorageClassName, "")
 	vp.StorageClass = scName
 	vp.Labels = map[string]string{
-		labelPVCName:          pvcName,
-		labelPVCNamespace:     pvcNamespace,
-		labelPVCStorageClass:  scName,
-		config.LabelCreatedBy: controllerIdentity,
+		labelPVCName:         pvcName,
+		labelPVCNamespace:    pvcNamespace,
+		labelPVCStorageClass: scName,
 	}
 	for k, v := range envDefaultLabels {
 		if _, exists := vp.Labels[k]; !exists {
@@ -243,9 +242,8 @@ func (s *Server) pvcFromVolumeHandle(ctx context.Context, volumeID string) (*cor
 
 func (s *Server) resolveSnapshotLabels(ctx context.Context, params map[string]string, sourceVolumeID, sc, pvName string) map[string]string {
 	labels := map[string]string{
-		config.LabelCreatedBy: controllerIdentity,
-		labelPVName:           pvName,
-		labelPVStorageClass:   sc,
+		labelPVName:         pvName,
+		labelPVStorageClass: sc,
 	}
 	for k, v := range envDefaultLabels {
 		if _, exists := labels[k]; !exists {
