@@ -76,6 +76,12 @@ controller:
   readinessProbe: {}
   extraArgs: []
   extraEnv: []
+  # To add default labels to all volumes created by this controller (e.g. multi-tenant
+  # or multi-cluster setups), set DRIVER_DEFAULT_LABELS.
+  # Note: labels can be added at any time, but cannot be removed from existing volumes.
+  # extraEnv:
+  #   - name: DRIVER_DEFAULT_LABELS
+  #     value: "kubernetes.cluster=my-cluster,env=prod"
   extraVolumes: []
   extraVolumeMounts: []
 

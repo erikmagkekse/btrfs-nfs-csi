@@ -1,9 +1,11 @@
 package ctl
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -12,6 +14,8 @@ import (
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/urfave/cli/v3"
+	"golang.org/x/sys/unix"
+	"golang.org/x/term"
 )
 
 const (
@@ -30,7 +34,7 @@ const (
 )
 
 func labelFlag() cli.Flag {
-	return &cli.StringSliceFlag{Name: "label", Aliases: []string{"l"}, Usage: "label filter key=value (repeatable)"}
+	return &cli.StringSliceFlag{Name: "label", Aliases: []string{"l"}, Usage: "label filter key=value (repeatable, AND)"}
 }
 
 func formatLabels(labels map[string]string) string {
@@ -88,8 +92,21 @@ func formatLabelsShort(labels map[string]string) string {
 	return s
 }
 
-func parseLabelsFlag(cmd *cli.Command) map[string]string {
+func splitLabelsFlag(cmd *cli.Command) []string {
 	raw := cmd.StringSlice("label")
+	var out []string
+	for _, entry := range raw {
+		for _, part := range strings.Split(entry, ",") {
+			if p := strings.TrimSpace(part); p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+func parseLabelsFlag(cmd *cli.Command) map[string]string {
+	raw := splitLabelsFlag(cmd)
 	if len(raw) == 0 {
 		return nil
 	}
@@ -103,6 +120,13 @@ func parseLabelsFlag(cmd *cli.Command) map[string]string {
 		labels[k] = v
 	}
 	return labels
+}
+
+func cliIdentity() string {
+	if id := os.Getenv("BTRFS_NFS_CSI_IDENTITY"); id != "" {
+		return id
+	}
+	return "cli"
 }
 
 func labelsWithDefault(cmd *cli.Command, key, value string) map[string]string {
@@ -122,6 +146,115 @@ func sortFlag() cli.Flag {
 
 func ascFlag() cli.Flag {
 	return &cli.BoolFlag{Name: "asc", Usage: "ascending sort (default is descending)"}
+}
+
+func watchFlag() cli.Flag {
+	return &cli.DurationFlag{Name: "watch", Aliases: []string{"w"}, Value: 2 * time.Second, Usage: "watch mode with interval (default 2s)"}
+}
+
+func injectWatchDefault(args []string) []string {
+	for i, a := range args {
+		if a == "-w" || a == "--watch" {
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				out := make([]string, 0, len(args)+1)
+				out = append(out, args[:i+1]...)
+				out = append(out, "2s")
+				out = append(out, args[i+1:]...)
+				return out
+			}
+		}
+	}
+	return args
+}
+
+func runWatch(ctx context.Context, cmd *cli.Command, fn func() error) error {
+	if !cmd.IsSet("watch") || !term.IsTerminal(int(os.Stdout.Fd())) {
+		return fn()
+	}
+	interval := cmd.Duration("watch")
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	defer stop()
+	if termios, err := unix.IoctlGetTermios(int(os.Stdin.Fd()), unix.TCGETS); err == nil {
+		noEcho := *termios
+		noEcho.Lflag &^= unix.ECHO
+		unix.IoctlSetTermios(int(os.Stdin.Fd()), unix.TCSETS, &noEcho)
+		defer unix.IoctlSetTermios(int(os.Stdin.Fd()), unix.TCSETS, termios)
+	}
+	fmt.Print("\033[?1049h\033[?25l")
+	defer fmt.Print("\033[?25h\033[?1049l")
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		fmt.Print("\033[H")
+		if err := fn(); err != nil {
+			return err
+		}
+		fmt.Printf("\nupdated %s, refresh %s\n", time.Now().Format("15:04:05"), interval)
+		fmt.Print("\033[J")
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func columnsFlag() cli.Flag {
+	return &cli.StringFlag{Name: "columns", Aliases: []string{"c"}, Usage: "comma-separated columns to display (omits header if single column)"}
+}
+
+type tableWriter struct {
+	selected []string
+	w        *tabwriter.Writer
+}
+
+func newTableWriter(cmd *cli.Command, all []string) *tableWriter {
+	selected := all
+	if raw := cmd.String("columns"); raw != "" {
+		avail := make(map[string]string, len(all))
+		for _, col := range all {
+			avail[strings.ToLower(col)] = col
+		}
+		var filtered []string
+		for _, r := range strings.Split(raw, ",") {
+			if col, ok := avail[strings.ToLower(strings.TrimSpace(r))]; ok {
+				filtered = append(filtered, col)
+			}
+		}
+		if len(filtered) > 0 {
+			selected = filtered
+		}
+	}
+	tw := &tableWriter{selected: selected}
+	if len(selected) > 1 {
+		tw.w = tab()
+	}
+	return tw
+}
+
+func (tw *tableWriter) writeHeader() {
+	if tw.w == nil {
+		return
+	}
+	_, _ = fmt.Fprintln(tw.w, strings.Join(tw.selected, "\t"))
+}
+
+func (tw *tableWriter) writeRow(values map[string]string) {
+	if tw.w == nil {
+		fmt.Println(values[tw.selected[0]])
+		return
+	}
+	parts := make([]string, 0, len(tw.selected))
+	for _, col := range tw.selected {
+		parts = append(parts, values[col])
+	}
+	_, _ = fmt.Fprintln(tw.w, strings.Join(parts, "\t"))
+}
+
+func (tw *tableWriter) flush() {
+	if tw.w != nil {
+		_ = tw.w.Flush()
+	}
 }
 
 func sortVolumes(vols []v1.VolumeResponse, field string, reverse bool) {
