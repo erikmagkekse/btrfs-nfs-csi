@@ -12,6 +12,9 @@ on:
       - "charts/**"
       - ".github/workflows/ci-helm.yml"
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -20,7 +23,7 @@ jobs:
 
       - name: Verify appVersion matches VERSION
         run: |
-          APP_VERSION=$(grep 'appVersion:' charts/btrfs-nfs-csi/Chart.yaml | sed 's/.*"\(.*\)"/\1/')
+          APP_VERSION=$(grep '^appVersion:' charts/btrfs-nfs-csi/Chart.yaml | sed 's/.*"\(.*\)"/\1/')
           VERSION=$(cat VERSION)
           if [[ "${APP_VERSION}" != "${VERSION}" ]]; then
             echo "::error::Chart appVersion (${APP_VERSION}) does not match VERSION file (${VERSION})"

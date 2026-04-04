@@ -18,3 +18,13 @@ maintainers:
   - name: erikmagkekse
     email: me@eriks.life
     url: https://github.com/erikmagkekse
+annotations:
+  org.opencontainers.image.title: btrfs-nfs-csi
+  org.opencontainers.image.description: >-
+    Kubernetes CSI driver that turns any btrfs filesystem into a full-featured
+    NFS storage backend with instant snapshots, clones, and quotas
+  org.opencontainers.image.url: https://github.com/erikmagkekse/btrfs-nfs-csi
+  org.opencontainers.image.source: https://github.com/erikmagkekse/btrfs-nfs-csi
+  org.opencontainers.image.documentation: https://github.com/erikmagkekse/btrfs-nfs-csi#readme
+  org.opencontainers.image.licenses: Apache-2.0
+  org.opencontainers.image.vendor: erikmagkekse

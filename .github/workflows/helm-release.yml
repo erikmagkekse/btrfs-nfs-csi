@@ -2,6 +2,11 @@ name: Helm Release
 
 on:
   workflow_call:
+    inputs:
+      suffix:
+        description: "Version suffix (e.g. -edge)"
+        type: string
+        default: ""
   workflow_dispatch:
 
 jobs:
@@ -23,7 +28,7 @@ jobs:
 
       - name: Verify appVersion matches VERSION
         run: |
-          APP_VERSION=$(grep 'appVersion:' charts/btrfs-nfs-csi/Chart.yaml | sed 's/.*"\(.*\)"/\1/')
+          APP_VERSION=$(grep '^appVersion:' charts/btrfs-nfs-csi/Chart.yaml | sed 's/.*"\(.*\)"/\1/')
           VERSION=$(cat VERSION)
           if [[ "${APP_VERSION}" != "${VERSION}" ]]; then
             echo "::error::Chart appVersion (${APP_VERSION}) does not match VERSION file (${VERSION})"
@@ -34,6 +39,12 @@ jobs:
         run: helm lint charts/btrfs-nfs-csi
 
       - name: Package and push
+        env:
+          SUFFIX: ${{ inputs.suffix }}
         run: |
-          helm package charts/btrfs-nfs-csi
+          CHART_VERSION=$(grep '^version:' charts/btrfs-nfs-csi/Chart.yaml | awk '{print $2}')
+          APP_VERSION=$(cat VERSION)
+          helm package charts/btrfs-nfs-csi \
+            --version "${CHART_VERSION}${SUFFIX}" \
+            --app-version "${APP_VERSION}${SUFFIX}"
           helm push btrfs-nfs-csi-*.tgz oci://ghcr.io/erikmagkekse/charts
