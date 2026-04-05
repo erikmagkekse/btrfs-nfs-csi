@@ -102,15 +102,13 @@ func taskTimeout(t string) string {
 	return "-"
 }
 
-func listTasks(ctx context.Context, cmd *cli.Command, taskType string, opts v1.ListOpts) error {
+func listTasks(ctx context.Context, cmd *cli.Command, taskType, sortBy string, rev bool, opts v1.ListOpts) error {
 	if isWide(cmd) {
 		resp, err := apiClient.ListTasksDetail(ctx, taskType, opts)
 		if err != nil {
 			return err
 		}
-		sort.Slice(resp.Tasks, func(i, j int) bool {
-			return resp.Tasks[i].CreatedAt.After(resp.Tasks[j].CreatedAt)
-		})
+		sortTasksDetail(resp.Tasks, sortBy, rev)
 		return output(cmd, resp, func() {
 			tw := newTableWriter(cmd, []string{"ID", "TYPE", "STATUS", "PROGRESS", "LABELS", "TIMEOUT", "TOOK", "CREATED", "RESULT", "ERROR"})
 			tw.writeHeader()
@@ -136,9 +134,7 @@ func listTasks(ctx context.Context, cmd *cli.Command, taskType string, opts v1.L
 	if err != nil {
 		return err
 	}
-	sort.Slice(resp.Tasks, func(i, j int) bool {
-		return resp.Tasks[i].CreatedAt.After(resp.Tasks[j].CreatedAt)
-	})
+	sortTasks(resp.Tasks, sortBy, rev)
 	return output(cmd, resp, func() {
 		tw := newTableWriter(cmd, []string{"ID", "TYPE", "STATUS", "PROGRESS", "TIMEOUT", "TOOK", "CREATED"})
 		tw.writeHeader()
@@ -223,7 +219,9 @@ func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
 			fmt.Printf("scrub started (task %s)\n", resp.TaskID)
 		})
 	}
-	fmt.Printf("scrub started (task %s)\n", resp.TaskID)
+	if !isJSON(cmd) {
+		fmt.Printf("scrub started (task %s)\n", resp.TaskID)
+	}
 	return waitForTask(ctx, resp.TaskID)
 }
 
@@ -244,7 +242,9 @@ func taskCreateTest(ctx context.Context, cmd *cli.Command) error {
 			fmt.Printf("test task started (task %s)\n", resp.TaskID)
 		})
 	}
-	fmt.Printf("test task started (task %s)\n", resp.TaskID)
+	if !isJSON(cmd) {
+		fmt.Printf("test task started (task %s)\n", resp.TaskID)
+	}
 	return waitForTask(ctx, resp.TaskID)
 }
 

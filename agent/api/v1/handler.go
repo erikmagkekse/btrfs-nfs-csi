@@ -267,6 +267,7 @@ func (h *Handler) Stats(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, StatsResponse{
+		TenantName: tenant,
 		Statfs: StatfsResponse{
 			TotalBytes: fs.TotalBytes,
 			UsedBytes:  fs.UsedBytes,

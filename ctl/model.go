@@ -2,10 +2,45 @@ package ctl
 
 import (
 	"context"
+	"fmt"
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/urfave/cli/v3"
 )
+
+func versionCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "version",
+		Usage: "show CLI version",
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			fmt.Printf("btrfs-nfs-csi %s (%s)\n", Version, Commit)
+			if cmd.Root().String("agent-url") != "" && cmd.Root().String("agent-token") != "" {
+				if h, err := apiClient.Healthz(ctx); err == nil {
+					fmt.Printf("agent         %s (%s)\n", h.Version, h.Commit)
+				}
+			}
+			return nil
+		},
+	}
+}
+
+func statsCmd() *cli.Command {
+	return &cli.Command{
+		Name:   "stats",
+		Usage:  "show filesystem stats",
+		Flags:  []cli.Flag{watchFlag()},
+		Action: watchAction(showStats),
+	}
+}
+
+func healthCmd() *cli.Command {
+	return &cli.Command{
+		Name:   "health",
+		Usage:  "show agent health",
+		Flags:  []cli.Flag{watchFlag()},
+		Action: watchAction(showHealth),
+	}
+}
 
 func volumeCmd() *cli.Command {
 	return &cli.Command{
@@ -34,7 +69,8 @@ func volumeCmd() *cli.Command {
 				Name:      "get",
 				Usage:     "get volume details",
 				ArgsUsage: "<name>",
-				Action:    volumeGet,
+				Flags:     []cli.Flag{watchFlag()},
+				Action:    watchAction(volumeGet),
 			},
 			{
 				Name:      "create",
@@ -107,7 +143,8 @@ func snapshotCmd() *cli.Command {
 				Name:      "get",
 				Usage:     "get snapshot details",
 				ArgsUsage: "<name>",
-				Action:    snapshotGet,
+				Flags:     []cli.Flag{watchFlag()},
+				Action:    watchAction(snapshotGet),
 			},
 			{
 				Name:      "create",
@@ -189,15 +226,22 @@ func taskCmd() *cli.Command {
 				Usage:   "list tasks",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: "filter by type (e.g. scrub)"},
+					sortFlag(),
+					ascFlag(),
 					labelFlag(),
 					columnsFlag(),
 					watchFlag(),
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					taskType := cmd.String("type")
+					sortBy := cmd.String("sort")
+					if sortBy == "" {
+						sortBy = sortCreated
+					}
+					rev := !cmd.Bool("asc")
 					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
 					return runWatch(ctx, cmd, func() error {
-						return listTasks(ctx, cmd, taskType, opts)
+						return listTasks(ctx, cmd, taskType, sortBy, rev, opts)
 					})
 				},
 			},
@@ -205,7 +249,8 @@ func taskCmd() *cli.Command {
 				Name:      "get",
 				Usage:     "get task details",
 				ArgsUsage: "<id>",
-				Action:    taskGet,
+				Flags:     []cli.Flag{watchFlag()},
+				Action:    watchAction(taskGet),
 			},
 			{
 				Name:      "cancel",

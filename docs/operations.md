@@ -304,9 +304,9 @@ btrfs-nfs-csi version
 
 **Column filter:** `--columns` / `-c` selects which columns to display. Single column omits the header for clean piping to `xargs`, `wc`, etc.
 
-**Watch mode:** `--watch` / `-w` enables live-refresh in an alternate screen. Default 2s, configurable (e.g. `-w 500ms`). Available on all list commands and `stats`.
+**Watch mode:** `--watch` / `-w` enables live-refresh in an alternate screen. Default 2s, configurable (e.g. `-w 500ms`). Available on all list commands, get commands, `stats`, and `health`.
 
-**Sorting:** `--sort` / `-s` with `--asc` (default descending). Volume default: `used%`. Snapshot default: `created`.
+**Sorting:** `--sort` / `-s` with `--asc` (default descending). Volume default: `used%`. Snapshot/task default: `created`.
 
 **Label filter:** `--label` / `-l`, repeatable (AND). Supports comma-separated values: `-l env=prod,team=be`.
 

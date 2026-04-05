@@ -84,7 +84,6 @@ func (a *Agent) Start(ctx context.Context) {
 	api.POST("/volumes/:name/export", h.CreateVolumeExport)
 	api.DELETE("/volumes/:name/export", h.DeleteVolumeExport)
 	api.GET("/exports", h.ListVolumeExports)
-	api.GET("/dashboard", v1.ServeDashboard(a.cfg.DashboardRefresh))
 
 	api.GET("/stats", h.Stats)
 	api.POST("/snapshots", h.CreateSnapshot)

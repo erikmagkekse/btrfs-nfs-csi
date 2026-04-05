@@ -405,6 +405,7 @@ Filesystem space usage, per-device IO counters (from sysfs), per-device btrfs er
 
 ```json
 {
+  "tenant_name": "default",
   "statfs": {
     "total_bytes": 1099511627776,
     "used_bytes": 10737418240,

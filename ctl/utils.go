@@ -32,6 +32,8 @@ const (
 	sortCreated = "created"
 	sortExports = "clients"
 	sortVolume  = "volume"
+	sortType    = "type"
+	sortStatus  = "status"
 )
 
 func labelFlag() cli.Flag {
@@ -173,6 +175,7 @@ func runWatch(ctx context.Context, cmd *cli.Command, fn func() error) error {
 	if !cmd.IsSet("watch") || !term.IsTerminal(int(os.Stdout.Fd())) {
 		return fn()
 	}
+	ranWatch = true
 	interval := cmd.Duration("watch")
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
@@ -192,7 +195,7 @@ func runWatch(ctx context.Context, cmd *cli.Command, fn func() error) error {
 		if err := fn(); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "\ntook %s, updated %s, refresh %s\n", fmtDuration(time.Since(start)), time.Now().Format("15:04:05"), interval)
+		fmt.Fprintf(os.Stderr, "\n%s, refresh %s\n", fmtTiming(time.Since(start)), interval)
 		fmt.Print("\033[J")
 		select {
 		case <-ctx.Done():
@@ -388,17 +391,63 @@ func sortExportsDetailList(exports []v1.ExportDetailResponse, field string, reve
 	})
 }
 
+func sortTasks(tasks []v1.TaskResponse, field string, reverse bool) {
+	sort.Slice(tasks, func(i, j int) bool {
+		var less bool
+		switch field {
+		case sortType:
+			less = tasks[i].Type < tasks[j].Type
+		case sortStatus:
+			less = tasks[i].Status < tasks[j].Status
+		default:
+			less = tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+		}
+		if reverse {
+			return !less
+		}
+		return less
+	})
+}
+
+func sortTasksDetail(tasks []v1.TaskDetailResponse, field string, reverse bool) {
+	sort.Slice(tasks, func(i, j int) bool {
+		var less bool
+		switch field {
+		case sortType:
+			less = tasks[i].Type < tasks[j].Type
+		case sortStatus:
+			less = tasks[i].Status < tasks[j].Status
+		default:
+			less = tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+		}
+		if reverse {
+			return !less
+		}
+		return less
+	})
+}
+
 var (
-	apiClient *v1.Client
-	cmdStart  time.Time
+	apiClient  *v1.Client
+	cmdStart   time.Time
+	ranWatch   bool
+	timingLine string
 )
 
 func initClient(cmd *cli.Command) {
 	apiClient = v1.NewClient(cmd.Root().String("agent-url"), cmd.Root().String("agent-token"), config.IdentityCLI)
 }
 
-func printTiming() {
-	fmt.Fprintf(os.Stderr, "took %s, %s\n", fmtDuration(time.Since(cmdStart)), time.Now().Format("2006-01-02 15:04:05"))
+func fmtTiming(d time.Duration) string {
+	return fmt.Sprintf("took %s, %s", fmtDuration(d), time.Now().Format("2006-01-02 15:04:05"))
+}
+
+func watchAction(fn cli.ActionFunc) cli.ActionFunc {
+	return func(ctx context.Context, cmd *cli.Command) error {
+		return runWatch(ctx, cmd, func() error {
+			return fn(ctx, cmd)
+		})
+	}
 }
 
 func outputFormat(cmd *cli.Command) string {
