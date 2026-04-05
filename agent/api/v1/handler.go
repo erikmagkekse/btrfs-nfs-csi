@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 
 	"github.com/labstack/echo/v5"
 )
@@ -30,6 +31,7 @@ type Handler struct {
 func volumeResponseFrom(meta *storage.VolumeMetadata) VolumeResponse {
 	return VolumeResponse{
 		Name:      meta.Name,
+		CreatedBy: meta.Labels[config.LabelCreatedBy],
 		SizeBytes: meta.SizeBytes,
 		UsedBytes: meta.UsedBytes,
 		Exports:   storage.CountUniqueExportIPs(meta.Exports),
@@ -98,6 +100,7 @@ func volumeDetailResponseFrom(meta *storage.VolumeMetadata) VolumeDetailResponse
 	}
 	return VolumeDetailResponse{
 		Name:         meta.Name,
+		CreatedBy:    meta.Labels[config.LabelCreatedBy],
 		Path:         meta.Path,
 		SizeBytes:    meta.SizeBytes,
 		NoCOW:        meta.NoCOW,
@@ -291,6 +294,7 @@ func (h *Handler) Stats(c *echo.Context) error {
 func snapshotResponseFrom(meta *storage.SnapshotMetadata) SnapshotResponse {
 	return SnapshotResponse{
 		Name:      meta.Name,
+		CreatedBy: meta.Labels[config.LabelCreatedBy],
 		Volume:    meta.Volume,
 		SizeBytes: meta.SizeBytes,
 		UsedBytes: meta.UsedBytes,
@@ -355,6 +359,7 @@ func (h *Handler) ListVolumeSnapshots(c *echo.Context) error {
 func snapshotDetailResponseFrom(meta *storage.SnapshotMetadata) SnapshotDetailResponse {
 	return SnapshotDetailResponse{
 		Name:           meta.Name,
+		CreatedBy:      meta.Labels[config.LabelCreatedBy],
 		Volume:         meta.Volume,
 		Path:           meta.Path,
 		SizeBytes:      meta.SizeBytes,
@@ -449,6 +454,10 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid timeout: " + req.Timeout, Code: storage.ErrInvalid})
 		}
+	}
+
+	if req.Labels[config.LabelCreatedBy] == "" {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "label \"" + config.LabelCreatedBy + "\" is required", Code: storage.ErrInvalid})
 	}
 
 	var taskID string

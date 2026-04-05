@@ -102,9 +102,9 @@ func taskTimeout(t string) string {
 	return "-"
 }
 
-func listTasks(ctx context.Context, cmd *cli.Command, taskType, sortBy string, rev bool, opts v1.ListOpts) error {
+func listTasks(ctx context.Context, cmd *cli.Command, taskType, sortBy string, rev bool, opts cliListOpts) error {
 	if isWide(cmd) {
-		resp, err := apiClient.ListTasksDetail(ctx, taskType, opts)
+		resp, err := apiClient.ListTasksDetail(ctx, taskType, opts.ListOpts)
 		if err != nil {
 			return err
 		}
@@ -128,9 +128,10 @@ func listTasks(ctx context.Context, cmd *cli.Command, taskType, sortBy string, r
 				})
 			}
 			tw.flush()
+			emptyHint("tasks", len(resp.Tasks), opts.allSet, opts.labelSet)
 		})
 	}
-	resp, err := apiClient.ListTasks(ctx, taskType, opts)
+	resp, err := apiClient.ListTasks(ctx, taskType, opts.ListOpts)
 	if err != nil {
 		return err
 	}
@@ -146,6 +147,7 @@ func listTasks(ctx context.Context, cmd *cli.Command, taskType, sortBy string, r
 			})
 		}
 		tw.flush()
+		emptyHint("tasks", len(resp.Tasks), opts.allSet, opts.labelSet)
 	})
 }
 

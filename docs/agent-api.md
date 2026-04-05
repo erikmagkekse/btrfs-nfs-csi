@@ -80,6 +80,7 @@ Example: `GET /v1/volumes?limit=10` returns the first 10 volumes. Use the `next`
 // Response 201
 {
   "name": "vol-1",
+  "created_by": "cli",
   "path": "/srv/csi/default/vol-1",
   "size_bytes": 1073741824,
   "nocow": false,
@@ -113,6 +114,7 @@ Returns a summary list. Supports pagination (`?after=&limit=`), label filtering 
   "volumes": [
     {
       "name": "vol-1",
+      "created_by": "cli",
       "size_bytes": 1073741824,
       "used_bytes": 16384,
       "clients": 1,
@@ -130,6 +132,7 @@ With `?detail=true`, each volume includes the full detail fields (same as `GET /
 ```json
 {
   "name": "vol-1",
+  "created_by": "cli",
   "path": "/srv/csi/default/vol-1",
   "size_bytes": 1073741824,
   "nocow": false,
@@ -273,6 +276,7 @@ With `?detail=true`, each export includes `labels`:
 // Response 201
 {
   "name": "snap-1",
+  "created_by": "cli",
   "volume": "vol-1",
   "path": "/srv/csi/default/snapshots/snap-1",
   "size_bytes": 1073741824,
@@ -294,6 +298,7 @@ Returns a summary list of all snapshots. Supports pagination (`?after=&limit=`),
   "snapshots": [
     {
       "name": "snap-1",
+      "created_by": "cli",
       "volume": "vol-1",
       "size_bytes": 1073741824,
       "used_bytes": 16384,
@@ -315,6 +320,7 @@ Returns a summary list of snapshots for a specific volume. Same response format 
 ```json
 {
   "name": "snap-1",
+  "created_by": "cli",
   "volume": "vol-1",
   "path": "/srv/csi/default/snapshots/snap-1",
   "size_bytes": 1073741824,

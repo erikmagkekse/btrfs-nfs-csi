@@ -50,6 +50,7 @@ type VolumeExportDeleteRequest struct {
 
 type VolumeResponse struct {
 	Name      string    `json:"name"`
+	CreatedBy string    `json:"created_by,omitempty"`
 	SizeBytes uint64    `json:"size_bytes"`
 	UsedBytes uint64    `json:"used_bytes"`
 	Exports   int       `json:"clients"`
@@ -58,6 +59,7 @@ type VolumeResponse struct {
 
 type VolumeDetailResponse struct {
 	Name         string                 `json:"name"`
+	CreatedBy    string                 `json:"created_by,omitempty"`
 	Path         string                 `json:"path"`
 	SizeBytes    uint64                 `json:"size_bytes"`
 	NoCOW        bool                   `json:"nocow"`
@@ -88,6 +90,7 @@ type VolumeDetailListResponse struct {
 
 type SnapshotResponse struct {
 	Name      string    `json:"name"`
+	CreatedBy string    `json:"created_by,omitempty"`
 	Volume    string    `json:"volume"`
 	SizeBytes uint64    `json:"size_bytes"`
 	UsedBytes uint64    `json:"used_bytes"`
@@ -96,6 +99,7 @@ type SnapshotResponse struct {
 
 type SnapshotDetailResponse struct {
 	Name           string            `json:"name"`
+	CreatedBy      string            `json:"created_by,omitempty"`
 	Volume         string            `json:"volume"`
 	Path           string            `json:"path"`
 	SizeBytes      uint64            `json:"size_bytes"`

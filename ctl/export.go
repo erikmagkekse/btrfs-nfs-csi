@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
 	"github.com/urfave/cli/v3"
 )
 
@@ -38,9 +37,9 @@ func exportRemove(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-func listExports(ctx context.Context, cmd *cli.Command, sortBy string, rev bool, opts v1.ListOpts) error {
+func listExports(ctx context.Context, cmd *cli.Command, sortBy string, rev bool, opts cliListOpts) error {
 	if isWide(cmd) {
-		resp, err := apiClient.ListVolumeExportsDetail(ctx, opts)
+		resp, err := apiClient.ListVolumeExportsDetail(ctx, opts.ListOpts)
 		if err != nil {
 			return err
 		}
@@ -61,9 +60,10 @@ func listExports(ctx context.Context, cmd *cli.Command, sortBy string, rev bool,
 				})
 			}
 			tw.flush()
+			emptyHint("exports", len(resp.Exports), opts.allSet, opts.labelSet)
 		})
 	}
-	resp, err := apiClient.ListVolumeExports(ctx, opts)
+	resp, err := apiClient.ListVolumeExports(ctx, opts.ListOpts)
 	if err != nil {
 		return err
 	}
@@ -83,5 +83,6 @@ func listExports(ctx context.Context, cmd *cli.Command, sortBy string, rev bool,
 			})
 		}
 		tw.flush()
+		emptyHint("exports", len(resp.Exports), opts.allSet, opts.labelSet)
 	})
 }
