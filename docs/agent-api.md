@@ -553,12 +553,6 @@ Cancels a running task. 204 No Content. 404 if not found. Cancelling a finished 
 
 Task statuses: `pending`, `running`, `completed`, `failed`, `cancelled`.
 
-## Dashboard
-
-### GET /v1/dashboard
-
-HTML dashboard (requires auth, use Basic in browser).
-
 ## Unauthenticated
 
 ### GET /healthz

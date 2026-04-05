@@ -54,7 +54,7 @@ type AgentConfig struct {
 	NFSReconcileInterval time.Duration `env:"AGENT_NFS_RECONCILE_INTERVAL" envDefault:"60s"`
 	DeviceIOInterval     time.Duration `env:"AGENT_DEVICE_IO_INTERVAL" envDefault:"5s"`
 	DeviceStatsInterval  time.Duration `env:"AGENT_DEVICE_STATS_INTERVAL" envDefault:"1m"`
-DefaultDirMode       string        `env:"AGENT_DEFAULT_DIR_MODE" envDefault:"0700"`
+	DefaultDirMode       string        `env:"AGENT_DEFAULT_DIR_MODE" envDefault:"0700"`
 	DefaultDataMode      string        `env:"AGENT_DEFAULT_DATA_MODE" envDefault:"2770"`
 	TaskCleanupInterval  time.Duration `env:"AGENT_TASK_CLEANUP_INTERVAL" envDefault:"24h"`
 	TaskMaxConcurrent    int           `env:"AGENT_TASK_MAX_CONCURRENT" envDefault:"2"`
