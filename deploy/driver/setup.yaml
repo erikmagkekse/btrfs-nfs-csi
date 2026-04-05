@@ -156,9 +156,9 @@ spec:
           effect: NoSchedule
       containers:
         - name: csi-driver
-          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.11
+          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.10.0
           imagePullPolicy: Always
-          args: ["controller"]
+          args: ["integration", "kubernetes", "controller"]
           env:
             - name: DRIVER_ENDPOINT
               value: unix:///csi/csi.sock
@@ -295,9 +295,9 @@ spec:
       #hostNetwork: true
       containers:
         - name: csi-driver
-          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.9.11
+          image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.10.0
           imagePullPolicy: Always
-          args: ["driver"]
+          args: ["integration", "kubernetes", "driver"]
           securityContext:
             privileged: true
           env:

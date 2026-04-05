@@ -45,6 +45,30 @@ func TestCreateVolume(t *testing.T) {
 			{name: "invalid_mode", req: VolumeCreateRequest{
 				Name: "vol", SizeBytes: 1024, Mode: "nope",
 			}, code: ErrInvalid},
+			{name: "mode_exceeds_7777", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, Mode: "10000",
+			}, code: ErrInvalid},
+			{name: "mode_exceeds_7777_large", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, Mode: "77777",
+			}, code: ErrInvalid},
+			{name: "negative_uid", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, UID: -1,
+			}, code: ErrInvalid},
+			{name: "negative_uid_large", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, UID: -100,
+			}, code: ErrInvalid},
+			{name: "uid_out_of_range", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, UID: 70000,
+			}, code: ErrInvalid},
+			{name: "negative_gid", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, GID: -1,
+			}, code: ErrInvalid},
+			{name: "negative_gid_large", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, GID: -100,
+			}, code: ErrInvalid},
+			{name: "gid_out_of_range", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, GID: 70000,
+			}, code: ErrInvalid},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -258,58 +282,6 @@ func TestListVolumes(t *testing.T) {
 	})
 }
 
-// --- TestListVolumesPaginated ---
-
-func TestListVolumesPaginated(t *testing.T) {
-	s, bp, _, _ := newTestStorage(t)
-
-	for _, name := range []string{"aaa", "bbb", "ccc", "ddd", "eee"} {
-		seedVolume(t, s, "test", bp, VolumeMetadata{Name: name, SizeBytes: 1024})
-	}
-
-	t.Run("all", func(t *testing.T) {
-		page, err := s.ListVolumesPaginated("test", "", 0)
-		require.NoError(t, err)
-		assert.Len(t, page.Items, 5)
-		assert.Equal(t, 5, page.Total)
-		assert.Empty(t, page.Next)
-	})
-
-	t.Run("first_page", func(t *testing.T) {
-		page, err := s.ListVolumesPaginated("test", "", 2)
-		require.NoError(t, err)
-		assert.Len(t, page.Items, 2)
-		assert.Equal(t, "aaa", page.Items[0].Name)
-		assert.Equal(t, "bbb", page.Items[1].Name)
-		assert.Equal(t, "bbb", page.Next)
-		assert.Equal(t, 5, page.Total)
-	})
-
-	t.Run("second_page", func(t *testing.T) {
-		page, err := s.ListVolumesPaginated("test", "bbb", 2)
-		require.NoError(t, err)
-		assert.Len(t, page.Items, 2)
-		assert.Equal(t, "ccc", page.Items[0].Name)
-		assert.Equal(t, "ddd", page.Items[1].Name)
-		assert.Equal(t, "ddd", page.Next)
-	})
-
-	t.Run("last_page", func(t *testing.T) {
-		page, err := s.ListVolumesPaginated("test", "ddd", 2)
-		require.NoError(t, err)
-		assert.Len(t, page.Items, 1)
-		assert.Equal(t, "eee", page.Items[0].Name)
-		assert.Empty(t, page.Next)
-	})
-
-	t.Run("after_last", func(t *testing.T) {
-		page, err := s.ListVolumesPaginated("test", "eee", 2)
-		require.NoError(t, err)
-		assert.Empty(t, page.Items)
-		assert.Empty(t, page.Next)
-	})
-}
-
 // --- TestGetVolume ---
 
 func TestGetVolume(t *testing.T) {
@@ -413,6 +385,62 @@ func TestUpdateVolume(t *testing.T) {
 				vol:  "vol",
 				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
 				req:  VolumeUpdateRequest{Mode: ptrString("nope")},
+				code: ErrInvalid,
+			},
+			{
+				name: "mode_exceeds_7777",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{Mode: ptrString("10000")},
+				code: ErrInvalid,
+			},
+			{
+				name: "mode_exceeds_7777_large",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{Mode: ptrString("77777")},
+				code: ErrInvalid,
+			},
+			{
+				name: "negative_uid",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{UID: ptrInt(-1)},
+				code: ErrInvalid,
+			},
+			{
+				name: "negative_uid_large",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{UID: ptrInt(-100)},
+				code: ErrInvalid,
+			},
+			{
+				name: "uid_out_of_range",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{UID: ptrInt(70000)},
+				code: ErrInvalid,
+			},
+			{
+				name: "negative_gid",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{GID: ptrInt(-1)},
+				code: ErrInvalid,
+			},
+			{
+				name: "negative_gid_large",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{GID: ptrInt(-100)},
+				code: ErrInvalid,
+			},
+			{
+				name: "gid_out_of_range",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{GID: ptrInt(70000)},
 				code: ErrInvalid,
 			},
 		}
@@ -615,14 +643,26 @@ func TestDeleteVolume(t *testing.T) {
 		requireStorageError(t, err, ErrBusy)
 	})
 
-	t.Run("subvol_delete_fails", func(t *testing.T) {
+	t.Run("subvol_delete_fails_returns_error", func(t *testing.T) {
 		runner := &utils.MockRunner{Err: fmt.Errorf("subvol error")}
 		exporter := &nfs.MockExporter{}
 		s, bp := testStorageWithRunner(t, runner, exporter)
 		seedVolume(t, s, "test", bp, VolumeMetadata{Name: "myvol"})
 
 		err := s.DeleteVolume(ctx, "test", "myvol")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "btrfs subvolume delete failed")
+		require.Error(t, err, "delete should fail when subvolume delete fails")
+		assert.Contains(t, err.Error(), "subvol error")
+	})
+
+	t.Run("corrupt_metadata_returns_error", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+
+		volDir := filepath.Join(bp, "corrupt")
+		require.NoError(t, os.MkdirAll(volDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(volDir, config.MetadataFile), []byte("{bad json"), 0o644))
+
+		err := s.DeleteVolume(ctx, "test", "corrupt")
+		require.Error(t, err, "delete should fail for corrupt metadata")
+		assert.Contains(t, err.Error(), "failed to read volume metadata")
 	})
 }

@@ -6,11 +6,7 @@
 
 Kubernetes Enterprise storage vibes for your homelab. A single-binary CSI driver that turns any Linux box with a btrfs disk into a full-featured storage backend - instant snapshots, writable clones, per-volume quotas, live compression tuning, NoCOW for databases, and automatic NFS exports. Even with HA via DRBD. No iSCSI, no Ceph, no PhD required.
 
-> **Pre-1.0** - stable, but minor breaking changes may occur before v1.0. Over the past weeks I have rolled out unit tests, integration tests, race-detection tests, NFS export reconciliation, and a web dashboard. Before the 1.0 release, CSI sanity tests, e2e tests, and more will be added. Feedback and bug reports welcome.
-
-### Dashboard
-
-![Agent Dashboard](docs/assets/dashboard.png)
+> **Pre-1.0** - stable, but minor breaking changes may occur before v1.0. Before the 1.0 release, CSI sanity tests, e2e tests, and more will be added. Feedback and bug reports welcome.
 
 ## Why btrfs-nfs-csi?
 
@@ -51,6 +47,7 @@ If you run a homelab, a small on-prem cluster, or an edge deployment and want re
 - NFS mount health checker with auto-heal (detects stale mounts, remounts automatically, heals all pods without restart, k8s events on PVC)
 - CLI with column filter (`-c`), watch mode (`-w`), label-based delete protection, relative volume resize (`+5Gi`), and xargs-friendly output
 - TLS support
+- OpenAPI/Swagger specification (`AGENT_API_SWAGGER_ENABLED`)
 - HA via DRBD + Pacemaker (active/passive failover)
 
 **Roadmap:**
@@ -144,7 +141,7 @@ Each StorageClass binds one agent + one tenant. Volume IDs use the StorageClass 
 ## Building
 
 ```bash
-go build -ldflags "-X main.version=$(cat VERSION) -X main.commit=$(git rev-parse --short HEAD)" -o btrfs-nfs-csi .
+go build -ldflags "-X main.version=$(cat VERSION) -X main.commit=$(git rev-parse --short HEAD)" -o btrfs-nfs-csi ./cmd/btrfs-nfs-csi
 ```
 
 ## Development

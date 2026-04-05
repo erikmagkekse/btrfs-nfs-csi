@@ -3,6 +3,7 @@ package v1
 import (
 	"testing"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 	"github.com/stretchr/testify/assert"
 )
@@ -38,11 +39,13 @@ func TestMatchLabels(t *testing.T) {
 	}
 }
 
+const testLabelVolumeID = "kubernetes.volume.id"
+
 func TestFilterByLabels_ExportEntry(t *testing.T) {
 	items := []storage.ExportEntry{
-		{Name: "vol1", Client: "10.0.0.1", Labels: map[string]string{"created-by": "csi", "kubernetes.volume.id": "vol1"}},
+		{Name: "vol1", Client: "10.0.0.1", Labels: map[string]string{"created-by": "csi", testLabelVolumeID: "vol1"}},
 		{Name: "vol1", Client: "10.0.0.2", Labels: map[string]string{"created-by": "cli"}},
-		{Name: "vol2", Client: "10.0.0.3", Labels: map[string]string{"created-by": "csi", "kubernetes.volume.id": "vol2"}},
+		{Name: "vol2", Client: "10.0.0.3", Labels: map[string]string{"created-by": "csi", testLabelVolumeID: "vol2"}},
 	}
 
 	filtered := filterByLabels(items, []string{"created-by=csi"})
@@ -72,7 +75,7 @@ func TestGenerateLabelQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, generateLabelQuery(tt.labels).Encode())
+			assert.Equal(t, tt.want, models.GenerateLabelQuery(tt.labels).Encode())
 		})
 	}
 }

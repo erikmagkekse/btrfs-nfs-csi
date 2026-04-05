@@ -46,6 +46,42 @@ func TestExport(t *testing.T) {
 		assert.Contains(t, args, fmt.Sprintf("fsid=%d", fsid))
 	})
 
+	t.Run("ipv6_brackets", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		e := newTestExporter(m)
+
+		err := e.Export(context.Background(), "/data/vol1", "::1")
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+
+		args := strings.Join(m.Calls[0], " ")
+		assert.Contains(t, args, "[::1]:/data/vol1", "IPv6 must be bracket-wrapped")
+		assert.NotContains(t, args, " ::1:/data/vol1", "bare IPv6 must not appear")
+	})
+
+	t.Run("ipv6_full_address", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		e := newTestExporter(m)
+
+		err := e.Export(context.Background(), "/data/vol1", "2001:db8::1")
+		require.NoError(t, err)
+
+		args := strings.Join(m.Calls[0], " ")
+		assert.Contains(t, args, "[2001:db8::1]:/data/vol1")
+	})
+
+	t.Run("ipv4_no_brackets", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		e := newTestExporter(m)
+
+		err := e.Export(context.Background(), "/data/vol1", "192.168.1.1")
+		require.NoError(t, err)
+
+		args := strings.Join(m.Calls[0], " ")
+		assert.Contains(t, args, "192.168.1.1:/data/vol1")
+		assert.NotContains(t, args, "[192.168.1.1]")
+	})
+
 	t.Run("error", func(t *testing.T) {
 		m := &utils.MockRunner{Err: fmt.Errorf("permission denied")}
 		e := newTestExporter(m)
@@ -97,6 +133,18 @@ func TestUnexport(t *testing.T) {
 		args := strings.Join(m.Calls[0], " ")
 		assert.Contains(t, args, "-u")
 		assert.Contains(t, args, "10.0.0.1:/data/vol1")
+	})
+
+	t.Run("with ipv6 client", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		e := newTestExporter(m)
+
+		err := e.Unexport(context.Background(), "/data/vol1", "::1")
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+
+		args := strings.Join(m.Calls[0], " ")
+		assert.Contains(t, args, "[::1]:/data/vol1", "IPv6 must be bracket-wrapped in unexport")
 	})
 
 	t.Run("without client", func(t *testing.T) {
@@ -225,6 +273,35 @@ func TestParseExports(t *testing.T) {
 				"",
 			}, "\n"),
 			want: []ExportInfo{{Path: "/data", Client: "10.0.0.1"}},
+		},
+		{
+			name:   "ipv6 single line",
+			output: "/data/vol1\t[::1](rw,no_root_squash,fsid=123)",
+			want:   []ExportInfo{{Path: "/data/vol1", Client: "::1"}},
+		},
+		{
+			name:   "ipv6 full address",
+			output: "/data/vol1\t[2001:db8::1](rw,fsid=456)",
+			want:   []ExportInfo{{Path: "/data/vol1", Client: "2001:db8::1"}},
+		},
+		{
+			name: "ipv6 multiline",
+			output: strings.Join([]string{
+				"/data/very/long/path",
+				"\t\t[fe80::1](rw,fsid=789)",
+			}, "\n"),
+			want: []ExportInfo{{Path: "/data/very/long/path", Client: "fe80::1"}},
+		},
+		{
+			name: "mixed ipv4 and ipv6",
+			output: strings.Join([]string{
+				"/data/vol1\t10.0.0.1(rw,fsid=1)",
+				"/data/vol2\t[::1](rw,fsid=2)",
+			}, "\n"),
+			want: []ExportInfo{
+				{Path: "/data/vol1", Client: "10.0.0.1"},
+				{Path: "/data/vol2", Client: "::1"},
+			},
 		},
 	}
 

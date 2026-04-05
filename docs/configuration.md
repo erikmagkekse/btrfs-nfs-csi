@@ -16,10 +16,9 @@
 | `AGENT_EXPORTFS_BIN` | `exportfs` | exportfs binary path |
 | `AGENT_KERNEL_EXPORT_OPTIONS` | `rw,nohide,crossmnt,no_root_squash,no_subtree_check` | NFS export options (fsid is always appended automatically) |
 | `AGENT_BTRFS_BIN` | `btrfs` | btrfs binary path |
-| `AGENT_NFS_RECONCILE_INTERVAL` | `10m` | Export reconciliation (`0` = off) |
+| `AGENT_NFS_RECONCILE_INTERVAL` | `60s` | Export reconciliation (`0` = off) |
 | `AGENT_DEVICE_IO_INTERVAL` | `5s` | Device IO stats update interval |
 | `AGENT_DEVICE_STATS_INTERVAL` | `1m` | btrfs device errors + filesystem usage update interval |
-| `AGENT_DASHBOARD_REFRESH_SECONDS` | `5` | Dashboard refresh |
 | `AGENT_DEFAULT_DIR_MODE` | `0700` | Default mode for volume/snapshot/clone directories |
 | `AGENT_DEFAULT_DATA_MODE` | `2770` | Default mode for data subvolumes (setgid + group rwx) |
 | `AGENT_TASK_CLEANUP_INTERVAL` | `24h` | Remove completed/failed tasks after this duration |
@@ -27,6 +26,11 @@
 | `AGENT_TASK_DEFAULT_TIMEOUT` | `6h` | Default timeout for tasks (e.g. test). `0` = no timeout |
 | `AGENT_TASK_SCRUB_TIMEOUT` | `24h` | Timeout for btrfs scrub tasks. `0` = no timeout |
 | `AGENT_TASK_POLL_INTERVAL` | `5s` | Progress update interval for background tasks |
+| `AGENT_IMMUTABLE_LABELS` | - | Comma-separated label keys that cannot be changed after creation |
+| `AGENT_DEFAULT_PAGE_LIMIT` | `100` | Default page size for list API responses |
+| `AGENT_API_PAGINATION_SNAPSHOT_TTL` | `30s` | TTL for cursor-based pagination snapshots |
+| `AGENT_API_PAGINATION_MAX_SNAPSHOTS` | `100` | Max concurrent pagination snapshots |
+| `AGENT_API_SWAGGER_ENABLED` | `false` | Enable `GET /swagger.json` endpoint |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 
 ## API Client Environment Variables
@@ -38,6 +42,9 @@ Shared by CLI and controller (any `v1.Client` user).
 | `AGENT_CSI_IDENTITY` | `cli` (CLI), `k8s` (controller) | Caller identity for `created-by` label, injected automatically on every create |
 | `AGENT_HTTP_CLIENT_TIMEOUT` | `30s` | API request timeout (Go duration) |
 | `AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY` | `false` | Skip TLS certificate verification |
+| `AGENT_HTTP_CLIENT_PAGE_LIMIT` | `100` | Items per page for auto-pagination |
+| `AGENT_HTTP_CLIENT_PREFETCH` | `8` | Max pages to prefetch concurrently (`0` = sequential) |
+| `AGENT_HTTP_CLIENT_PREFETCH_MB` | `4` | Prefetch byte budget in MB (`0` = unlimited) |
 
 ## CLI Environment Variables
 
@@ -83,7 +90,7 @@ Each StorageClass binds one agent + one tenant. The SC name is used in volume ID
 | `agentURL` | yes | Agent REST API URL |
 | `nfsMountOptions` | no | NFS mount options |
 | `nocow` | no | `"true"` / `"false"` |
-| `compression` | no | `zstd`, `lzo`, `zlib`, `none` (with level: `zstd:3`) |
+| `compression` | no | `zstd`, `lzo`, `zlib`, `none` (with level: `zstd:3`, `zlib:6`) |
 | `uid` / `gid` | no | Volume owner |
 | `mode` | no | Octal permissions (default `"2770"`) |
 
@@ -93,9 +100,9 @@ Each StorageClass binds one agent + one tenant. The SC name is used in volume ID
 |---|---|
 | `btrfs-nfs-csi/nocow` | `"true"`, `"false"` |
 | `btrfs-nfs-csi/compression` | `"zstd"`, `"lzo"`, `"zlib"`, `"none"` |
-| `btrfs-nfs-csi/uid` | integer |
-| `btrfs-nfs-csi/gid` | integer |
-| `btrfs-nfs-csi/mode` | octal string |
+| `btrfs-nfs-csi/uid` | integer (0-65534) |
+| `btrfs-nfs-csi/gid` | integer (0-65534) |
+| `btrfs-nfs-csi/mode` | octal string (0000-7777) |
 | `btrfs-nfs-csi/labels` | `key=value,key=value` (max 8 user labels, see below) |
 
 Annotations override StorageClass defaults. Applied at create and on every attach.
@@ -176,6 +183,6 @@ stringData:
 
 ## TLS
 
-Set `AGENT_TLS_CERT` + `AGENT_TLS_KEY` → agent listens HTTPS (min TLS 1.2). Use `https://` in `agentURL`.
+Set `AGENT_TLS_CERT` + `AGENT_TLS_KEY` --> agent listens HTTPS (min TLS 1.2). Use `https://` in `agentURL`.
 
 For self-signed certificates, set `AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY=true`.

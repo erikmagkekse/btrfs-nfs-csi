@@ -58,6 +58,8 @@ spec:
           image: {{ include "btrfs-nfs-csi.driverImage" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
+            - integration
+            - kubernetes
             - controller
           {{- with .Values.controller.extraArgs }}
             {{- toYaml . | nindent 12 }}

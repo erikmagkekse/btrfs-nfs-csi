@@ -55,7 +55,7 @@ func TestVolumeMetadata_UnmarshalJSON_Migration(t *testing.T) {
 		orig := VolumeMetadata{
 			Name: "vol",
 			Exports: []ExportMetadata{
-				{IP: "10.0.0.1", Labels: map[string]string{"kubernetes.volume.id": "sc|vol1"}},
+				{IP: "10.0.0.1", Labels: map[string]string{testLabelVolumeID: "sc|vol1"}},
 				{IP: "10.0.0.2"},
 			},
 		}
@@ -112,13 +112,13 @@ func TestRefsForIP(t *testing.T) {
 }
 
 func TestLabelsContain(t *testing.T) {
-	stored := map[string]string{"created-by": "csi", "kubernetes.volume.id": "vol1", "kubernetes.node.name": "w1"}
+	stored := map[string]string{"created-by": "csi", testLabelVolumeID: "vol1", "kubernetes.node.name": "w1"}
 
-	assert.True(t, labelsContain(stored, map[string]string{"kubernetes.volume.id": "vol1"}), "subset match")
-	assert.True(t, labelsContain(stored, map[string]string{"kubernetes.volume.id": "vol1", "created-by": "csi"}), "multi-key subset")
+	assert.True(t, labelsContain(stored, map[string]string{testLabelVolumeID: "vol1"}), "subset match")
+	assert.True(t, labelsContain(stored, map[string]string{testLabelVolumeID: "vol1", "created-by": "csi"}), "multi-key subset")
 	assert.True(t, labelsContain(stored, map[string]string{}), "empty match matches everything")
 	assert.True(t, labelsContain(stored, nil), "nil match matches everything")
-	assert.False(t, labelsContain(stored, map[string]string{"kubernetes.volume.id": "vol2"}), "wrong value")
+	assert.False(t, labelsContain(stored, map[string]string{testLabelVolumeID: "vol2"}), "wrong value")
 	assert.False(t, labelsContain(stored, map[string]string{"missing-key": "x"}), "missing key")
 	assert.True(t, labelsContain(nil, nil), "both nil")
 	assert.True(t, labelsContain(nil, map[string]string{}), "nil stored, empty match")

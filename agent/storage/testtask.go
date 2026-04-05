@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,7 +20,7 @@ func (s *Storage) StartTestTask(ctx context.Context, opts map[string]string, lab
 		}
 	}
 
-	if err := validateLabels(labels); err != nil {
+	if err := config.ValidateLabels(labels); err != nil {
 		return "", err
 	}
 
@@ -29,7 +30,7 @@ func (s *Storage) StartTestTask(ctx context.Context, opts map[string]string, lab
 	}
 	id := s.tasks.Create(string(task.TypeTest), task.TaskOpts{Opts: opts, Labels: labels, Timeout: t}, func(ctx context.Context, update *task.Update) error {
 		if sleep > 0 {
-			log.Debug().Dur("sleep", sleep).Msg("test task sleeping")
+			log.Debug().Str("sleep", sleep.String()).Msg("test task sleeping")
 			start := time.Now()
 			stop := update.PollProgress(ctx, func() int {
 				return int(time.Since(start) * 100 / sleep)

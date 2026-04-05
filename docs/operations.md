@@ -15,7 +15,7 @@ spec:
     persistentVolumeClaimName: my-pvc
 ```
 
-Agent: `btrfs subvolume snapshot -r <src>/data <dst>/data` → stored under `{basePath}/{tenant}/snapshots/{name}/`
+Agent: `btrfs subvolume snapshot -r <src>/data <dst>/data` --> stored under `{basePath}/{tenant}/snapshots/{name}/`
 
 Usage updater tracks `used_bytes` (referenced) and `exclusive_bytes` (unique blocks).
 
@@ -23,7 +23,7 @@ Usage updater tracks `used_bytes` (referenced) and `exclusive_bytes` (unique blo
 
 ### From Snapshot
 
-Writable clone from a read-only VolumeSnapshot. Instant, independent of source.
+Writable clone from a read-only VolumeSnapshot. Instant, independent of source. The clone inherits the source volume's properties (size, quota, compression, nocow, uid, gid, mode) and has qgroup limits applied.
 
 ```yaml
 apiVersion: v1
@@ -81,9 +81,9 @@ Requires `allowVolumeExpansion: true` in StorageClass. New size must be > curren
 
 | Algorithm | Notes |
 |---|---|
-| `zstd` | Recommended. Optional level: `zstd:3` (1–15) |
-| `lzo` | Fastest, lower ratio |
-| `zlib` | Highest ratio, slowest |
+| `zstd` | Recommended. Optional level: `zstd:3` (1-15) |
+| `lzo` | Fastest, lower ratio. No level suffix (bare `lzo` only) |
+| `zlib` | Highest ratio, slowest. Optional level: `zlib:6` (1-9) |
 | `none` | Disable |
 
 Set via SC parameter `compression` or PVC annotation `btrfs-nfs-csi/compression`.
@@ -128,13 +128,13 @@ annotations:
   btrfs-nfs-csi/mode: "0750"
 ```
 
-Default mode: `2770` (configurable via `AGENT_DEFAULT_DATA_MODE`). Applied at creation via `chown`/`chmod`. Updated on attach if annotations change. Usage updater detects drift from NFS-level changes.
+UID and GID must be between 0 and 65534. Mode must be valid octal between 0000 and 7777. Default mode: `2770` (configurable via `AGENT_DEFAULT_DATA_MODE`). Applied at creation via `chown`/`chmod`. Updated on attach if annotations change. Usage updater detects drift from NFS-level changes.
 
 ## NFS Exports
 
 Export options: `rw,nohide,crossmnt,no_root_squash,no_subtree_check,fsid=<crc32>`
 
-**Lifecycle:** ControllerPublish → agent CreateVolumeExport (with labels: `created-by`, `kubernetes.pv.name`, `kubernetes.pvc.name`, `kubernetes.pvc.namespace`, `kubernetes.pvc.storageclassname`, `kubernetes.node.name`, `kubernetes.volumeattachment.name`) → `exportfs` add → NodeStage (NFS mount) → NodePublish (bind mount) → reverse on detach.
+**Lifecycle:** ControllerPublish --> agent CreateVolumeExport (with labels: `created-by`, `kubernetes.pv.name`, `kubernetes.pvc.name`, `kubernetes.pvc.namespace`, `kubernetes.pvc.storageclassname`, `kubernetes.node.name`, `kubernetes.volumeattachment.name`) --> `exportfs` add --> NodeStage (NFS mount) --> NodePublish (bind mount) --> reverse on detach.
 
 Exports are reference-counted per client IP. The NFS kernel export is only created on the first reference for an IP and removed when the last reference is gone. Each export carries labels identifying who created it (`created-by` is immutable).
 
@@ -243,7 +243,7 @@ The scrub result (bytes scrubbed, error counts) is exposed via Prometheus metric
 
 ## CLI
 
-The `btrfs-nfs-csi` binary doubles as a CLI tool. Any command that isn't `agent`, `controller`, or `driver` is treated as a CLI command.
+The `btrfs-nfs-csi` binary doubles as a CLI tool. Server commands (`agent`, `integration kubernetes controller|driver`) start long-running processes; everything else is a CLI command.
 
 ```bash
 export AGENT_URL=http://10.0.0.5:8080

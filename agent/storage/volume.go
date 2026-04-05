@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
-	"strconv"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -20,7 +18,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	// validation
-	if err := validateName(req.Name); err != nil {
+	if err := config.ValidateName(req.Name); err != nil {
 		return nil, err
 	}
 	if req.SizeBytes == 0 {
@@ -35,18 +33,24 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	if req.QuotaBytes == 0 {
 		req.QuotaBytes = req.SizeBytes
 	}
-	if err := validateLabels(req.Labels); err != nil {
+	if err := config.ValidateLabels(req.Labels); err != nil {
 		return nil, err
 	}
 	if err := requireImmutableLabels(s.immutableLabelKeys, req.Labels); err != nil {
 		return nil, err
 	}
+	if err := utils.ValidateUID(req.UID); err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
+	if err := utils.ValidateGID(req.GID); err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
 	if req.Mode == "" {
 		req.Mode = s.defaultDataMode
 	}
-	mode, err := strconv.ParseUint(req.Mode, 8, 32)
+	mode, err := utils.ValidateMode(req.Mode)
 	if err != nil {
-		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid mode: %s", req.Mode)}
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
 	}
 
 	// operations
@@ -149,20 +153,11 @@ func (s *Storage) ListVolumes(tenant string) ([]VolumeMetadata, error) {
 	return vols, nil
 }
 
-func (s *Storage) ListVolumesPaginated(tenant, after string, limit int) (*PaginatedResult[VolumeMetadata], error) {
-	vols, err := s.ListVolumes(tenant)
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(vols, func(i, j int) bool { return vols[i].Name < vols[j].Name })
-	return paginateSlice(vols, func(v VolumeMetadata) string { return v.Name }, after, limit), nil
-}
-
 func (s *Storage) GetVolume(tenant, name string) (*VolumeMetadata, error) {
 	if _, err := s.tenantPath(tenant); err != nil {
 		return nil, err
 	}
-	if err := validateName(name); err != nil {
+	if err := config.ValidateName(name); err != nil {
 		return nil, err
 	}
 	meta, err := s.volumes.Get(tenant, name)
@@ -180,7 +175,7 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	if _, err := s.tenantPath(tenant); err != nil {
 		return nil, err
 	}
-	if err := validateName(name); err != nil {
+	if err := config.ValidateName(name); err != nil {
 		return nil, err
 	}
 
@@ -197,7 +192,7 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 
 	// validation
 	if req.Labels != nil {
-		if err := validateLabels(*req.Labels); err != nil {
+		if err := config.ValidateLabels(*req.Labels); err != nil {
 			return nil, err
 		}
 		if err := protectImmutableLabels(s.immutableLabelKeys, cur.Labels, *req.Labels); err != nil {
@@ -215,12 +210,22 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 			return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
 		}
 	}
+	if req.UID != nil {
+		if err := utils.ValidateUID(*req.UID); err != nil {
+			return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+		}
+	}
+	if req.GID != nil {
+		if err := utils.ValidateGID(*req.GID); err != nil {
+			return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+		}
+	}
 	var parsedMode uint64
 	if req.Mode != nil {
 		var err error
-		parsedMode, err = strconv.ParseUint(*req.Mode, 8, 32)
+		parsedMode, err = utils.ValidateMode(*req.Mode)
 		if err != nil {
-			return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid mode: %s", *req.Mode)}
+			return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
 		}
 	}
 
@@ -309,7 +314,7 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	if _, err := s.tenantPath(tenant); err != nil {
 		return nil, err
 	}
-	if err := validateName(req.Name); err != nil {
+	if err := config.ValidateName(req.Name); err != nil {
 		return nil, err
 	}
 
@@ -319,7 +324,7 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	}
 	labels[config.LabelCloneSourceType] = "volume"
 	labels[config.LabelCloneSourceName] = req.Source
-	if err := validateLabels(labels); err != nil {
+	if err := config.ValidateLabels(labels); err != nil {
 		return nil, err
 	}
 	if err := requireImmutableLabels(s.immutableLabelKeys, labels); err != nil {
@@ -394,7 +399,7 @@ func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 	if _, err := s.tenantPath(tenant); err != nil {
 		return err
 	}
-	if err := validateName(name); err != nil {
+	if err := config.ValidateName(name); err != nil {
 		return err
 	}
 

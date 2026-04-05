@@ -90,7 +90,7 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	}
 
 	for _, name := range tenants {
-		if err := validateName(name); err != nil {
+		if err := config.ValidateName(name); err != nil {
 			log.Fatal().Str("tenant", name).Msg("invalid tenant name")
 		}
 		td := filepath.Join(basePath, name)
@@ -136,6 +136,11 @@ func (s *Storage) loadCache() {
 				if !e.IsDir() || e.Name() == config.SnapshotsDir {
 					continue
 				}
+				dataDir := s.volumes.DataPath(tenant, e.Name())
+				if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+					log.Warn().Str("tenant", tenant).Str("volume", e.Name()).Str("path", dataDir).Msg("cache: data directory missing, skipping phantom volume")
+					continue
+				}
 				if _, err := s.volumes.LoadFromDisk(tenant, e.Name()); err != nil {
 					log.Warn().Err(err).Str("tenant", tenant).Str("volume", e.Name()).Msg("cache: corrupt metadata, skipping")
 					continue
@@ -149,6 +154,11 @@ func (s *Storage) loadCache() {
 		if entries, err := os.ReadDir(snapDir); err == nil {
 			for _, e := range entries {
 				if !e.IsDir() {
+					continue
+				}
+				dataDir := s.snapshots.DataPath(tenant, e.Name())
+				if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+					log.Warn().Str("tenant", tenant).Str("snapshot", e.Name()).Str("path", dataDir).Msg("cache: data directory missing, skipping phantom snapshot")
 					continue
 				}
 				if _, err := s.snapshots.LoadFromDisk(tenant, e.Name()); err != nil {
@@ -184,7 +194,7 @@ func (s *Storage) Exporter() nfs.Exporter { return s.exporter }
 func (s *Storage) Tasks() *task.Manager   { return s.tasks }
 
 func (s *Storage) tenantPath(tenant string) (string, error) {
-	if err := validateName(tenant); err != nil {
+	if err := config.ValidateName(tenant); err != nil {
 		return "", err
 	}
 	bp := filepath.Join(s.basePath, tenant)

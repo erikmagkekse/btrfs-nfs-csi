@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 	"time"
 
@@ -78,7 +77,7 @@ func (tm *Manager) Create(taskType string, opts TaskOpts, fn TaskFunc) string {
 	tm.tasks[id] = rt
 	tm.mu.Unlock()
 
-	log.Info().Str("task", id).Str("type", taskType).Dur("timeout", opts.Timeout).Msg("task submitted")
+	log.Info().Str("task", id).Str("type", taskType).Str("timeout", opts.Timeout.String()).Msg("task submitted")
 
 	go func() {
 		// Wait for a worker slot (nil sem = unlimited)
@@ -146,7 +145,7 @@ func (tm *Manager) Create(taskType string, opts TaskOpts, fn TaskFunc) string {
 			Str("task", id).
 			Str("type", taskType).
 			Str("status", string(final.Status)).
-			Dur("took", elapsed).
+			Str("took", elapsed.String()).
 			Msg("task finished")
 	}()
 
@@ -184,31 +183,6 @@ func (tm *Manager) List(taskType string) []Task {
 		result = append(result, *t)
 	}
 	return result
-}
-
-// ListPaginated returns a paginated, sorted list of tasks.
-func (tm *Manager) ListPaginated(taskType, after string, limit int) (items []Task, total int, next string) {
-	all := tm.List(taskType)
-	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
-	total = len(all)
-
-	if after != "" {
-		for i, t := range all {
-			if t.ID > after {
-				all = all[i:]
-				break
-			}
-			if i == len(all)-1 {
-				return nil, total, ""
-			}
-		}
-	}
-
-	if limit > 0 && len(all) > limit {
-		next = all[limit-1].ID
-		return all[:limit], total, next
-	}
-	return all, total, ""
 }
 
 // Cancel aborts a running task via context cancellation.

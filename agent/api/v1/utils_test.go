@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
@@ -46,10 +47,16 @@ func TestStorageError(t *testing.T) {
 			wantCode:   "CUSTOM",
 		},
 		{
+			name:       "ErrInternal_maps_to_500",
+			err:        &storage.StorageError{Code: storage.ErrInternal, Message: "nfs export failed"},
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   storage.ErrInternal,
+		},
+		{
 			name:       "non_StorageError_maps_to_500",
 			err:        fmt.Errorf("boom"),
 			wantStatus: http.StatusInternalServerError,
-			wantCode:   "INTERNAL_ERROR",
+			wantCode:   storage.ErrInternal,
 		},
 	}
 
@@ -65,9 +72,27 @@ func TestStorageError(t *testing.T) {
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 
-			var resp ErrorResponse
+			var resp models.ErrorResponse
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 			assert.Equal(t, tt.wantCode, resp.Code)
 		})
 	}
+}
+
+func TestStorageError_FallbackSanitized(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := StorageError(c, fmt.Errorf("exportfs: /data/vol1: permission denied"))
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	var resp models.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "internal error", resp.Error, "fallback must not leak error details")
+	assert.NotContains(t, resp.Error, "exportfs", "command name must not leak")
+	assert.NotContains(t, resp.Error, "permission denied", "system error must not leak")
 }

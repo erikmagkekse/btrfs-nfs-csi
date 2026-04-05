@@ -1,0 +1,1116 @@
+basePath: /
+definitions:
+  models.CloneCreateRequest:
+    properties:
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        description: ^[a-zA-Z0-9_-]{1,128}$
+        type: string
+      snapshot:
+        description: source snapshot name
+        type: string
+    type: object
+  models.DeviceErrorsResponse:
+    properties:
+      corruption_errs:
+        type: integer
+      flush_errs:
+        type: integer
+      generation_errs:
+        type: integer
+      read_errs:
+        type: integer
+      write_errs:
+        type: integer
+    type: object
+  models.DeviceIOStatsResponse:
+    properties:
+      io_time_ms_total:
+        type: integer
+      ios_in_progress:
+        type: integer
+      read_bytes_total:
+        type: integer
+      read_ios_total:
+        type: integer
+      read_time_ms_total:
+        type: integer
+      weighted_io_time_ms_total:
+        type: integer
+      write_bytes_total:
+        type: integer
+      write_ios_total:
+        type: integer
+      write_time_ms_total:
+        type: integer
+    type: object
+  models.DeviceStatsResponse:
+    properties:
+      allocated_bytes:
+        type: integer
+      device:
+        type: string
+      devid:
+        type: string
+      errors:
+        $ref: '#/definitions/models.DeviceErrorsResponse'
+      io:
+        $ref: '#/definitions/models.DeviceIOStatsResponse'
+      missing:
+        type: boolean
+      size_bytes:
+        type: integer
+    type: object
+  models.ErrorResponse:
+    properties:
+      code:
+        type: string
+      error:
+        type: string
+    type: object
+  models.ExportDetailResponse:
+    properties:
+      client:
+        type: string
+      created_at:
+        type: string
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+    type: object
+  models.ExportListResponse:
+    properties:
+      exports:
+        items:
+          $ref: '#/definitions/models.ExportResponse'
+        type: array
+      next:
+        type: string
+      total:
+        type: integer
+    type: object
+  models.ExportResponse:
+    properties:
+      client:
+        type: string
+      created_at:
+        type: string
+      name:
+        type: string
+    type: object
+  models.FilesystemStatsResponse:
+    properties:
+      data_ratio:
+        type: number
+      devices:
+        items:
+          $ref: '#/definitions/models.DeviceStatsResponse'
+        type: array
+      free_bytes:
+        type: integer
+      metadata_total_bytes:
+        type: integer
+      metadata_used_bytes:
+        type: integer
+      total_bytes:
+        type: integer
+      unallocated_bytes:
+        type: integer
+      used_bytes:
+        type: integer
+    type: object
+  models.HealthResponse:
+    properties:
+      commit:
+        type: string
+      features:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        type: string
+      uptime_seconds:
+        type: integer
+      version:
+        type: string
+    type: object
+  models.SnapshotCreateRequest:
+    properties:
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        description: ^[a-zA-Z0-9_-]{1,128}$
+        type: string
+      volume:
+        description: source volume name
+        type: string
+    type: object
+  models.SnapshotDetailResponse:
+    properties:
+      created_at:
+        type: string
+      exclusive_bytes:
+        type: integer
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      path:
+        type: string
+      readonly:
+        type: boolean
+      size_bytes:
+        type: integer
+      updated_at:
+        type: string
+      used_bytes:
+        type: integer
+      volume:
+        type: string
+    type: object
+  models.SnapshotListResponse:
+    properties:
+      next:
+        type: string
+      snapshots:
+        items:
+          $ref: '#/definitions/models.SnapshotResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  models.SnapshotResponse:
+    properties:
+      created_at:
+        type: string
+      name:
+        type: string
+      size_bytes:
+        type: integer
+      used_bytes:
+        type: integer
+      volume:
+        type: string
+    type: object
+  models.StatfsResponse:
+    properties:
+      free_bytes:
+        type: integer
+      total_bytes:
+        type: integer
+      used_bytes:
+        type: integer
+    type: object
+  models.StatsResponse:
+    properties:
+      btrfs:
+        $ref: '#/definitions/models.FilesystemStatsResponse'
+      statfs:
+        $ref: '#/definitions/models.StatfsResponse'
+    type: object
+  models.TaskCreateRequest:
+    properties:
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      opts:
+        additionalProperties:
+          type: string
+        description: task-specific options
+        type: object
+      timeout:
+        description: Go duration string, e.g. "6h", "30m"
+        type: string
+    type: object
+  models.TaskCreateResponse:
+    properties:
+      status:
+        type: string
+      task_id:
+        type: string
+    type: object
+  models.TaskDetailResponse:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      error:
+        type: string
+      id:
+        type: string
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      opts:
+        additionalProperties:
+          type: string
+        type: object
+      progress:
+        type: integer
+      result:
+        items:
+          type: integer
+        type: array
+      started_at:
+        type: string
+      status:
+        type: string
+      timeout:
+        type: string
+      type:
+        type: string
+    type: object
+  models.TaskListResponse:
+    properties:
+      next:
+        type: string
+      tasks:
+        items:
+          $ref: '#/definitions/models.TaskResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  models.TaskResponse:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      error:
+        type: string
+      id:
+        type: string
+      opts:
+        additionalProperties:
+          type: string
+        type: object
+      progress:
+        type: integer
+      started_at:
+        type: string
+      status:
+        type: string
+      timeout:
+        type: string
+      type:
+        type: string
+    type: object
+  models.VolumeCloneRequest:
+    properties:
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        description: ^[a-zA-Z0-9_-]{1,128}$
+        type: string
+      source:
+        description: source volume name
+        type: string
+    type: object
+  models.VolumeCreateRequest:
+    properties:
+      compression:
+        description: '"zstd", "zstd:3", "zlib", "zlib:5", "lzo", or ""'
+        type: string
+      gid:
+        description: owner GID (0-65534)
+        type: integer
+      labels:
+        additionalProperties:
+          type: string
+        description: 'key: ^[a-z0-9][a-z0-9._-]{0,62}$, value: ^[a-zA-Z0-9._-]{0,128}$'
+        type: object
+      mode:
+        description: octal permission string, e.g. "0755" (max 7777)
+        type: string
+      name:
+        description: ^[a-zA-Z0-9_-]{1,128}$
+        type: string
+      nocow:
+        description: disable copy-on-write (chattr +C)
+        type: boolean
+      quota_bytes:
+        description: btrfs qgroup limit (0 = no quota)
+        type: integer
+      size_bytes:
+        description: subvolume size in bytes
+        type: integer
+      uid:
+        description: owner UID (0-65534)
+        type: integer
+    type: object
+  models.VolumeDetailResponse:
+    properties:
+      clients:
+        items:
+          $ref: '#/definitions/models.ExportDetailResponse'
+        type: array
+      compression:
+        type: string
+      created_at:
+        type: string
+      gid:
+        type: integer
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      last_attach_at:
+        type: string
+      mode:
+        type: string
+      name:
+        type: string
+      nocow:
+        type: boolean
+      path:
+        type: string
+      quota_bytes:
+        type: integer
+      size_bytes:
+        type: integer
+      uid:
+        type: integer
+      updated_at:
+        type: string
+      used_bytes:
+        type: integer
+    type: object
+  models.VolumeExportCreateRequest:
+    properties:
+      client:
+        description: client IP address (IPv4 or IPv6)
+        type: string
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  models.VolumeExportDeleteRequest:
+    properties:
+      client:
+        description: client IP address (IPv4 or IPv6)
+        type: string
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  models.VolumeListResponse:
+    properties:
+      next:
+        type: string
+      total:
+        type: integer
+      volumes:
+        items:
+          $ref: '#/definitions/models.VolumeResponse'
+        type: array
+    type: object
+  models.VolumeResponse:
+    properties:
+      clients:
+        type: integer
+      created_at:
+        type: string
+      name:
+        type: string
+      size_bytes:
+        type: integer
+      used_bytes:
+        type: integer
+    type: object
+  models.VolumeUpdateRequest:
+    properties:
+      compression:
+        description: see VolumeCreateRequest.Compression
+        type: string
+      gid:
+        description: new owner GID (0-65534)
+        type: integer
+      labels:
+        additionalProperties:
+          type: string
+        description: replaces all labels
+        type: object
+      mode:
+        description: octal permission string (max 7777)
+        type: string
+      nocow:
+        description: toggle copy-on-write
+        type: boolean
+      size_bytes:
+        description: new size (must be >= current)
+        type: integer
+      uid:
+        description: new owner UID (0-65534)
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: REST API for managing btrfs volumes, snapshots, clones, NFS exports,
+    and background tasks.
+  title: btrfs-nfs-csi Agent API
+  version: "1.0"
+paths:
+  /healthz:
+    get:
+      description: Returns agent health status, version, and enabled features. Does
+        not require authentication.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.HealthResponse'
+      summary: Health check
+      tags:
+      - health
+  /v1/clones:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new volume from a snapshot. Returns existing on conflict.
+      parameters:
+      - description: Clone configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CloneCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.VolumeDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Volume already exists
+          schema:
+            $ref: '#/definitions/models.VolumeDetailResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a clone from snapshot
+      tags:
+      - clones
+  /v1/exports:
+    get:
+      description: Returns all active NFS exports. Use detail=true for labels. Supports
+        pagination and label filtering.
+      parameters:
+      - description: Return full detail
+        enum:
+        - "true"
+        in: query
+        name: detail
+        type: string
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor
+        in: query
+        name: after
+        type: string
+      - collectionFormat: csv
+        description: Label filter (key=value), repeatable
+        in: query
+        items:
+          type: string
+        name: label
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ExportListResponse'
+      security:
+      - BearerAuth: []
+      summary: List NFS exports
+      tags:
+      - exports
+  /v1/snapshots:
+    get:
+      description: Returns all snapshots. Use detail=true for full metadata. Supports
+        pagination and label filtering.
+      parameters:
+      - description: Return full detail
+        enum:
+        - "true"
+        in: query
+        name: detail
+        type: string
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor
+        in: query
+        name: after
+        type: string
+      - collectionFormat: csv
+        description: Label filter (key=value), repeatable
+        in: query
+        items:
+          type: string
+        name: label
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SnapshotListResponse'
+      security:
+      - BearerAuth: []
+      summary: List snapshots
+      tags:
+      - snapshots
+    post:
+      consumes:
+      - application/json
+      description: Creates a read-only btrfs snapshot of a volume. Returns existing
+        snapshot on conflict.
+      parameters:
+      - description: Snapshot configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SnapshotCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.SnapshotDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Snapshot already exists
+          schema:
+            $ref: '#/definitions/models.SnapshotDetailResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a snapshot
+      tags:
+      - snapshots
+  /v1/snapshots/{name}:
+    delete:
+      description: Deletes a snapshot and its btrfs subvolume.
+      parameters:
+      - description: Snapshot name
+        in: path
+        name: name
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a snapshot
+      tags:
+      - snapshots
+    get:
+      description: Returns detailed metadata for a single snapshot.
+      parameters:
+      - description: Snapshot name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SnapshotDetailResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a snapshot
+      tags:
+      - snapshots
+  /v1/stats:
+    get:
+      description: Returns statfs and btrfs device/filesystem statistics.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.StatsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get filesystem statistics
+      tags:
+      - stats
+  /v1/tasks:
+    get:
+      description: Returns background tasks. Filter by type. Supports detail, pagination,
+        and label filtering.
+      parameters:
+      - description: Filter by task type
+        enum:
+        - scrub
+        - test
+        in: query
+        name: type
+        type: string
+      - description: Return full detail
+        enum:
+        - "true"
+        in: query
+        name: detail
+        type: string
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor
+        in: query
+        name: after
+        type: string
+      - collectionFormat: csv
+        description: Label filter (key=value), repeatable
+        in: query
+        items:
+          type: string
+        name: label
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TaskListResponse'
+      security:
+      - BearerAuth: []
+      summary: List tasks
+      tags:
+      - tasks
+  /v1/tasks/{id}:
+    delete:
+      description: Cancels a running or pending background task.
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel a task
+      tags:
+      - tasks
+    get:
+      description: Returns detailed metadata for a single background task.
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TaskDetailResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a task
+      tags:
+      - tasks
+  /v1/tasks/{type}:
+    post:
+      consumes:
+      - application/json
+      description: Creates a background task (scrub or test). Returns 202 Accepted
+        with task ID.
+      parameters:
+      - description: Task type
+        enum:
+        - scrub
+        - test
+        in: path
+        name: type
+        required: true
+        type: string
+      - description: Task options
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/models.TaskCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/models.TaskCreateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a background task
+      tags:
+      - tasks
+  /v1/volumes:
+    get:
+      description: Returns all volumes. Use detail=true for full metadata. Supports
+        pagination and label filtering.
+      parameters:
+      - description: Return full detail
+        enum:
+        - "true"
+        in: query
+        name: detail
+        type: string
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor from previous response
+        in: query
+        name: after
+        type: string
+      - collectionFormat: csv
+        description: Label filter (key=value), repeatable
+        in: query
+        items:
+          type: string
+        name: label
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.VolumeListResponse'
+      security:
+      - BearerAuth: []
+      summary: List volumes
+      tags:
+      - volumes
+    post:
+      consumes:
+      - application/json
+      description: Creates a new btrfs subvolume. Returns the existing volume on conflict.
+      parameters:
+      - description: Volume configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VolumeCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.VolumeDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Volume already exists
+          schema:
+            $ref: '#/definitions/models.VolumeDetailResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a volume
+      tags:
+      - volumes
+  /v1/volumes/{name}:
+    delete:
+      description: Deletes a volume and its btrfs subvolume. Fails if the volume has
+        active exports.
+      parameters:
+      - description: Volume name
+        in: path
+        name: name
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "423":
+          description: Volume has active exports
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a volume
+      tags:
+      - volumes
+    get:
+      description: Returns detailed metadata for a single volume.
+      parameters:
+      - description: Volume name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.VolumeDetailResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a volume
+      tags:
+      - volumes
+    patch:
+      consumes:
+      - application/json
+      description: Patches volume properties. Nil/omitted fields are left unchanged.
+      parameters:
+      - description: Volume name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VolumeUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.VolumeDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a volume
+      tags:
+      - volumes
+  /v1/volumes/{name}/export:
+    delete:
+      consumes:
+      - application/json
+      description: Removes an NFS export for a volume from the given client IP.
+      parameters:
+      - description: Volume name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Export to remove
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VolumeExportDeleteRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove NFS export
+      tags:
+      - exports
+    post:
+      consumes:
+      - application/json
+      description: Adds an NFS export for a volume to the given client IP.
+      parameters:
+      - description: Volume name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Export config
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VolumeExportCreateRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add NFS export
+      tags:
+      - exports
+  /v1/volumes/{name}/snapshots:
+    get:
+      description: Returns snapshots for a specific volume. Supports detail, pagination,
+        and label filtering.
+      parameters:
+      - description: Volume name
+        in: path
+        name: name
+        type: string
+      - description: Return full detail
+        enum:
+        - "true"
+        in: query
+        name: detail
+        type: string
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Pagination cursor
+        in: query
+        name: after
+        type: string
+      - collectionFormat: csv
+        description: Label filter (key=value), repeatable
+        in: query
+        items:
+          type: string
+        name: label
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SnapshotListResponse'
+      security:
+      - BearerAuth: []
+      summary: List snapshots for a volume
+      tags:
+      - snapshots
+  /v1/volumes/clone:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new volume from another volume (internal snapshot + clone).
+        Returns existing on conflict.
+      parameters:
+      - description: Clone configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VolumeCloneRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.VolumeDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: Volume already exists
+          schema:
+            $ref: '#/definitions/models.VolumeDetailResponse'
+      security:
+      - BearerAuth: []
+      summary: Clone a volume
+      tags:
+      - clones
+securityDefinitions:
+  BearerAuth:
+    description: Tenant token as "Bearer <token>"
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
