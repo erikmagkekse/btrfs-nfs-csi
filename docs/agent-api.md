@@ -405,6 +405,7 @@ Filesystem space usage, per-device IO counters (from sysfs), per-device btrfs er
 
 ```json
 {
+  "tenant_name": "default",
   "statfs": {
     "total_bytes": 1099511627776,
     "used_bytes": 10737418240,
@@ -551,12 +552,6 @@ Returns a single task with full details including `result`, `opts`, and `labels`
 Cancels a running task. 204 No Content. 404 if not found. Cancelling a finished task is a no-op.
 
 Task statuses: `pending`, `running`, `completed`, `failed`, `cancelled`.
-
-## Dashboard
-
-### GET /v1/dashboard
-
-HTML dashboard (requires auth, use Basic in browser).
 
 ## Unauthenticated
 

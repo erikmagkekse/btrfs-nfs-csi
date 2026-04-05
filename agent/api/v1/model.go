@@ -145,8 +145,9 @@ type ExportDetailListResponse struct {
 }
 
 type StatsResponse struct {
-	Statfs StatfsResponse          `json:"statfs"`
-	Btrfs  FilesystemStatsResponse `json:"btrfs"`
+	TenantName string                  `json:"tenant_name"`
+	Statfs     StatfsResponse          `json:"statfs"`
+	Btrfs      FilesystemStatsResponse `json:"btrfs"`
 }
 
 type StatfsResponse struct {
