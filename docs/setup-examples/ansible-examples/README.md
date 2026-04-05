@@ -60,7 +60,7 @@ Runs four roles in order:
 Override any default variable via `-e`:
 
 ```bash
-ansible-playbook simple.yaml -e agent_version=0.9.9 -e k8s_server_type=cx32
+ansible-playbook simple.yaml -e agent_version=0.10.0 -e k8s_server_type=cx32
 ```
 
 ### Agent defaults
@@ -70,7 +70,7 @@ ansible-playbook simple.yaml -e agent_version=0.9.9 -e k8s_server_type=cx32
 | `server_type` | `cx23` |
 | `server_image` | `debian-13` |
 | `volume_size` | `20` (GB) |
-| `agent_version` | `0.9.9` |
+| `agent_version` | `0.10.0` |
 | `agent_image` | (unset, set by quickstart install script) |
 | `agent_base_path` | `/export/data` |
 

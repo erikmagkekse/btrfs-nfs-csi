@@ -16,10 +16,10 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	}
 
 	// validation
-	if err := validateName(req.Name); err != nil {
+	if err := config.ValidateName(req.Name); err != nil {
 		return nil, err
 	}
-	if err := validateName(req.Snapshot); err != nil {
+	if err := config.ValidateName(req.Snapshot); err != nil {
 		return nil, err
 	}
 	labels := req.Labels
@@ -28,15 +28,20 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	}
 	labels[config.LabelCloneSourceType] = "snapshot"
 	labels[config.LabelCloneSourceName] = req.Snapshot
-	if err := validateLabels(labels); err != nil {
+	if err := config.ValidateLabels(labels); err != nil {
 		return nil, err
 	}
 	if err := requireImmutableLabels(s.immutableLabelKeys, labels); err != nil {
 		return nil, err
 	}
 	srcData := s.snapshots.DataPath(tenant, req.Snapshot)
-	if !s.snapshots.Exists(tenant, req.Snapshot) {
+	snap, snapErr := s.snapshots.Get(tenant, req.Snapshot)
+	if snapErr != nil {
 		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source snapshot %q not found", req.Snapshot)}
+	}
+	srcVol, volErr := s.volumes.Get(tenant, snap.Volume)
+	if volErr != nil {
+		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source volume %q for snapshot %q not found", snap.Volume, req.Snapshot)}
 	}
 	cloneDir := s.volumes.Dir(tenant, req.Name)
 	if existing, err := s.volumes.Get(tenant, req.Name); err == nil {
@@ -56,13 +61,31 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
 	}
 
+	if s.quotaEnabled && srcVol.QuotaBytes > 0 {
+		if err := s.btrfs.QgroupLimit(ctx, dstData, srcVol.QuotaBytes); err != nil {
+			log.Error().Err(err).Str("path", dstData).Msg("failed to set qgroup limit on clone")
+			if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
+				log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
+			}
+			_ = os.RemoveAll(cloneDir)
+			return nil, fmt.Errorf("qgroup limit failed: %w", err)
+		}
+	}
+
 	now := time.Now().UTC()
 	vol := VolumeMetadata{
-		Name:      req.Name,
-		Path:      cloneDir,
-		Labels:    labels,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:        req.Name,
+		Path:        cloneDir,
+		SizeBytes:   srcVol.SizeBytes,
+		QuotaBytes:  srcVol.QuotaBytes,
+		Compression: srcVol.Compression,
+		NoCOW:       srcVol.NoCOW,
+		UID:         srcVol.UID,
+		GID:         srcVol.GID,
+		Mode:        srcVol.Mode,
+		Labels:      labels,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	if err := s.volumes.Store(tenant, req.Name, &vol); err != nil {

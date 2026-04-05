@@ -31,20 +31,25 @@
       Agent:           http://{{ agent_ip }}:8080
         Tenant:        {{ tenant_name }}
         Token:         {{ tenant_token }}
-      Dashboard:       http://{{ agent_ip }}:8080/v1/dashboard
-        Auth:          any username, token as password
       K8s Server:      {{ hcloud_k8s_server.hcloud_server.ipv4_address }}
       Kubeconfig:      {{ kubeconfig_local_path }}
 
       CSI Pods:
       {{ csi_pods.stdout | indent(2, true) }}
 
-      StorageClass:    
+      StorageClass:
         {{ csi_sc.stdout }}
-      SnapshotClass:   
+      SnapshotClass:
         {{ csi_vsc.stdout | default('not found') }}
 
-      Quick start:
+      CLI:
+        export AGENT_URL=http://{{ agent_ip }}:8080
+        export AGENT_TOKEN={{ tenant_token }}
+        btrfs-nfs-csi health
+        btrfs-nfs-csi volume list --all
+        btrfs-nfs-csi stats
+
+      Kubernetes:
         export KUBECONFIG={{ kubeconfig_local_path }}
         kubectl get nodes
         kubectl apply -f test-pvc.yaml

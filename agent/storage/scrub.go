@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -21,7 +22,7 @@ func (s *Storage) StartScrub(ctx context.Context, opts map[string]string, labels
 		return "", &StorageError{Code: ErrBusy, Message: "scrub already running on filesystem"}
 	}
 
-	if err := validateLabels(labels); err != nil {
+	if err := config.ValidateLabels(labels); err != nil {
 		return "", err
 	}
 

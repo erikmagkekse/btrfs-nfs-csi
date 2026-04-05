@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testLabelVolumeID = "kubernetes.volume.id"
+
 // --- TestCreateVolumeExport ---
 
 func TestCreateVolumeExport(t *testing.T) {
@@ -68,6 +70,47 @@ func TestCreateVolumeExport(t *testing.T) {
 		requireStorageError(t, err, ErrNotFound)
 	})
 
+	t.Run("invalid_client_ip", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+
+		volDir := filepath.Join(bp, "myvol")
+		require.NoError(t, os.MkdirAll(volDir, 0o755))
+		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
+
+		cases := []struct {
+			name   string
+			client string
+		}{
+			{"wildcard", "*"},
+			{"hostname", "node1.example.com"},
+			{"cidr", "10.0.0.0/24"},
+			{"parens_injection", "10.0.0.1(rw,no_root_squash)"},
+			{"empty", ""},
+			{"space", "10.0.0.1 10.0.0.2"},
+			{"newline", "10.0.0.1\n10.0.0.2"},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				err := s.CreateVolumeExport(ctx, "test", "myvol", tc.client, nil)
+				requireStorageError(t, err, ErrInvalid)
+			})
+		}
+	})
+
+	t.Run("valid_ipv6_client", func(t *testing.T) {
+		s, bp, _, exporter := newTestStorage(t)
+
+		volDir := filepath.Join(bp, "myvol")
+		require.NoError(t, os.MkdirAll(volDir, 0o755))
+		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
+
+		exporter.On("Export", mock.Anything, volDir, "::1").Return(nil)
+
+		err := s.CreateVolumeExport(ctx, "test", "myvol", "::1", nil)
+		require.NoError(t, err, "CreateVolumeExport with IPv6")
+		exporter.AssertExpectations(t)
+	})
+
 	t.Run("metadata_first_on_export_failure", func(t *testing.T) {
 		s, bp, _, exporter := newTestStorage(t)
 
@@ -75,11 +118,13 @@ func TestCreateVolumeExport(t *testing.T) {
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
 		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
 
-		exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(fmt.Errorf("nfs error"))
+		exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(fmt.Errorf("exportfs: /data/vol1: command failed"))
 
 		err := s.CreateVolumeExport(ctx, "test", "myvol", "10.0.0.1", nil)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "nfs export failed")
+		requireStorageError(t, err, ErrInternal)
+		assert.Equal(t, "nfs export failed", err.Error(), "error should not leak command details")
+		assert.NotContains(t, err.Error(), "exportfs", "command name must not leak")
 
 		// metadata should already have the client (written before export call)
 		meta := readVolumeMeta(t, volDir)
@@ -99,8 +144,8 @@ func TestCreateVolumeExport(t *testing.T) {
 		// first export for this IP: Export called
 		exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(nil).Once()
 
-		labels1 := map[string]string{"kubernetes.volume.id": "vol1"}
-		labels2 := map[string]string{"kubernetes.volume.id": "vol2"}
+		labels1 := map[string]string{testLabelVolumeID: "vol1"}
+		labels2 := map[string]string{testLabelVolumeID: "vol2"}
 
 		require.NoError(t, s.CreateVolumeExport(ctx, "test", "myvol", "10.0.0.1", labels1))
 		// second export for same IP with different labels: no Export call
@@ -137,6 +182,22 @@ func TestDeleteVolumeExport(t *testing.T) {
 		exporter.AssertExpectations(t)
 	})
 
+	t.Run("invalid_client_ip", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+
+		volDir := filepath.Join(bp, "myvol")
+		require.NoError(t, os.MkdirAll(volDir, 0o755))
+		writeTestMetadata(t, s, volDir, VolumeMetadata{
+			Name: "myvol", Exports: []ExportMetadata{{IP: "10.0.0.1"}},
+		})
+
+		err := s.DeleteVolumeExport(ctx, "test", "myvol", "*", nil)
+		requireStorageError(t, err, ErrInvalid)
+
+		err = s.DeleteVolumeExport(ctx, "test", "myvol", "node1.example.com", nil)
+		requireStorageError(t, err, ErrInvalid)
+	})
+
 	t.Run("client_not_in_list", func(t *testing.T) {
 		s, bp, _, exporter := newTestStorage(t)
 
@@ -165,11 +226,13 @@ func TestDeleteVolumeExport(t *testing.T) {
 			Name: "myvol", Exports: []ExportMetadata{{IP: "10.0.0.1"}},
 		})
 
-		exporter.On("Unexport", mock.Anything, volDir, "10.0.0.1").Return(fmt.Errorf("nfs error"))
+		exporter.On("Unexport", mock.Anything, volDir, "10.0.0.1").Return(fmt.Errorf("exportfs: /data/vol1: command failed"))
 
 		err := s.DeleteVolumeExport(ctx, "test", "myvol", "10.0.0.1", nil)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "nfs unexport failed")
+		requireStorageError(t, err, ErrInternal)
+		assert.Equal(t, "nfs unexport failed", err.Error(), "error should not leak command details")
+		assert.NotContains(t, err.Error(), "exportfs", "command name must not leak")
 
 		// metadata should already have client removed (written before unexport call)
 		meta := readVolumeMeta(t, volDir)
@@ -183,8 +246,8 @@ func TestDeleteVolumeExport(t *testing.T) {
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		labels1 := map[string]string{"kubernetes.volume.id": "vol1"}
-		labels2 := map[string]string{"kubernetes.volume.id": "vol2"}
+		labels1 := map[string]string{testLabelVolumeID: "vol1"}
+		labels2 := map[string]string{testLabelVolumeID: "vol2"}
 		writeTestMetadata(t, s, volDir, VolumeMetadata{
 			Name: "myvol", Exports: []ExportMetadata{
 				{IP: "10.0.0.1", Labels: labels1},
@@ -207,7 +270,7 @@ func TestDeleteVolumeExport(t *testing.T) {
 
 		volDir := filepath.Join(bp, "myvol")
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
-		labels1 := map[string]string{"kubernetes.volume.id": "vol1"}
+		labels1 := map[string]string{testLabelVolumeID: "vol1"}
 		writeTestMetadata(t, s, volDir, VolumeMetadata{
 			Name: "myvol", Exports: []ExportMetadata{
 				{IP: "10.0.0.1", Labels: labels1},
@@ -231,8 +294,8 @@ func TestDeleteVolumeExport(t *testing.T) {
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
 		writeTestMetadata(t, s, volDir, VolumeMetadata{
 			Name: "myvol", Exports: []ExportMetadata{
-				{IP: "10.0.0.1", Labels: map[string]string{"kubernetes.volume.id": "vol1"}},
-				{IP: "10.0.0.1", Labels: map[string]string{"kubernetes.volume.id": "vol2"}},
+				{IP: "10.0.0.1", Labels: map[string]string{testLabelVolumeID: "vol1"}},
+				{IP: "10.0.0.1", Labels: map[string]string{testLabelVolumeID: "vol2"}},
 			},
 		})
 
@@ -248,9 +311,9 @@ func TestDeleteVolumeExport(t *testing.T) {
 	})
 }
 
-// --- TestListExportsPaginated ---
+// --- TestListVolumeExports ---
 
-func TestListExportsPaginated(t *testing.T) {
+func TestListVolumeExports(t *testing.T) {
 	t.Run("from_metadata", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
 
@@ -269,21 +332,30 @@ func TestListExportsPaginated(t *testing.T) {
 			Name: "vol2", Exports: []ExportMetadata{{IP: "10.0.0.3", CreatedAt: now.Add(-2 * time.Minute)}},
 		})
 
-		page, err := s.ListVolumeExportsPaginated("test", "", 0)
+		entries, err := s.ListVolumeExports("test")
 		require.NoError(t, err)
-		assert.Equal(t, 3, page.Total)
-		require.Len(t, page.Items, 3)
-		// sorted newest first
-		assert.Equal(t, "10.0.0.1", page.Items[0].Client)
-		assert.Equal(t, "csi", page.Items[0].Labels["created-by"])
-		assert.Equal(t, "10.0.0.3", page.Items[2].Client)
+		require.Len(t, entries, 3)
+		// unsorted from storage; handler applies sort order
+		clients := map[string]bool{}
+		for _, e := range entries {
+			clients[e.Client] = true
+		}
+		assert.True(t, clients["10.0.0.1"])
+		assert.True(t, clients["10.0.0.2"])
+		assert.True(t, clients["10.0.0.3"])
+		// verify labels are preserved
+		for _, e := range entries {
+			if e.Client == "10.0.0.1" {
+				assert.Equal(t, "csi", e.Labels["created-by"])
+			}
+		}
 	})
 
 	t.Run("empty", func(t *testing.T) {
 		s, _, _, _ := newTestStorage(t)
 
-		page, err := s.ListVolumeExportsPaginated("test", "", 0)
+		entries, err := s.ListVolumeExports("test")
 		require.NoError(t, err)
-		assert.Empty(t, page.Items)
+		assert.Empty(t, entries)
 	})
 }

@@ -12,14 +12,14 @@
 ## Volume Lifecycle
 
 ```
-CreateVolume   → POST /v1/volumes (btrfs subvolume create, compression, quota, chown)
-Publish        → POST /v1/volumes/:name/export (exportfs)
-NodeStage      → mount -t nfs server:path staging
-NodePublish    → mount --bind staging/data target
-NodeUnpublish  → umount target
-NodeUnstage    → umount staging
-Unpublish      → DELETE /v1/volumes/:name/export
-DeleteVolume   → DELETE /v1/volumes/:name (subvolume delete)
+CreateVolume   --> POST /v1/volumes (btrfs subvolume create, compression, quota, chown)
+Publish        --> POST /v1/volumes/:name/export (exportfs, client must be valid IPv4/IPv6)
+NodeStage      --> mount -t nfs server:path staging
+NodePublish    --> mount --bind staging/data target
+NodeUnpublish  --> umount target
+NodeUnstage    --> umount staging
+Unpublish      --> DELETE /v1/volumes/:name/export
+DeleteVolume   --> DELETE /v1/volumes/:name (subvolume delete)
 ```
 
 ## ID Formats
@@ -35,16 +35,16 @@ DeleteVolume   → DELETE /v1/volumes/:name (subvolume delete)
 ```
 {AGENT_BASE_PATH}/
 ├── tasks/
-│   └── {id}.json          ← persisted task state
+│   └── {id}.json          <-- persisted task state
 └── {tenant}/
     ├── {volume}/
-    │   ├── data/           ← btrfs subvolume
+    │   ├── data/           <-- btrfs subvolume
     │   └── metadata.json
     ├── snapshots/{name}/
-    │   ├── data/           ← read-only btrfs snapshot
+    │   ├── data/           <-- read-only btrfs snapshot
     │   └── metadata.json
     └── {clone}/
-        ├── data/           ← writable btrfs snapshot
+        ├── data/           <-- writable btrfs snapshot
         └── metadata.json
 ```
 
@@ -59,6 +59,14 @@ Long-running operations (scrub, future: cross-agent transfers) run as background
 - Status transitions (pending, running, completed, failed, cancelled) are persisted to disk
 - On agent restart, interrupted running/pending tasks are marked as `failed`
 - Completed tasks are cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h)
+
+## Pagination
+
+List endpoints use cursor-based pagination with snapshot isolation. On the first page request, the full result set is copied into an in-memory snapshot (keyed by random ID, TTL 30s). Subsequent pages slice from the snapshot, so clients see a consistent view even if the underlying data changes. Expired or invalid cursors fall back to page 1 of current data. Max concurrent snapshots is capped (`AGENT_API_PAGINATION_MAX_SNAPSHOTS`, default 100).
+
+## Cache Loading
+
+On startup, the agent scans the tenant directory and loads volume/snapshot metadata into an in-memory cache. Directories with metadata but no `data/` subdirectory (phantom entries) are skipped with a warning. This prevents stale entries from appearing in API responses after incomplete cleanups.
 
 ## CSI Capabilities
 
@@ -92,7 +100,7 @@ All controller sidecars use `--leader-election`.
 - **Controller:** 1 replica + leader election. Sidecars elect independently.
 - **Node:** DaemonSet, rolling update max 1 unavailable.
 - **Agent:** Stateful (local btrfs). NFS reconciler re-exports on restart.
-- **Node health checker:** Background goroutine detects stale NFS mounts via `statWithTimeout` and auto-heals them by remounting over the stale mount. Heals all bind mounts (running pods) automatically. Reports `VOLUME_CONDITION` and writes k8s events on PVCs. Configurable via `DRIVER_HEALTH_CHECK_INTERVAL` (default 30s).
+- **Node health checker:** Background goroutine detects stale NFS mounts via `statWithTimeout` and auto-heals by remounting. Uses per-volume locking to avoid racing with unstage/unpublish. Heals all bind mounts automatically. Reports `VOLUME_CONDITION` and writes k8s events on PVCs. Configurable via `DRIVER_HEALTH_CHECK_INTERVAL` (default 30s).
 
 | Failure | Impact | Recovery |
 |---|---|---|
@@ -104,14 +112,14 @@ All controller sidecars use `--leader-election`.
 
 Each StorageClass defines one agent + tenant pair:
 
-- `agentURL` parameter → which agent to talk to
-- `agentToken` secret → which tenant on that agent (token → tenant mapping via `AGENT_TENANTS`)
+- `agentURL` parameter --> which agent to talk to
+- `agentToken` secret --> which tenant on that agent (token --> tenant mapping via `AGENT_TENANTS`)
 
 Volume IDs use the StorageClass name (`{storageClassName}|{name}`), not the agent URL. The controller resolves the agent URL at runtime from the StorageClass cache. This means agent URLs can change (IP, port) without breaking existing volumes.
 
 ## Multi-Tenancy
 
 - One directory per tenant under `AGENT_BASE_PATH`
-- Token → tenant mapping via `AGENT_TENANTS`
+- Token --> tenant mapping via `AGENT_TENANTS`
 - All API ops scoped to authenticated tenant
 - For stronger isolation: separate agents + separate StorageClasses

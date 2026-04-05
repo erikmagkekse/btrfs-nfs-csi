@@ -78,6 +78,12 @@ func writeSnapshotMetadata(t *testing.T, s *Storage, snapDir string, meta Snapsh
 func requireStorageError(t *testing.T, err error, code string) {
 	t.Helper()
 	require.Error(t, err)
+	if code == ErrInvalid {
+		var ve *config.ValidationError
+		if errors.As(err, &ve) {
+			return
+		}
+	}
 	var se *StorageError
 	require.True(t, errors.As(err, &se), "expected *StorageError, got %T: %v", err, err)
 	assert.Equal(t, code, se.Code)
@@ -167,15 +173,48 @@ func TestValidateName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateName(tt.input)
+			err := config.ValidateName(tt.input)
 			if !tt.wantErr {
 				assert.NoError(t, err)
 				return
 			}
 			require.Error(t, err)
-			var se *StorageError
-			require.ErrorAs(t, err, &se)
-			assert.Equal(t, ErrInvalid, se.Code)
+			var ve *config.ValidationError
+			require.ErrorAs(t, err, &ve)
+		})
+	}
+}
+
+func TestValidateClientIP(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid_ipv4", "10.0.0.1", false},
+		{"valid_ipv4_localhost", "127.0.0.1", false},
+		{"valid_ipv6_loopback", "::1", false},
+		{"valid_ipv6_full", "2001:db8::1", false},
+		{"wildcard", "*", true},
+		{"hostname", "node1.example.com", true},
+		{"cidr_v4", "10.0.0.0/24", true},
+		{"cidr_v6", "2001:db8::/32", true},
+		{"parens_injection", "10.0.0.1(rw,no_root_squash)", true},
+		{"semicolon_injection", "10.0.0.1;rm -rf /", true},
+		{"empty", "", true},
+		{"space", "10.0.0.1 10.0.0.2", true},
+		{"newline", "10.0.0.1\n10.0.0.2", true},
+		{"tab", "10.0.0.1\t10.0.0.2", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateClientIP(tt.input)
+			if !tt.wantErr {
+				assert.NoError(t, err)
+				return
+			}
+			requireStorageError(t, err, ErrInvalid)
 		})
 	}
 }
@@ -211,12 +250,14 @@ func TestValidateLabels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateLabels(tt.labels)
+			err := config.ValidateLabels(tt.labels)
 			if !tt.wantErr {
 				assert.NoError(t, err)
 				return
 			}
-			requireStorageError(t, err, ErrInvalid)
+			require.Error(t, err)
+			var ve *config.ValidationError
+			require.ErrorAs(t, err, &ve)
 		})
 	}
 }

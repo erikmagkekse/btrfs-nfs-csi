@@ -1,0 +1,1707 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "REST API for managing btrfs volumes, snapshots, clones, NFS exports, and background tasks.",
+        "title": "btrfs-nfs-csi Agent API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/healthz": {
+            "get": {
+                "description": "Returns agent health status, version, and enabled features. Does not require authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.HealthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/clones": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new volume from a snapshot. Returns existing on conflict.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "clones"
+                ],
+                "summary": "Create a clone from snapshot",
+                "parameters": [
+                    {
+                        "description": "Clone configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CloneCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Volume already exists",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/exports": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all active NFS exports. Use detail=true for labels. Supports pagination and label filtering.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "exports"
+                ],
+                "summary": "List NFS exports",
+                "parameters": [
+                    {
+                        "enum": [
+                            "true"
+                        ],
+                        "type": "string",
+                        "description": "Return full detail",
+                        "name": "detail",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Label filter (key=value), repeatable",
+                        "name": "label",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.ExportListResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/snapshots": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all snapshots. Use detail=true for full metadata. Supports pagination and label filtering.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "snapshots"
+                ],
+                "summary": "List snapshots",
+                "parameters": [
+                    {
+                        "enum": [
+                            "true"
+                        ],
+                        "type": "string",
+                        "description": "Return full detail",
+                        "name": "detail",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Label filter (key=value), repeatable",
+                        "name": "label",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.SnapshotListResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a read-only btrfs snapshot of a volume. Returns existing snapshot on conflict.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "snapshots"
+                ],
+                "summary": "Create a snapshot",
+                "parameters": [
+                    {
+                        "description": "Snapshot configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.SnapshotCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.SnapshotDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Snapshot already exists",
+                        "schema": {
+                            "$ref": "#/definitions/models.SnapshotDetailResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/snapshots/{name}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns detailed metadata for a single snapshot.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "snapshots"
+                ],
+                "summary": "Get a snapshot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Snapshot name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.SnapshotDetailResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a snapshot and its btrfs subvolume.",
+                "tags": [
+                    "snapshots"
+                ],
+                "summary": "Delete a snapshot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Snapshot name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns statfs and btrfs device/filesystem statistics.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stats"
+                ],
+                "summary": "Get filesystem statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.StatsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns background tasks. Filter by type. Supports detail, pagination, and label filtering.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "List tasks",
+                "parameters": [
+                    {
+                        "enum": [
+                            "scrub",
+                            "test"
+                        ],
+                        "type": "string",
+                        "description": "Filter by task type",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "true"
+                        ],
+                        "type": "string",
+                        "description": "Return full detail",
+                        "name": "detail",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Label filter (key=value), repeatable",
+                        "name": "label",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaskListResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tasks/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns detailed metadata for a single background task.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Get a task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaskDetailResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cancels a running or pending background task.",
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Cancel a task",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tasks/{type}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a background task (scrub or test). Returns 202 Accepted with task ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Create a background task",
+                "parameters": [
+                    {
+                        "enum": [
+                            "scrub",
+                            "test"
+                        ],
+                        "type": "string",
+                        "description": "Task type",
+                        "name": "type",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Task options",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaskCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaskCreateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/volumes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns all volumes. Use detail=true for full metadata. Supports pagination and label filtering.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "volumes"
+                ],
+                "summary": "List volumes",
+                "parameters": [
+                    {
+                        "enum": [
+                            "true"
+                        ],
+                        "type": "string",
+                        "description": "Return full detail",
+                        "name": "detail",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Label filter (key=value), repeatable",
+                        "name": "label",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeListResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new btrfs subvolume. Returns the existing volume on conflict.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "volumes"
+                ],
+                "summary": "Create a volume",
+                "parameters": [
+                    {
+                        "description": "Volume configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Volume already exists",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/volumes/clone": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a new volume from another volume (internal snapshot + clone). Returns existing on conflict.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "clones"
+                ],
+                "summary": "Clone a volume",
+                "parameters": [
+                    {
+                        "description": "Clone configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeCloneRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Volume already exists",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/volumes/{name}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns detailed metadata for a single volume.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "volumes"
+                ],
+                "summary": "Get a volume",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Volume name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes a volume and its btrfs subvolume. Fails if the volume has active exports.",
+                "tags": [
+                    "volumes"
+                ],
+                "summary": "Delete a volume",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Volume name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "423": {
+                        "description": "Volume has active exports",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Patches volume properties. Nil/omitted fields are left unchanged.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "volumes"
+                ],
+                "summary": "Update a volume",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Volume name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/volumes/{name}/export": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Adds an NFS export for a volume to the given client IP.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "exports"
+                ],
+                "summary": "Add NFS export",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Volume name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Export config",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeExportCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Removes an NFS export for a volume from the given client IP.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "exports"
+                ],
+                "summary": "Remove NFS export",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Volume name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Export to remove",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.VolumeExportDeleteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/volumes/{name}/snapshots": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns snapshots for a specific volume. Supports detail, pagination, and label filtering.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "snapshots"
+                ],
+                "summary": "List snapshots for a volume",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Volume name",
+                        "name": "name",
+                        "in": "path"
+                    },
+                    {
+                        "enum": [
+                            "true"
+                        ],
+                        "type": "string",
+                        "description": "Return full detail",
+                        "name": "detail",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Pagination cursor",
+                        "name": "after",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Label filter (key=value), repeatable",
+                        "name": "label",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.SnapshotListResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "models.CloneCreateRequest": {
+            "type": "object",
+            "properties": {
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "^[a-zA-Z0-9_-]{1,128}$",
+                    "type": "string"
+                },
+                "snapshot": {
+                    "description": "source snapshot name",
+                    "type": "string"
+                }
+            }
+        },
+        "models.DeviceErrorsResponse": {
+            "type": "object",
+            "properties": {
+                "corruption_errs": {
+                    "type": "integer"
+                },
+                "flush_errs": {
+                    "type": "integer"
+                },
+                "generation_errs": {
+                    "type": "integer"
+                },
+                "read_errs": {
+                    "type": "integer"
+                },
+                "write_errs": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.DeviceIOStatsResponse": {
+            "type": "object",
+            "properties": {
+                "io_time_ms_total": {
+                    "type": "integer"
+                },
+                "ios_in_progress": {
+                    "type": "integer"
+                },
+                "read_bytes_total": {
+                    "type": "integer"
+                },
+                "read_ios_total": {
+                    "type": "integer"
+                },
+                "read_time_ms_total": {
+                    "type": "integer"
+                },
+                "weighted_io_time_ms_total": {
+                    "type": "integer"
+                },
+                "write_bytes_total": {
+                    "type": "integer"
+                },
+                "write_ios_total": {
+                    "type": "integer"
+                },
+                "write_time_ms_total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.DeviceStatsResponse": {
+            "type": "object",
+            "properties": {
+                "allocated_bytes": {
+                    "type": "integer"
+                },
+                "device": {
+                    "type": "string"
+                },
+                "devid": {
+                    "type": "string"
+                },
+                "errors": {
+                    "$ref": "#/definitions/models.DeviceErrorsResponse"
+                },
+                "io": {
+                    "$ref": "#/definitions/models.DeviceIOStatsResponse"
+                },
+                "missing": {
+                    "type": "boolean"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ExportDetailResponse": {
+            "type": "object",
+            "properties": {
+                "client": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ExportListResponse": {
+            "type": "object",
+            "properties": {
+                "exports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ExportResponse"
+                    }
+                },
+                "next": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ExportResponse": {
+            "type": "object",
+            "properties": {
+                "client": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.FilesystemStatsResponse": {
+            "type": "object",
+            "properties": {
+                "data_ratio": {
+                    "type": "number"
+                },
+                "devices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DeviceStatsResponse"
+                    }
+                },
+                "free_bytes": {
+                    "type": "integer"
+                },
+                "metadata_total_bytes": {
+                    "type": "integer"
+                },
+                "metadata_used_bytes": {
+                    "type": "integer"
+                },
+                "total_bytes": {
+                    "type": "integer"
+                },
+                "unallocated_bytes": {
+                    "type": "integer"
+                },
+                "used_bytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "commit": {
+                    "type": "string"
+                },
+                "features": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "uptime_seconds": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.SnapshotCreateRequest": {
+            "type": "object",
+            "properties": {
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "^[a-zA-Z0-9_-]{1,128}$",
+                    "type": "string"
+                },
+                "volume": {
+                    "description": "source volume name",
+                    "type": "string"
+                }
+            }
+        },
+        "models.SnapshotDetailResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "exclusive_bytes": {
+                    "type": "integer"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "readonly": {
+                    "type": "boolean"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "used_bytes": {
+                    "type": "integer"
+                },
+                "volume": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.SnapshotListResponse": {
+            "type": "object",
+            "properties": {
+                "next": {
+                    "type": "string"
+                },
+                "snapshots": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.SnapshotResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.SnapshotResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                },
+                "used_bytes": {
+                    "type": "integer"
+                },
+                "volume": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.StatfsResponse": {
+            "type": "object",
+            "properties": {
+                "free_bytes": {
+                    "type": "integer"
+                },
+                "total_bytes": {
+                    "type": "integer"
+                },
+                "used_bytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.StatsResponse": {
+            "type": "object",
+            "properties": {
+                "btrfs": {
+                    "$ref": "#/definitions/models.FilesystemStatsResponse"
+                },
+                "statfs": {
+                    "$ref": "#/definitions/models.StatfsResponse"
+                }
+            }
+        },
+        "models.TaskCreateRequest": {
+            "type": "object",
+            "properties": {
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "opts": {
+                    "description": "task-specific options",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "timeout": {
+                    "description": "Go duration string, e.g. \"6h\", \"30m\"",
+                    "type": "string"
+                }
+            }
+        },
+        "models.TaskCreateResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string"
+                },
+                "task_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TaskDetailResponse": {
+            "type": "object",
+            "properties": {
+                "completed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "opts": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "result": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timeout": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TaskListResponse": {
+            "type": "object",
+            "properties": {
+                "next": {
+                    "type": "string"
+                },
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.TaskResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.TaskResponse": {
+            "type": "object",
+            "properties": {
+                "completed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "opts": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "progress": {
+                    "type": "integer"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timeout": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.VolumeCloneRequest": {
+            "type": "object",
+            "properties": {
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "^[a-zA-Z0-9_-]{1,128}$",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "source volume name",
+                    "type": "string"
+                }
+            }
+        },
+        "models.VolumeCreateRequest": {
+            "type": "object",
+            "properties": {
+                "compression": {
+                    "description": "\"zstd\", \"zstd:3\", \"zlib\", \"zlib:5\", \"lzo\", or \"\"",
+                    "type": "string"
+                },
+                "gid": {
+                    "description": "owner GID (0-65534)",
+                    "type": "integer"
+                },
+                "labels": {
+                    "description": "key: ^[a-z0-9][a-z0-9._-]{0,62}$, value: ^[a-zA-Z0-9._-]{0,128}$",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "mode": {
+                    "description": "octal permission string, e.g. \"0755\" (max 7777)",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "^[a-zA-Z0-9_-]{1,128}$",
+                    "type": "string"
+                },
+                "nocow": {
+                    "description": "disable copy-on-write (chattr +C)",
+                    "type": "boolean"
+                },
+                "quota_bytes": {
+                    "description": "btrfs qgroup limit (0 = no quota)",
+                    "type": "integer"
+                },
+                "size_bytes": {
+                    "description": "subvolume size in bytes",
+                    "type": "integer"
+                },
+                "uid": {
+                    "description": "owner UID (0-65534)",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.VolumeDetailResponse": {
+            "type": "object",
+            "properties": {
+                "clients": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ExportDetailResponse"
+                    }
+                },
+                "compression": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "gid": {
+                    "type": "integer"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "last_attach_at": {
+                    "type": "string"
+                },
+                "mode": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "nocow": {
+                    "type": "boolean"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "quota_bytes": {
+                    "type": "integer"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                },
+                "uid": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "used_bytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.VolumeExportCreateRequest": {
+            "type": "object",
+            "properties": {
+                "client": {
+                    "description": "client IP address (IPv4 or IPv6)",
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.VolumeExportDeleteRequest": {
+            "type": "object",
+            "properties": {
+                "client": {
+                    "description": "client IP address (IPv4 or IPv6)",
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.VolumeListResponse": {
+            "type": "object",
+            "properties": {
+                "next": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "volumes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.VolumeResponse"
+                    }
+                }
+            }
+        },
+        "models.VolumeResponse": {
+            "type": "object",
+            "properties": {
+                "clients": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "size_bytes": {
+                    "type": "integer"
+                },
+                "used_bytes": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.VolumeUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "compression": {
+                    "description": "see VolumeCreateRequest.Compression",
+                    "type": "string"
+                },
+                "gid": {
+                    "description": "new owner GID (0-65534)",
+                    "type": "integer"
+                },
+                "labels": {
+                    "description": "replaces all labels",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "mode": {
+                    "description": "octal permission string (max 7777)",
+                    "type": "string"
+                },
+                "nocow": {
+                    "description": "toggle copy-on-write",
+                    "type": "boolean"
+                },
+                "size_bytes": {
+                    "description": "new size (must be \u003e= current)",
+                    "type": "integer"
+                },
+                "uid": {
+                    "description": "new owner UID (0-65534)",
+                    "type": "integer"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Tenant token as \"Bearer \u003ctoken\u003e\"",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

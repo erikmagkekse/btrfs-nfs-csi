@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -11,11 +12,14 @@ import (
 // --- Error types ---
 
 const (
+	ErrBadRequest    = "BAD_REQUEST"
+	ErrUnauthorized  = "UNAUTHORIZED"
 	ErrInvalid       = "INVALID"
 	ErrNotFound      = "NOT_FOUND"
 	ErrAlreadyExists = "ALREADY_EXISTS"
 	ErrBusy          = "BUSY"
 	ErrMetadata      = "METADATA_ERROR"
+	ErrInternal      = "INTERNAL_ERROR"
 )
 
 type StorageError struct {
@@ -24,30 +28,6 @@ type StorageError struct {
 }
 
 func (e *StorageError) Error() string { return e.Message }
-
-// --- Validation ---
-
-func validateName(name string) error {
-	if !config.ValidName.MatchString(name) {
-		return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid name: %q (must be 1-128 chars, only a-z A-Z 0-9 _ -)", name)}
-	}
-	return nil
-}
-
-func validateLabels(labels map[string]string) error {
-	if len(labels) > config.MaxLabels {
-		return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("too many labels: %d (max %d)", len(labels), config.MaxLabels)}
-	}
-	for k, v := range labels {
-		if !config.ValidLabelKey.MatchString(k) {
-			return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid label key: %q", k)}
-		}
-		if !config.ValidLabelVal.MatchString(v) {
-			return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid label value: %q", v)}
-		}
-	}
-	return nil
-}
 
 func requireImmutableLabels(keys []string, labels map[string]string) error {
 	for _, k := range keys {
@@ -66,6 +46,15 @@ func protectImmutableLabels(keys []string, cur, updated map[string]string) error
 		if v := cur[k]; v != "" {
 			updated[k] = v
 		}
+	}
+	return nil
+}
+
+// validateClientIP ensures client is a valid IPv4 or IPv6 address.
+// Rejects wildcards, hostnames, CIDRs, and strings with unsafe characters.
+func validateClientIP(client string) error {
+	if net.ParseIP(client) == nil {
+		return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("invalid client IP: %q (must be a valid IPv4 or IPv6 address)", client)}
 	}
 	return nil
 }

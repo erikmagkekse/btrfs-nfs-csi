@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
 	"time"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -14,10 +14,13 @@ func (s *Storage) CreateVolumeExport(ctx context.Context, tenant, name, client s
 	if _, err := s.tenantPath(tenant); err != nil {
 		return err
 	}
-	if err := validateName(name); err != nil {
+	if err := config.ValidateName(name); err != nil {
 		return err
 	}
-	if err := validateLabels(labels); err != nil {
+	if err := validateClientIP(client); err != nil {
+		return err
+	}
+	if err := config.ValidateLabels(labels); err != nil {
 		return err
 	}
 	if err := requireImmutableLabels(s.immutableLabelKeys, labels); err != nil {
@@ -48,7 +51,7 @@ func (s *Storage) CreateVolumeExport(ctx context.Context, tenant, name, client s
 	if firstRef {
 		if err := s.exporter.Export(ctx, volDir, client); err != nil {
 			log.Error().Err(err).Str("name", name).Str("client", client).Msg("failed to export, reconciler will retry")
-			return fmt.Errorf("nfs export failed: %w", err)
+			return &StorageError{Code: ErrInternal, Message: "nfs export failed"}
 		}
 	}
 
@@ -60,10 +63,13 @@ func (s *Storage) DeleteVolumeExport(ctx context.Context, tenant, name, client s
 	if _, err := s.tenantPath(tenant); err != nil {
 		return err
 	}
-	if err := validateName(name); err != nil {
+	if err := config.ValidateName(name); err != nil {
 		return err
 	}
-	if err := validateLabels(labels); err != nil {
+	if err := validateClientIP(client); err != nil {
+		return err
+	}
+	if err := config.ValidateLabels(labels); err != nil {
 		return err
 	}
 
@@ -101,7 +107,7 @@ func (s *Storage) DeleteVolumeExport(ctx context.Context, tenant, name, client s
 	if lastRef {
 		if err := s.exporter.Unexport(ctx, volDir, client); err != nil {
 			log.Error().Err(err).Str("name", name).Str("client", client).Msg("failed to unexport, reconciler will clean up")
-			return fmt.Errorf("nfs unexport failed: %w", err)
+			return &StorageError{Code: ErrInternal, Message: "nfs unexport failed"}
 		}
 	}
 
@@ -109,7 +115,7 @@ func (s *Storage) DeleteVolumeExport(ctx context.Context, tenant, name, client s
 	return nil
 }
 
-func (s *Storage) ListVolumeExportsPaginated(tenant, after string, limit int) (*PaginatedResult[ExportEntry], error) {
+func (s *Storage) ListVolumeExports(tenant string) ([]ExportEntry, error) {
 	if _, err := s.tenantPath(tenant); err != nil {
 		return nil, err
 	}
@@ -129,8 +135,5 @@ func (s *Storage) ListVolumeExportsPaginated(tenant, after string, limit int) (*
 		}
 		return true
 	})
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].CreatedAt.After(entries[j].CreatedAt)
-	})
-	return paginateSlice(entries, func(e ExportEntry) string { return e.Name + "|" + e.Client }, after, limit), nil
+	return entries, nil
 }

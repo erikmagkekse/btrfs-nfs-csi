@@ -9,7 +9,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build \
     -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" \
-    -o btrfs-nfs-csi .
+    -o btrfs-nfs-csi ./cmd/btrfs-nfs-csi
 
 FROM alpine:3.21
 

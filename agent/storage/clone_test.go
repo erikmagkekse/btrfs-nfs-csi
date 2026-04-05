@@ -19,13 +19,18 @@ import (
 func TestCreateClone(t *testing.T) {
 	ctx := context.Background()
 
-	// setupSrcSnap creates a source snapshot with data/ dir and metadata.
+	// setupSrcSnap creates a source snapshot with data/ dir and metadata,
+	// plus the source volume it references.
 	setupSrcSnap := func(t *testing.T, s *Storage, bp, name string) {
 		t.Helper()
 		snapDir := filepath.Join(bp, config.SnapshotsDir, name)
 		dataDir := filepath.Join(snapDir, config.DataDir)
 		require.NoError(t, os.MkdirAll(dataDir, 0o755))
 		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: name, Volume: "srcvol", ReadOnly: true})
+		seedVolume(t, s, "test", bp, VolumeMetadata{
+			Name: "srcvol", SizeBytes: 4096, QuotaBytes: 4096,
+			Compression: "zstd", UID: 1000, GID: 1000, Mode: "0755",
+		})
 	}
 
 	t.Run("validation", func(t *testing.T) {
@@ -93,6 +98,60 @@ func TestCreateClone(t *testing.T) {
 		cloneDir := filepath.Join(bp, "failclone")
 		_, statErr := os.Stat(cloneDir)
 		assert.True(t, os.IsNotExist(statErr), "cloneDir should be cleaned up after failure")
+	})
+
+	t.Run("copies_source_volume_metadata", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+		setupSrcSnap(t, s, bp, "mysnap")
+
+		meta, err := s.CreateClone(ctx, "test", CloneCreateRequest{
+			Name: "metaclone", Snapshot: "mysnap",
+		})
+		require.NoError(t, err, "CreateClone")
+		assert.Equal(t, uint64(4096), meta.SizeBytes, "SizeBytes should be copied from source volume")
+		assert.Equal(t, uint64(4096), meta.QuotaBytes, "QuotaBytes should be copied from source volume")
+		assert.Equal(t, "zstd", meta.Compression, "Compression should be copied from source volume")
+		assert.Equal(t, 1000, meta.UID, "UID should be copied from source volume")
+		assert.Equal(t, 1000, meta.GID, "GID should be copied from source volume")
+		assert.Equal(t, "0755", meta.Mode, "Mode should be copied from source volume")
+
+		// verify on-disk metadata also has the fields
+		var ondisk VolumeMetadata
+		readTestJSON(t, filepath.Join(bp, "metaclone", config.MetadataFile), &ondisk)
+		assert.Equal(t, uint64(4096), ondisk.SizeBytes)
+		assert.Equal(t, "zstd", ondisk.Compression)
+		assert.Equal(t, 1000, ondisk.UID)
+	})
+
+	t.Run("applies_qgroup_limit_when_quota_enabled", func(t *testing.T) {
+		s, bp, runner, _ := newTestStorage(t)
+		s.quotaEnabled = true
+		setupSrcSnap(t, s, bp, "mysnap")
+
+		meta, err := s.CreateClone(ctx, "test", CloneCreateRequest{
+			Name: "quotaclone", Snapshot: "mysnap",
+		})
+		require.NoError(t, err, "CreateClone")
+		assert.Equal(t, uint64(4096), meta.QuotaBytes)
+
+		dstData := filepath.Join(bp, "quotaclone", config.DataDir)
+		require.Len(t, runner.Calls, 2, "expected snapshot + qgroup limit calls")
+		assert.Equal(t, []string{"qgroup", "limit", "4096", dstData}, runner.Calls[1])
+	})
+
+	t.Run("source_volume_not_found", func(t *testing.T) {
+		s, bp, _, _ := newTestStorage(t)
+
+		// Create snapshot pointing to a non-existent volume
+		snapDir := filepath.Join(bp, config.SnapshotsDir, "orphansnap")
+		dataDir := filepath.Join(snapDir, config.DataDir)
+		require.NoError(t, os.MkdirAll(dataDir, 0o755))
+		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: "orphansnap", Volume: "missing", ReadOnly: true})
+
+		_, err := s.CreateClone(ctx, "test", CloneCreateRequest{
+			Name: "clone", Snapshot: "orphansnap",
+		})
+		requireStorageError(t, err, ErrNotFound)
 	})
 
 	t.Run("invalid_tenant", func(t *testing.T) {

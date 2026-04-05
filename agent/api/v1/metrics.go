@@ -63,7 +63,7 @@ func MetricsMiddleware() echo.MiddlewareFunc {
 				Str("path", c.Request().URL.Path).
 				Str("code", code).
 				Str("client", c.RealIP()).
-				Dur("took", time.Since(start))
+				Str("took", time.Since(start).String())
 			if tenant != "" {
 				l = l.Str("tenant", tenant)
 			}

@@ -46,6 +46,24 @@ func TestParseSizeErrors(t *testing.T) {
 	}
 }
 
+func TestParseSizeOverflow(t *testing.T) {
+	t.Run("18Ei_overflows", func(t *testing.T) {
+		_, err := ParseSize("18Ei")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "value too large")
+	})
+	t.Run("16Ei_overflows", func(t *testing.T) {
+		_, err := ParseSize("16Ei")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "value too large")
+	})
+	t.Run("15Ei_succeeds", func(t *testing.T) {
+		got, err := ParseSize("15Ei")
+		require.NoError(t, err)
+		assert.Equal(t, uint64(15)*uint64(1)<<60, got)
+	})
+}
+
 func TestFormatBytes(t *testing.T) {
 	tests := []struct {
 		input uint64

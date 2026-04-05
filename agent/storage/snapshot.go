@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sort"
 	"time"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -16,13 +16,13 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	}
 
 	// validation
-	if err := validateName(req.Name); err != nil {
+	if err := config.ValidateName(req.Name); err != nil {
 		return nil, err
 	}
-	if err := validateName(req.Volume); err != nil {
+	if err := config.ValidateName(req.Volume); err != nil {
 		return nil, err
 	}
-	if err := validateLabels(req.Labels); err != nil {
+	if err := config.ValidateLabels(req.Labels); err != nil {
 		return nil, err
 	}
 	if err := requireImmutableLabels(s.immutableLabelKeys, req.Labels); err != nil {
@@ -34,8 +34,8 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	}
 	srcData := s.volumes.DataPath(tenant, req.Volume)
 
-	if s.snapshots.Exists(tenant, req.Name) {
-		return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("snapshot %q already exists", req.Name)}
+	if existing, err := s.snapshots.Get(tenant, req.Name); err == nil {
+		return existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("snapshot %q already exists", req.Name)}
 	}
 	snapDir := s.snapshots.Dir(tenant, req.Name)
 
@@ -94,20 +94,11 @@ func (s *Storage) ListSnapshots(tenant, volume string) ([]SnapshotMetadata, erro
 	return snaps, nil
 }
 
-func (s *Storage) ListSnapshotsPaginated(tenant, volume, after string, limit int) (*PaginatedResult[SnapshotMetadata], error) {
-	snaps, err := s.ListSnapshots(tenant, volume)
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(snaps, func(i, j int) bool { return snaps[i].Name < snaps[j].Name })
-	return paginateSlice(snaps, func(s SnapshotMetadata) string { return s.Name }, after, limit), nil
-}
-
 func (s *Storage) GetSnapshot(tenant, name string) (*SnapshotMetadata, error) {
 	if _, err := s.tenantPath(tenant); err != nil {
 		return nil, err
 	}
-	if err := validateName(name); err != nil {
+	if err := config.ValidateName(name); err != nil {
 		return nil, err
 	}
 	m, err := s.snapshots.Get(tenant, name)
@@ -125,7 +116,7 @@ func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error
 	if _, err := s.tenantPath(tenant); err != nil {
 		return err
 	}
-	if err := validateName(name); err != nil {
+	if err := config.ValidateName(name); err != nil {
 		return err
 	}
 

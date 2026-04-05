@@ -26,9 +26,9 @@ func (r *ShellRunner) Run(ctx context.Context, bin string, args ...string) (stri
 	took := time.Since(start)
 
 	if err != nil {
-		log.Trace().Str("cmd", bin).Strs("args", args).Dur("took", took).Str("stderr", strings.TrimSpace(string(out))).Err(err).Msg("exec failed")
+		log.Trace().Str("cmd", bin).Strs("args", args).Str("took", took.String()).Str("stderr", strings.TrimSpace(string(out))).Err(err).Msg("exec failed")
 		return string(out), fmt.Errorf("%s %s: %w: %s", bin, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
-	log.Trace().Str("cmd", bin).Strs("args", args).Dur("took", took).Str("stdout", strings.TrimSpace(string(out))).Msg("exec ok")
+	log.Trace().Str("cmd", bin).Strs("args", args).Str("took", took.String()).Str("stdout", strings.TrimSpace(string(out))).Msg("exec ok")
 	return string(out), nil
 }

@@ -6,6 +6,8 @@
 
 Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth.
 
+Request bodies are limited to 1 MB.
+
 ## Error Format
 
 ```json
@@ -24,7 +26,7 @@ Token resolves to tenant via `AGENT_TENANTS`. All `/v1/*` endpoints require auth
 | `ALREADY_EXISTS` | 409 | Conflict (returns existing record) |
 | `BUSY` | 423 | Resource locked (e.g. active NFS exports, scrub running) |
 | `METADATA_ERROR` | 500 | Volume/snapshot metadata corrupt or unreadable |
-| `INTERNAL_ERROR` | 500 | Server error |
+| `INTERNAL_ERROR` | 500 | Server error (generic message, no internal paths or command details) |
 
 ## Labels
 
@@ -61,7 +63,7 @@ Example: `GET /v1/volumes?limit=10` returns the first 10 volumes. Use the `next`
 
 ### POST /v1/volumes
 
-`name`: 1-128 chars `[a-zA-Z0-9_-]`. `nocow` + `compression` mutually exclusive. 409 returns existing volume.
+`name`: 1-128 chars `[a-zA-Z0-9_-]`. `nocow` + `compression` mutually exclusive. `uid`/`gid`: 0-65534. `mode`: valid octal 0000-7777. 409 returns existing volume.
 
 ```json
 // Request
@@ -205,7 +207,7 @@ Exports are reference-counted per client IP. Each export carries labels identify
 }
 ```
 
-204 No Content. `labels` is optional. Duplicate entries (same IP + labels) are idempotent. Reconciler retries on failure.
+204 No Content. `client` must be a valid IPv4 or IPv6 address (no hostnames, CIDRs, wildcards, or special characters). `labels` is optional. Duplicate entries (same IP + labels) are idempotent. Reconciler retries on failure.
 
 ### DELETE /v1/volumes/:name/export
 
@@ -229,6 +231,7 @@ Returns exports from metadata. Supports pagination (`?after=&limit=`) and `?deta
   "exports": [
     {
       "name": "vol-1",
+      "created_by": "k8s",
       "client": "10.1.0.50",
       "created_at": "2025-01-15T11:00:00Z"
     }
@@ -244,6 +247,7 @@ With `?detail=true`, each export includes `labels`:
   "exports": [
     {
       "name": "pvc-917a54c3-4a61-4c3a-8597-410f329962e8",
+      "created_by": "k8s",
       "client": "10.1.0.50",
       "labels": {
         "created-by": "k8s",
@@ -374,7 +378,7 @@ Direct volume-to-volume clone via a single atomic btrfs snapshot. No intermediat
 
 ### POST /v1/clones
 
-Clone from a read-only snapshot. 409 returns existing clone. `clone.source.type=snapshot` and `clone.source.name=<snapshot>` are always set automatically.
+Clone from a read-only snapshot. The clone inherits the source volume's properties (size, quota, compression, nocow, uid, gid, mode) and has qgroup limits applied. 409 returns existing clone. `clone.source.type=snapshot` and `clone.source.name=<snapshot>` are always set automatically.
 
 ```json
 // Request
@@ -388,14 +392,14 @@ Clone from a read-only snapshot. 409 returns existing clone. `clone.source.type=
 {
   "name": "clone-1",
   "path": "/srv/csi/default/clone-1",
-  "size_bytes": 0,
+  "size_bytes": 1073741824,
   "nocow": false,
-  "compression": "",
-  "quota_bytes": 0,
+  "compression": "zstd",
+  "quota_bytes": 1073741824,
   "used_bytes": 0,
-  "uid": 0,
-  "gid": 0,
-  "mode": "",
+  "uid": 1000,
+  "gid": 1000,
+  "mode": "0750",
   "labels": {"env": "dev"},
   "clients": [],
   "created_at": "2025-01-15T12:30:00Z",
@@ -511,6 +515,7 @@ List all tasks. Supports pagination (`?after=&limit=`), `?type=` filter, label f
     {
       "id": "bba30993dee31318f016f5350718cffa",
       "type": "scrub",
+      "created_by": "cli",
       "status": "completed",
       "progress": 100,
       "timeout": "24h0m0s",
@@ -533,6 +538,7 @@ Returns a single task with full details including `result`, `opts`, and `labels`
 {
   "id": "bba30993dee31318f016f5350718cffa",
   "type": "scrub",
+  "created_by": "cli",
   "status": "completed",
   "progress": 100,
   "timeout": "24h0m0s",
@@ -561,6 +567,14 @@ Task statuses: `pending`, `running`, `completed`, `failed`, `cancelled`.
 
 ## Unauthenticated
 
+### GET /
+
+Landing page with agent version and API documentation link.
+
+### GET /swagger.json
+
+OpenAPI specification (requires `AGENT_API_SWAGGER_ENABLED=true`).
+
 ### GET /healthz
 
 `status` is `"ok"` or `"degraded"` (missing device or btrfs device errors).
@@ -568,17 +582,12 @@ Task statuses: `pending`, `running`, `completed`, `failed`, `cancelled`.
 ```json
 {
   "status": "ok",
-  "version": "0.9.9",
+  "version": "0.10.0",
   "commit": "abc123",
-  "uptime_seconds": 3600,
-  "features": {
-    "nfs_exporter": "kernel",
-    "quota": "enabled",
-    "nfs_reconcile": "10m0s"
-  }
+  "uptime_seconds": 3600
 }
 ```
 
 ### GET /metrics
 
-Prometheus text format.
+Prometheus text format. Served on the separate metrics server (`AGENT_METRICS_ADDR`, default `127.0.0.1:9090`), not on the main API port.

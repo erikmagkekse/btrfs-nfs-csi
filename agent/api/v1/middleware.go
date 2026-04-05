@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
@@ -54,10 +56,10 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 
 func authFailed(c *echo.Context, reason string) error {
 	log.Warn().Str("client", c.RealIP()).Str("path", c.Request().URL.Path).Str("reason", reason).Msg("auth failed")
-	log.Debug().Str("client", c.RealIP()).Str("authorization", c.Request().Header.Get("Authorization")).Msg("auth failed detail")
+	log.Trace().Str("client", c.RealIP()).Str("authorization", c.Request().Header.Get("Authorization")).Msg("auth failed detail")
 	c.Response().Header().Set("WWW-Authenticate", `Basic realm="agent"`)
-	return c.JSON(http.StatusUnauthorized, ErrorResponse{
+	return c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 		Error: "invalid auth token",
-		Code:  "UNAUTHORIZED",
+		Code:  storage.ErrUnauthorized,
 	})
 }
