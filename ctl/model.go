@@ -52,14 +52,14 @@ func volumeCmd() *cli.Command {
 				Name:    "list",
 				Aliases: []string{"ls"},
 				Usage:   "list all volumes",
-				Flags:   []cli.Flag{sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
+				Flags:   []cli.Flag{allFlag(), sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					sortBy := cmd.String("sort")
 					if sortBy == "" {
 						sortBy = sortUsedPct
 					}
 					rev := !cmd.Bool("asc")
-					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
+					opts := buildListOpts(cmd)
 					return runWatch(ctx, cmd, func() error {
 						return listVolumes(ctx, cmd, sortBy, rev, opts)
 					})
@@ -125,7 +125,7 @@ func snapshotCmd() *cli.Command {
 				Aliases:   []string{"ls"},
 				Usage:     "list snapshots (optionally filter by volume)",
 				ArgsUsage: "[volume]",
-				Flags:     []cli.Flag{sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
+				Flags:     []cli.Flag{allFlag(), sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					sortBy := cmd.String("sort")
 					if sortBy == "" {
@@ -133,7 +133,7 @@ func snapshotCmd() *cli.Command {
 					}
 					rev := !cmd.Bool("asc")
 					vol := cmd.Args().First()
-					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
+					opts := buildListOpts(cmd)
 					return runWatch(ctx, cmd, func() error {
 						return listSnapshots(ctx, cmd, vol, sortBy, rev, opts)
 					})
@@ -200,11 +200,11 @@ func exportCmd() *cli.Command {
 				Name:    "list",
 				Aliases: []string{"ls"},
 				Usage:   "list active NFS exports",
-				Flags:   []cli.Flag{sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
+				Flags:   []cli.Flag{allFlag(), sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					sortBy := cmd.String("sort")
 					rev := !cmd.Bool("asc")
-					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
+					opts := buildListOpts(cmd)
 					return runWatch(ctx, cmd, func() error {
 						return listExports(ctx, cmd, sortBy, rev, opts)
 					})
@@ -226,6 +226,7 @@ func taskCmd() *cli.Command {
 				Usage:   "list tasks",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: "filter by type (e.g. scrub)"},
+					allFlag(),
 					sortFlag(),
 					ascFlag(),
 					labelFlag(),
@@ -239,7 +240,7 @@ func taskCmd() *cli.Command {
 						sortBy = sortCreated
 					}
 					rev := !cmd.Bool("asc")
-					opts := v1.ListOpts{Labels: splitLabelsFlag(cmd)}
+					opts := buildListOpts(cmd)
 					return runWatch(ctx, cmd, func() error {
 						return listTasks(ctx, cmd, taskType, sortBy, rev, opts)
 					})

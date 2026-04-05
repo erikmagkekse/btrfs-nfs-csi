@@ -12,43 +12,45 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func listVolumes(ctx context.Context, cmd *cli.Command, sortBy string, rev bool, opts v1.ListOpts) error {
+func listVolumes(ctx context.Context, cmd *cli.Command, sortBy string, rev bool, opts cliListOpts) error {
 	if isWide(cmd) {
-		resp, err := apiClient.ListVolumesDetail(ctx, opts)
+		resp, err := apiClient.ListVolumesDetail(ctx, opts.ListOpts)
 		if err != nil {
 			return err
 		}
 		sortVolumesDetail(resp.Volumes, sortBy, rev)
 		return output(cmd, resp, func() {
-			tw := newTableWriter(cmd, []string{"NAME", "SIZE", "USED", "QUOTA", "COMPRESSION", "NOCOW", "UID", "GID", "MODE", "LABELS", "CLIENTS", "CREATED"})
+			tw := newTableWriter(cmd, []string{"NAME", "CREATED BY", "SIZE", "USED", "QUOTA", "COMPRESSION", "NOCOW", "UID", "GID", "MODE", "LABELS", "CLIENTS", "CREATED"})
 			tw.writeHeader()
 			for _, v := range resp.Volumes {
 				tw.writeRow(map[string]string{
-					"NAME": v.Name, "SIZE": utils.FormatBytes(v.SizeBytes), "USED": utils.FormatBytes(v.UsedBytes),
+					"NAME": v.Name, "CREATED BY": v.CreatedBy, "SIZE": utils.FormatBytes(v.SizeBytes), "USED": utils.FormatBytes(v.UsedBytes),
 					"QUOTA": utils.FormatBytes(v.QuotaBytes), "COMPRESSION": v.Compression, "NOCOW": fmt.Sprintf("%v", v.NoCOW),
 					"UID": fmt.Sprintf("%d", v.UID), "GID": fmt.Sprintf("%d", v.GID), "MODE": v.Mode,
 					"LABELS": formatLabelsShort(v.Labels), "CLIENTS": fmt.Sprintf("%d", len(v.Exports)), "CREATED": v.CreatedAt.Format(timeFmt),
 				})
 			}
 			tw.flush()
+			emptyHint("volumes", len(resp.Volumes), opts.allSet, opts.labelSet)
 		})
 	}
-	resp, err := apiClient.ListVolumes(ctx, opts)
+	resp, err := apiClient.ListVolumes(ctx, opts.ListOpts)
 	if err != nil {
 		return err
 	}
 	sortVolumes(resp.Volumes, sortBy, rev)
 	return output(cmd, resp, func() {
-		tw := newTableWriter(cmd, []string{"NAME", "SIZE", "USED", "USED%", "CLIENTS", "CREATED"})
+		tw := newTableWriter(cmd, []string{"NAME", "CREATED BY", "SIZE", "USED", "USED%", "CLIENTS", "CREATED"})
 		tw.writeHeader()
 		for _, v := range resp.Volumes {
 			tw.writeRow(map[string]string{
-				"NAME": v.Name, "SIZE": utils.FormatBytes(v.SizeBytes), "USED": utils.FormatBytes(v.UsedBytes),
+				"NAME": v.Name, "CREATED BY": v.CreatedBy, "SIZE": utils.FormatBytes(v.SizeBytes), "USED": utils.FormatBytes(v.UsedBytes),
 				"USED%":   fmt.Sprintf("%.0f%%", usedPct(v.UsedBytes, v.SizeBytes)),
 				"CLIENTS": fmt.Sprintf("%d", v.Exports), "CREATED": v.CreatedAt.Format(timeFmt),
 			})
 		}
 		tw.flush()
+		emptyHint("volumes", len(resp.Volumes), opts.allSet, opts.labelSet)
 	})
 }
 
@@ -128,6 +130,11 @@ func volumeDelete(ctx context.Context, cmd *cli.Command) error {
 				return wrapErr(err, "volume", name)
 			}
 			if vol.Labels[config.LabelCreatedBy] != apiClient.Identity() {
+				owner := vol.Labels[config.LabelCreatedBy]
+				if owner == "" {
+					owner = "unknown"
+				}
+				_, _ = fmt.Fprintf(os.Stderr, "skipped %q (created-by: %s)\n", name, owner)
 				protected = append(protected, name)
 				continue
 			}
@@ -140,7 +147,7 @@ func volumeDelete(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 	if len(protected) > 0 {
-		_, _ = fmt.Fprintf(os.Stderr, "skipped %d protected volume(s) (created-by != cli):\n  btrfs-nfs-csi volume delete %s --confirm --yes\n", len(protected), strings.Join(protected, " "))
+		_, _ = fmt.Fprintf(os.Stderr, "to force:  btrfs-nfs-csi volume delete %s --confirm --yes\n", strings.Join(protected, " "))
 	}
 	return nil
 }

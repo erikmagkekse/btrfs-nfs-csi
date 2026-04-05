@@ -308,6 +308,8 @@ btrfs-nfs-csi version
 
 **Sorting:** `--sort` / `-s` with `--asc` (default descending). Volume default: `used%`. Snapshot/task default: `created`.
 
+**Default filter:** List commands filter by `created-by=cli` by default (only show resources created by the CLI). Use `--all` / `-A` to show all resources regardless of creator.
+
 **Label filter:** `--label` / `-l`, repeatable (AND). Supports comma-separated values: `-l env=prod,team=be`.
 
 **Size values:** Supports `Ki`, `Mi`, `Gi` (binary) and `K`, `M`, `G` (decimal). `volume expand` accepts relative sizes with `+`/`-` prefix.

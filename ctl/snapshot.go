@@ -12,53 +12,55 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func listSnapshots(ctx context.Context, cmd *cli.Command, vol, sortBy string, rev bool, opts v1.ListOpts) error {
+func listSnapshots(ctx context.Context, cmd *cli.Command, vol, sortBy string, rev bool, opts cliListOpts) error {
 	if isWide(cmd) {
 		var resp *v1.SnapshotDetailListResponse
 		var err error
 		if vol != "" {
-			resp, err = apiClient.ListVolumeSnapshotsDetail(ctx, vol, opts)
+			resp, err = apiClient.ListVolumeSnapshotsDetail(ctx, vol, opts.ListOpts)
 		} else {
-			resp, err = apiClient.ListSnapshotsDetail(ctx, opts)
+			resp, err = apiClient.ListSnapshotsDetail(ctx, opts.ListOpts)
 		}
 		if err != nil {
 			return err
 		}
 		sortSnapshotsDetail(resp.Snapshots, sortBy, rev)
 		return output(cmd, resp, func() {
-			tw := newTableWriter(cmd, []string{"NAME", "VOLUME", "SIZE", "USED", "EXCLUSIVE", "READONLY", "LABELS", "CREATED"})
+			tw := newTableWriter(cmd, []string{"NAME", "CREATED BY", "VOLUME", "SIZE", "USED", "EXCLUSIVE", "READONLY", "LABELS", "CREATED"})
 			tw.writeHeader()
 			for _, s := range resp.Snapshots {
 				tw.writeRow(map[string]string{
-					"NAME": s.Name, "VOLUME": s.Volume, "SIZE": utils.FormatBytes(s.SizeBytes), "USED": utils.FormatBytes(s.UsedBytes),
+					"NAME": s.Name, "CREATED BY": s.CreatedBy, "VOLUME": s.Volume, "SIZE": utils.FormatBytes(s.SizeBytes), "USED": utils.FormatBytes(s.UsedBytes),
 					"EXCLUSIVE": utils.FormatBytes(s.ExclusiveBytes), "READONLY": fmt.Sprintf("%v", s.ReadOnly),
 					"LABELS": formatLabelsShort(s.Labels), "CREATED": s.CreatedAt.Format(timeFmt),
 				})
 			}
 			tw.flush()
+			emptyHint("snapshots", len(resp.Snapshots), opts.allSet, opts.labelSet)
 		})
 	}
 	var resp *v1.SnapshotListResponse
 	var err error
 	if vol != "" {
-		resp, err = apiClient.ListVolumeSnapshots(ctx, vol, opts)
+		resp, err = apiClient.ListVolumeSnapshots(ctx, vol, opts.ListOpts)
 	} else {
-		resp, err = apiClient.ListSnapshots(ctx, opts)
+		resp, err = apiClient.ListSnapshots(ctx, opts.ListOpts)
 	}
 	if err != nil {
 		return err
 	}
 	sortSnapshots(resp.Snapshots, sortBy, rev)
 	return output(cmd, resp, func() {
-		tw := newTableWriter(cmd, []string{"NAME", "VOLUME", "SIZE", "USED", "CREATED"})
+		tw := newTableWriter(cmd, []string{"NAME", "CREATED BY", "VOLUME", "SIZE", "USED", "CREATED"})
 		tw.writeHeader()
 		for _, s := range resp.Snapshots {
 			tw.writeRow(map[string]string{
-				"NAME": s.Name, "VOLUME": s.Volume, "SIZE": utils.FormatBytes(s.SizeBytes),
+				"NAME": s.Name, "CREATED BY": s.CreatedBy, "VOLUME": s.Volume, "SIZE": utils.FormatBytes(s.SizeBytes),
 				"USED": utils.FormatBytes(s.UsedBytes), "CREATED": s.CreatedAt.Format(timeFmt),
 			})
 		}
 		tw.flush()
+		emptyHint("snapshots", len(resp.Snapshots), opts.allSet, opts.labelSet)
 	})
 }
 
@@ -110,6 +112,11 @@ func snapshotDelete(ctx context.Context, cmd *cli.Command) error {
 				return wrapErr(err, "snapshot", name)
 			}
 			if snap.Labels[config.LabelCreatedBy] != apiClient.Identity() {
+				owner := snap.Labels[config.LabelCreatedBy]
+				if owner == "" {
+					owner = "unknown"
+				}
+				_, _ = fmt.Fprintf(os.Stderr, "skipped %q (created-by: %s)\n", name, owner)
 				protected = append(protected, name)
 				continue
 			}
@@ -122,7 +129,7 @@ func snapshotDelete(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 	if len(protected) > 0 {
-		_, _ = fmt.Fprintf(os.Stderr, "skipped %d protected snapshot(s) (created-by != cli):\n  btrfs-nfs-csi snapshot delete %s --confirm --yes\n", len(protected), strings.Join(protected, " "))
+		_, _ = fmt.Fprintf(os.Stderr, "to force:  btrfs-nfs-csi snapshot delete %s --confirm --yes\n", strings.Join(protected, " "))
 	}
 	return nil
 }
