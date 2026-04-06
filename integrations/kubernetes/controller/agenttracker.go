@@ -160,7 +160,12 @@ func (t *AgentTracker) discoverFromStorageClasses(ctx context.Context) {
 		known[a.agentURL] = true
 
 		if _, exists := t.agents[a.agentURL]; !exists {
-			t.agents[a.agentURL] = agentclient.NewClient(a.agentURL, a.token, config.IdentityK8sController)
+			c, err := agentclient.NewClient(a.agentURL, a.token, config.IdentityK8sController)
+			if err != nil {
+				log.Error().Err(err).Str("agent", a.agentURL).Str("sc", a.scName).Msg("invalid agent client config")
+				continue
+			}
+			t.agents[a.agentURL] = c
 			log.Info().Str("agent", a.agentURL).Str("sc", a.scName).Msg("discovered agent from StorageClass")
 		}
 	}

@@ -26,7 +26,7 @@ func TestCreateClone(t *testing.T) {
 		snapDir := filepath.Join(bp, config.SnapshotsDir, name)
 		dataDir := filepath.Join(snapDir, config.DataDir)
 		require.NoError(t, os.MkdirAll(dataDir, 0o755))
-		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: name, Volume: "srcvol", ReadOnly: true})
+		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: name, Volume: "srcvol"})
 		seedVolume(t, s, "test", bp, VolumeMetadata{
 			Name: "srcvol", SizeBytes: 4096, QuotaBytes: 4096,
 			Compression: "zstd", UID: 1000, GID: 1000, Mode: "0755",
@@ -139,19 +139,31 @@ func TestCreateClone(t *testing.T) {
 		assert.Equal(t, []string{"qgroup", "limit", "4096", dstData}, runner.Calls[1])
 	})
 
-	t.Run("source_volume_not_found", func(t *testing.T) {
+	t.Run("source_volume_deleted_fallback", func(t *testing.T) {
 		s, bp, _, _ := newTestStorage(t)
 
-		// Create snapshot pointing to a non-existent volume
+		// Create snapshot pointing to a deleted volume. Clone should use snapshot properties as fallback.
 		snapDir := filepath.Join(bp, config.SnapshotsDir, "orphansnap")
 		dataDir := filepath.Join(snapDir, config.DataDir)
 		require.NoError(t, os.MkdirAll(dataDir, 0o755))
-		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: "orphansnap", Volume: "missing", ReadOnly: true})
-
-		_, err := s.CreateClone(ctx, "test", CloneCreateRequest{
-			Name: "clone", Snapshot: "orphansnap",
+		writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{
+			Name: "orphansnap", Volume: "missing",
+			SizeBytes: 1024, QuotaBytes: 1024, Compression: "zstd", NoCOW: true,
+			UID: 1000, GID: 1000, Mode: "0755",
 		})
-		requireStorageError(t, err, ErrNotFound)
+
+		meta, err := s.CreateClone(ctx, "test", CloneCreateRequest{
+			Name: "clone", Snapshot: "orphansnap",
+			Labels: map[string]string{"created-by": "test"},
+		})
+		require.NoError(t, err, "CreateClone with deleted source volume")
+		assert.Equal(t, uint64(1024), meta.SizeBytes)
+		assert.Equal(t, uint64(1024), meta.QuotaBytes)
+		assert.Equal(t, "zstd", meta.Compression)
+		assert.True(t, meta.NoCOW)
+		assert.Equal(t, 1000, meta.UID)
+		assert.Equal(t, 1000, meta.GID)
+		assert.Equal(t, "0755", meta.Mode)
 	})
 
 	t.Run("invalid_tenant", func(t *testing.T) {

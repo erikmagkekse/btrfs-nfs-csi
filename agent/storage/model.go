@@ -36,7 +36,13 @@ type SnapshotMetadata struct {
 	SizeBytes      uint64            `json:"size_bytes"`
 	UsedBytes      uint64            `json:"used_bytes"`
 	ExclusiveBytes uint64            `json:"exclusive_bytes"`
-	ReadOnly       bool              `json:"readonly"`
+	// Source volume properties, preserved for clone fallback when source volume is deleted.
+	QuotaBytes  uint64 `json:"quota_bytes,omitempty"` // btrfs qgroup limit from source volume
+	NoCOW       bool   `json:"nocow,omitempty"`       // copy-on-write disabled on source volume
+	Compression string `json:"compression,omitempty"` // compression algorithm from source volume
+	UID         int    `json:"uid,omitempty"`          // owner UID from source volume
+	GID         int    `json:"gid,omitempty"`          // owner GID from source volume
+	Mode        string `json:"mode,omitempty"`         // permission mode from source volume
 	Labels         map[string]string `json:"labels,omitempty"`
 	CreatedAt      time.Time         `json:"created_at"`
 	UpdatedAt      time.Time         `json:"updated_at"`

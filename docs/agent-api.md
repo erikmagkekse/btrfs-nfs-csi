@@ -286,7 +286,12 @@ With `?detail=true`, each export includes `labels`:
   "size_bytes": 1073741824,
   "used_bytes": 16384,
   "exclusive_bytes": 0,
-  "readonly": true,
+  "quota_bytes": 1073741824,
+  "nocow": false,
+  "compression": "zstd",
+  "uid": 1000,
+  "gid": 1000,
+  "mode": "0755",
   "labels": {"env": "prod"},
   "created_at": "2025-01-15T12:00:00Z",
   "updated_at": "2025-01-15T12:00:00Z"
@@ -313,7 +318,7 @@ Returns a summary list of all snapshots. Supports pagination (`?after=&limit=`),
 }
 ```
 
-With `?detail=true`, each snapshot includes the full detail fields (same as `GET /v1/snapshots/:name`): `path`, `exclusive_bytes`, `readonly`, `labels`, `updated_at`.
+With `?detail=true`, each snapshot includes the full detail fields (same as `GET /v1/snapshots/:name`): `path`, `exclusive_bytes`, `quota_bytes`, `nocow`, `compression`, `uid`, `gid`, `mode`, `labels`, `updated_at`.
 
 ### GET /v1/volumes/:name/snapshots
 
@@ -330,7 +335,12 @@ Returns a summary list of snapshots for a specific volume. Same response format 
   "size_bytes": 1073741824,
   "used_bytes": 16384,
   "exclusive_bytes": 0,
-  "readonly": true,
+  "quota_bytes": 1073741824,
+  "nocow": false,
+  "compression": "zstd",
+  "uid": 1000,
+  "gid": 1000,
+  "mode": "0755",
   "labels": {"env": "prod"},
   "created_at": "2025-01-15T12:00:00Z",
   "updated_at": "2025-01-15T12:00:00Z"

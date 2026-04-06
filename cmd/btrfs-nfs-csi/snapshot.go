@@ -26,12 +26,12 @@ func listSnapshots(ctx context.Context, cmd *cli.Command, vol, sortBy string, re
 		}
 		sortSnapshotsDetail(resp.Snapshots, sortBy, rev)
 		return output(cmd, resp, func() {
-			tw := newTableWriter(cmd, []string{"NAME", "CREATED BY", "VOLUME", "SIZE", "USED", "EXCLUSIVE", "READONLY", "LABELS", "CREATED"})
+			tw := newTableWriter(cmd, []string{"NAME", "CREATED BY", "VOLUME", "SIZE", "USED", "EXCLUSIVE", "LABELS", "CREATED"})
 			tw.writeHeader()
 			for _, s := range resp.Snapshots {
 				tw.writeRow(map[string]string{
 					"NAME": s.Name, "CREATED BY": s.CreatedBy, "VOLUME": s.Volume, "SIZE": utils.FormatBytes(s.SizeBytes), "USED": utils.FormatBytes(s.UsedBytes),
-					"EXCLUSIVE": utils.FormatBytes(s.ExclusiveBytes), "READONLY": fmt.Sprintf("%v", s.ReadOnly),
+					"EXCLUSIVE": utils.FormatBytes(s.ExclusiveBytes),
 					"LABELS": formatLabelsShort(s.Labels), "CREATED": s.CreatedAt.Format(timeFmt),
 				})
 			}
@@ -79,7 +79,6 @@ func snapshotGet(ctx context.Context, cmd *cli.Command) error {
 		fmt.Printf("Size:       %s\n", utils.FormatBytes(resp.SizeBytes))
 		fmt.Printf("Used:       %s\n", utils.FormatBytes(resp.UsedBytes))
 		fmt.Printf("Exclusive:  %s\n", utils.FormatBytes(resp.ExclusiveBytes))
-		fmt.Printf("ReadOnly:   %v\n", resp.ReadOnly)
 		printLabels("Labels:", resp.Labels, 12)
 		fmt.Printf("Created:    %s\n", resp.CreatedAt.Format(timeFmt))
 		fmt.Printf("Updated:    %s\n", resp.UpdatedAt.Format(timeFmt))

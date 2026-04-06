@@ -41,7 +41,16 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	}
 	srcVol, volErr := s.volumes.Get(tenant, snap.Volume)
 	if volErr != nil {
-		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source volume %q for snapshot %q not found", snap.Volume, req.Snapshot)}
+		// Source volume was deleted. Fall back to snapshot properties.
+		srcVol = &VolumeMetadata{
+			SizeBytes:   snap.SizeBytes,
+			QuotaBytes:  snap.QuotaBytes,
+			NoCOW:       snap.NoCOW,
+			Compression: snap.Compression,
+			UID:         snap.UID,
+			GID:         snap.GID,
+			Mode:        snap.Mode,
+		}
 	}
 	cloneDir := s.volumes.Dir(tenant, req.Name)
 	if existing, err := s.volumes.Get(tenant, req.Name); err == nil {

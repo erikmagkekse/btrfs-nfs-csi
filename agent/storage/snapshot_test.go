@@ -65,7 +65,6 @@ func TestCreateSnapshot(t *testing.T) {
 		require.NoError(t, err, "CreateSnapshot")
 		assert.Equal(t, "mysnap", meta.Name)
 		assert.Equal(t, "srcvol", meta.Volume)
-		assert.True(t, meta.ReadOnly, "snapshot should be readonly")
 		assert.Equal(t, uint64(1024), meta.SizeBytes)
 		assert.False(t, meta.CreatedAt.IsZero(), "CreatedAt should be set")
 
@@ -73,8 +72,6 @@ func TestCreateSnapshot(t *testing.T) {
 		var ondisk SnapshotMetadata
 		readTestJSON(t, filepath.Join(snapDir, config.MetadataFile), &ondisk)
 		assert.Equal(t, "mysnap", ondisk.Name)
-		assert.True(t, ondisk.ReadOnly, "on-disk snapshot should be readonly")
-
 		// btrfs snapshot called with -r (readonly) flag
 		srcData := filepath.Join(bp, "srcvol", config.DataDir)
 		dstData := filepath.Join(snapDir, config.DataDir)
@@ -182,7 +179,7 @@ func TestGetSnapshot(t *testing.T) {
 
 	snapDir := filepath.Join(bp, config.SnapshotsDir, "mysnap")
 	require.NoError(t, os.MkdirAll(snapDir, 0o755))
-	writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: "mysnap", Volume: "vol1", ReadOnly: true})
+	writeSnapshotMetadata(t, s, snapDir, SnapshotMetadata{Name: "mysnap", Volume: "vol1"})
 
 	tests := []struct {
 		name   string
@@ -203,7 +200,6 @@ func TestGetSnapshot(t *testing.T) {
 			}
 			require.NoError(t, err, "GetSnapshot")
 			assert.Equal(t, tt.expect, meta.Name)
-			assert.True(t, meta.ReadOnly, "snapshot should be readonly")
 		})
 	}
 }

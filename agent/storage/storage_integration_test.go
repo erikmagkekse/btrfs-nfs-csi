@@ -258,8 +258,6 @@ func (s *StorageIntegrationSuite) TestSnapshotLifecycle() {
 	s.Require().NoError(err)
 	s.Assert().Equal("my-snapshot", snap.Name)
 	s.Assert().Equal("snap-src", snap.Volume)
-	s.Assert().True(snap.ReadOnly)
-
 	// Verify snapshot subvolume is readonly
 	snapDataDir := filepath.Join(s.tenantDir, config.SnapshotsDir, "my-snapshot", config.DataDir)
 	s.Assert().True(s.storage.btrfs.SubvolumeExists(s.ctx, snapDataDir))

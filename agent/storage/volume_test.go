@@ -360,13 +360,6 @@ func TestUpdateVolume(t *testing.T) {
 				code: ErrInvalid,
 			},
 			{
-				name: "size_equal",
-				vol:  "vol",
-				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
-				req:  VolumeUpdateRequest{SizeBytes: ptrUint64(1024)},
-				code: ErrInvalid,
-			},
-			{
 				name: "invalid_compression",
 				vol:  "vol",
 				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},

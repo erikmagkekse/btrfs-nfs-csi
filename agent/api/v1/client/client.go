@@ -112,7 +112,7 @@ type Client struct {
 
 // NewClient creates a client, parsing AGENT_HTTP_CLIENT_* and AGENT_CSI_IDENTITY env vars.
 // identity is the fallback when AGENT_CSI_IDENTITY is unset.
-func NewClient(url, token, identity string) *Client {
+func NewClient(url, token, identity string) (*Client, error) {
 	cfg, err := env.ParseAs[ClientConfig]()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: invalid client env config: %v, using defaults\n", err)
@@ -126,11 +126,17 @@ func NewClient(url, token, identity string) *Client {
 
 // NewClientWithConfig creates a client with explicit configuration.
 // Use this when embedding the client in third-party projects.
-func NewClientWithConfig(url, token string, cfg ClientConfig) *Client {
+func NewClientWithConfig(url, token string, cfg ClientConfig) (*Client, error) {
 	return newClient(url, token, cfg)
 }
 
-func newClient(url, token string, cfg ClientConfig) *Client {
+func newClient(url, token string, cfg ClientConfig) (*Client, error) {
+	if url == "" {
+		return nil, fmt.Errorf("agent URL must not be empty")
+	}
+	if token == "" {
+		return nil, fmt.Errorf("agent token must not be empty")
+	}
 	hc := cfg.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: cfg.Timeout}
@@ -146,7 +152,7 @@ func newClient(url, token string, cfg ClientConfig) *Client {
 		pageLimit:     cfg.PageLimit,
 		prefetch:      cfg.Prefetch,
 		prefetchBytes: int64(cfg.PrefetchMB) * 1024 * 1024,
-	}
+	}, nil
 }
 
 // Identity returns the client's identity label value (e.g. "cli", "k8s").

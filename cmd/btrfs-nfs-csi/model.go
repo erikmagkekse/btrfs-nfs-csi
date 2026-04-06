@@ -13,10 +13,14 @@ func versionCmd() *cli.Command {
 		Name:  "version",
 		Usage: "show CLI version",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			fmt.Printf("btrfs-nfs-csi %s (%s)\n", version, commit)
+			fmt.Printf("Local:\n")
+			fmt.Printf("  btrfs-nfs-csi %s (%s)\n", version, commit)
 			if cmd.Root().String("agent-url") != "" && cmd.Root().String("agent-token") != "" {
+				fmt.Printf("Agent:\n")
 				if h, err := apiClient.Healthz(ctx); err == nil {
-					fmt.Printf("agent         %s (%s)\n", h.Version, h.Commit)
+					fmt.Printf("  btrfs-nfs-csi %s (%s)\n", h.Version, h.Commit)
+				} else {
+					fmt.Printf("  unreachable (%v)\n", err)
 				}
 			}
 			return nil
