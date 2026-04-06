@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/github/license/erikmagkekse/btrfs-nfs-csi)](LICENSE)
 
 **Turn any Linux box with a btrfs disk into a very capable storage backend.**
-Instant snapshots, writable clones, per-volume quotas, compression, NoCOW (no copy-on-write) for databases, and automatic NFS exports. All from a single Go binary and a REST API. No iSCSI, no Ceph, no PhD required.
+Instant snapshots, writable clones, per-volume quotas, compression, NoCOW (no copy-on-write) for databases, and automatic NFS exports. All from a single Go binary and a REST API. 
 
 > **Pre-1.0.** Stable and used, but minor breaking changes may occur before v1.0. Feedback welcome.
 
