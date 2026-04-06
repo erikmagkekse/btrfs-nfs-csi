@@ -44,16 +44,18 @@ func main() {
 	}).With().Timestamp().Logger()
 
 	app := &cli.Command{
-		Name:  "btrfs-nfs-csi",
-		Usage: "btrfs-nfs-csi storage driver",
+		Name:        "btrfs-nfs-csi",
+		Usage:       "btrfs-nfs-csi storage driver",
+		Description: `Turns any btrfs filesystem into a full-featured NFS storage backend with
+instant snapshots, clones, and quotas. Includes a standalone REST agent,
+a CLI, and several CSI integrations.
+
+Docs:   https://github.com/erikmagkekse/btrfs-nfs-csi#readme
+Issues: https://github.com/erikmagkekse/btrfs-nfs-csi/issues`,
 		OnUsageError: func(_ context.Context, _ *cli.Command, err error, _ bool) error {
 			return err
 		},
-		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "agent-url", Sources: cli.EnvVars("AGENT_URL"), Usage: "agent API URL"},
-			&cli.StringFlag{Name: "agent-token", Sources: cli.EnvVars("AGENT_TOKEN"), Usage: "tenant token"},
-			&cli.StringFlag{Name: "output", Aliases: []string{"o"}, Value: outputTable, Usage: "output format: table, wide, json, json,wide"},
-		},
+		Flags: []cli.Flag{},
 		Commands: append(
 			withCLIHooks(
 				volumeCmd(),
@@ -128,10 +130,10 @@ func driverBackwardsCompatibilityWillBeRemovedInTheFuture() *cli.Command {
 func integrationCmd() *cli.Command {
 	return &cli.Command{
 		Name:        "integration",
-		Aliases:     []string{"integrations"},
+		Aliases:     []string{"integrations", "int"},
 		Usage:       "Platform integrations (kubernetes, ...)",
 		Category:    "Server",
-		Description: "Start platform-specific server components for Integrations",
+		Description: "Start platform-specific server components for integrations.",
 		Commands: []*cli.Command{
 			kubernetesCmd(),
 		},
@@ -140,9 +142,15 @@ func integrationCmd() *cli.Command {
 
 func kubernetesCmd() *cli.Command {
 	return &cli.Command{
-		Name:    "kubernetes",
-		Aliases: []string{"k8s"},
-		Usage:   "Kubernetes CSI driver",
+		Name:        "kubernetes",
+		Aliases:     []string{"k8s"},
+		Usage:       "Kubernetes integration",
+		Description: `Dynamic provisioning of btrfs volumes and snapshots via PVCs.
+Supports volume expansion, cloning, snapshots, NFS exports,
+health monitoring with auto-heal, and multi-node access.
+
+https://github.com/erikmagkekse/btrfs-nfs-csi
+Author: Erik Groh <me@eriks.life>`,
 		Commands: []*cli.Command{
 			{
 				Name:  "controller",
