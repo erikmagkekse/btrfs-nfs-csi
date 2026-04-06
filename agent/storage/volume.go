@@ -199,8 +199,8 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 			return nil, err
 		}
 	}
-	if req.SizeBytes != nil && *req.SizeBytes <= cur.SizeBytes {
-		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("new size %d must be larger than current size %d", *req.SizeBytes, cur.SizeBytes)}
+	if req.SizeBytes != nil && *req.SizeBytes < cur.SizeBytes {
+		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("new size %d must be at least current size %d", *req.SizeBytes, cur.SizeBytes)}
 	}
 	if req.Compression != nil {
 		if !utils.IsValidCompression(*req.Compression) {

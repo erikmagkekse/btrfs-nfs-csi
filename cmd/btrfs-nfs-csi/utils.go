@@ -99,7 +99,7 @@ func formatExports(refs []models.ExportDetailResponse) string {
 			s += " (" + formatLabelsShort(r.Labels) + ")"
 		}
 		if !r.CreatedAt.IsZero() {
-			s += " since " + r.CreatedAt.Format(timeFmt)
+			s += " since " + r.CreatedAt.Local().Format(timeFmt)
 		}
 		parts = append(parts, s)
 	}
@@ -367,14 +367,18 @@ var (
 	timingLine string
 )
 
-func initClient(cmd *cli.Command) {
-	apiClient = agentclient.NewClient(cmd.Root().String("agent-url"), cmd.Root().String("agent-token"), config.IdentityCLI)
+func initClient(cmd *cli.Command) error {
+	var err error
+	apiClient, err = agentclient.NewClient(cmd.Root().String("agent-url"), cmd.Root().String("agent-token"), config.IdentityCLI)
+	return err
 }
 
 func withCLIHooks(cmds ...*cli.Command) []*cli.Command {
 	for _, cmd := range cmds {
 		cmd.Before = func(ctx context.Context, c *cli.Command) (context.Context, error) {
-			initClient(c)
+			if err := initClient(c); err != nil {
+				return ctx, err
+			}
 			cmdStart = time.Now()
 			return ctx, nil
 		}
@@ -389,6 +393,9 @@ func withCLIHooks(cmds ...*cli.Command) []*cli.Command {
 }
 
 func fmtTiming(d time.Duration) string {
+	if d.Milliseconds() == 0 {
+		return ""
+	}
 	return fmt.Sprintf("took %s, %s", fmtDuration(d), time.Now().Format("2006-01-02 15:04:05"))
 }
 

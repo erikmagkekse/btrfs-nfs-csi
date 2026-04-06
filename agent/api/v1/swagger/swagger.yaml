@@ -1,6 +1,5 @@
-basePath: /
 definitions:
-  models.CloneCreateRequest:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.CloneCreateRequest:
     properties:
       labels:
         additionalProperties:
@@ -13,134 +12,181 @@ definitions:
         description: source snapshot name
         type: string
     type: object
-  models.DeviceErrorsResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceErrorsResponse:
     properties:
       corruption_errs:
+        description: data corruption errors
         type: integer
       flush_errs:
+        description: flush errors
         type: integer
       generation_errs:
+        description: generation mismatch errors
         type: integer
       read_errs:
+        description: read errors
         type: integer
       write_errs:
+        description: write errors
         type: integer
     type: object
-  models.DeviceIOStatsResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceIOStatsResponse:
     properties:
       io_time_ms_total:
+        description: total I/O time in milliseconds
         type: integer
       ios_in_progress:
+        description: I/O operations currently in flight
         type: integer
       read_bytes_total:
+        description: total bytes read
         type: integer
       read_ios_total:
+        description: total read I/O operations
         type: integer
       read_time_ms_total:
+        description: total read time in milliseconds
         type: integer
       weighted_io_time_ms_total:
+        description: weighted I/O time in milliseconds
         type: integer
       write_bytes_total:
+        description: total bytes written
         type: integer
       write_ios_total:
+        description: total write I/O operations
         type: integer
       write_time_ms_total:
+        description: total write time in milliseconds
         type: integer
     type: object
-  models.DeviceStatsResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceStatsResponse:
     properties:
       allocated_bytes:
+        description: bytes allocated on this device
         type: integer
       device:
+        description: block device path (e.g. "/dev/sda1")
         type: string
       devid:
+        description: btrfs device ID
         type: string
       errors:
-        $ref: '#/definitions/models.DeviceErrorsResponse'
+        allOf:
+        - $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceErrorsResponse'
+        description: btrfs error counters
       io:
-        $ref: '#/definitions/models.DeviceIOStatsResponse'
+        allOf:
+        - $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceIOStatsResponse'
+        description: I/O counters from /sys/block
       missing:
+        description: true if device is missing from the filesystem
         type: boolean
       size_bytes:
+        description: device size in bytes
         type: integer
     type: object
-  models.ErrorResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse:
     properties:
       code:
         type: string
       error:
         type: string
     type: object
-  models.ExportDetailResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportDetailResponse:
     properties:
       client:
+        description: client IP address (IPv4 or IPv6)
         type: string
       created_at:
+        description: creation timestamp (UTC)
+        type: string
+      created_by:
+        description: identity that created this export
         type: string
       labels:
         additionalProperties:
           type: string
+        description: user-defined labels
         type: object
       name:
+        description: volume name
         type: string
     type: object
-  models.ExportListResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportListResponse:
     properties:
       exports:
+        description: list of exports
         items:
-          $ref: '#/definitions/models.ExportResponse'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportResponse'
         type: array
       next:
+        description: opaque cursor for the next page
         type: string
       total:
+        description: total number of exports matching the query
         type: integer
     type: object
-  models.ExportResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportResponse:
     properties:
       client:
+        description: client IP address (IPv4 or IPv6)
         type: string
       created_at:
+        description: creation timestamp (UTC)
+        type: string
+      created_by:
+        description: identity that created this export
         type: string
       name:
+        description: volume name
         type: string
     type: object
-  models.FilesystemStatsResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.FilesystemStatsResponse:
     properties:
       data_ratio:
+        description: data replication ratio (e.g. 1.0 for single, 2.0 for RAID1)
         type: number
       devices:
+        description: per-device statistics
         items:
-          $ref: '#/definitions/models.DeviceStatsResponse'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceStatsResponse'
         type: array
       free_bytes:
+        description: bytes free (total - used)
         type: integer
       metadata_total_bytes:
+        description: metadata bytes allocated
         type: integer
       metadata_used_bytes:
+        description: metadata bytes used
         type: integer
       total_bytes:
+        description: total filesystem size in bytes
         type: integer
       unallocated_bytes:
+        description: bytes not yet allocated to any chunk
         type: integer
       used_bytes:
+        description: bytes used
         type: integer
     type: object
-  models.HealthResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.HealthResponse:
     properties:
       commit:
+        description: git commit hash
         type: string
-      features:
-        additionalProperties:
-          type: string
-        type: object
       status:
+        description: '"ok" or "degraded"'
         type: string
       uptime_seconds:
+        description: seconds since agent start
         type: integer
       version:
+        description: agent version string
         type: string
     type: object
-  models.SnapshotCreateRequest:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotCreateRequest:
     properties:
       labels:
         additionalProperties:
@@ -153,72 +199,121 @@ definitions:
         description: source volume name
         type: string
     type: object
-  models.SnapshotDetailResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse:
     properties:
+      compression:
+        description: compression algorithm from source volume
+        type: string
       created_at:
+        description: creation timestamp (UTC)
+        type: string
+      created_by:
+        description: identity that created this snapshot
         type: string
       exclusive_bytes:
+        description: exclusive bytes (not shared with other snapshots)
+        type: integer
+      gid:
+        description: owner GID from source volume
         type: integer
       labels:
         additionalProperties:
           type: string
+        description: user-defined labels
         type: object
+      mode:
+        description: permission mode from source volume
+        type: string
       name:
+        description: snapshot name
         type: string
-      path:
-        type: string
-      readonly:
+      nocow:
+        description: copy-on-write disabled on source volume
         type: boolean
+      path:
+        description: absolute path on the agent host
+        type: string
+      quota_bytes:
+        description: Source volume properties, preserved for clone fallback.
+        type: integer
       size_bytes:
+        description: size in bytes (from source volume at snapshot time)
+        type: integer
+      uid:
+        description: owner UID from source volume
         type: integer
       updated_at:
+        description: last update timestamp (UTC)
         type: string
       used_bytes:
+        description: bytes used (btrfs qgroup accounting)
         type: integer
       volume:
+        description: source volume name
         type: string
     type: object
-  models.SnapshotListResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotListResponse:
     properties:
       next:
+        description: opaque cursor for the next page
         type: string
       snapshots:
+        description: list of snapshots
         items:
-          $ref: '#/definitions/models.SnapshotResponse'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotResponse'
         type: array
       total:
+        description: total number of snapshots matching the query
         type: integer
     type: object
-  models.SnapshotResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotResponse:
     properties:
       created_at:
+        description: creation timestamp (UTC)
+        type: string
+      created_by:
+        description: identity that created this snapshot
         type: string
       name:
+        description: snapshot name
         type: string
       size_bytes:
+        description: size in bytes (from source volume at snapshot time)
         type: integer
       used_bytes:
+        description: bytes used (btrfs qgroup accounting)
         type: integer
       volume:
+        description: source volume name
         type: string
     type: object
-  models.StatfsResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatfsResponse:
     properties:
       free_bytes:
+        description: bytes free
         type: integer
       total_bytes:
+        description: total filesystem size in bytes
         type: integer
       used_bytes:
+        description: bytes used
         type: integer
     type: object
-  models.StatsResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatsResponse:
     properties:
       btrfs:
-        $ref: '#/definitions/models.FilesystemStatsResponse'
+        allOf:
+        - $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.FilesystemStatsResponse'
+        description: btrfs-specific filesystem statistics
       statfs:
-        $ref: '#/definitions/models.StatfsResponse'
+        allOf:
+        - $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatfsResponse'
+        description: statfs(2) counters
+      tenant_name:
+        description: tenant name
+        type: string
     type: object
-  models.TaskCreateRequest:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskCreateRequest:
     properties:
       labels:
         additionalProperties:
@@ -233,83 +328,116 @@ definitions:
         description: Go duration string, e.g. "6h", "30m"
         type: string
     type: object
-  models.TaskCreateResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskCreateResponse:
     properties:
       status:
+        description: initial status ("pending")
         type: string
       task_id:
+        description: unique task ID (UUID)
         type: string
     type: object
-  models.TaskDetailResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskDetailResponse:
     properties:
       completed_at:
+        description: completion timestamp (UTC)
         type: string
       created_at:
+        description: creation timestamp (UTC)
+        type: string
+      created_by:
+        description: identity that created this task
         type: string
       error:
+        description: error message if failed
         type: string
       id:
+        description: unique task ID (UUID)
         type: string
       labels:
         additionalProperties:
           type: string
+        description: user-defined labels
         type: object
       opts:
         additionalProperties:
           type: string
+        description: task-specific options
         type: object
       progress:
+        description: completion percentage (0-100)
         type: integer
       result:
+        description: task-specific result payload (JSON)
         items:
           type: integer
         type: array
       started_at:
+        description: execution start timestamp (UTC)
         type: string
       status:
+        description: '"pending", "running", "completed", "failed", "cancelled"'
         type: string
       timeout:
+        description: Go duration string (e.g. "6h")
         type: string
       type:
+        description: task type ("scrub", "test")
         type: string
     type: object
-  models.TaskListResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskListResponse:
     properties:
       next:
+        description: opaque cursor for the next page
         type: string
       tasks:
+        description: list of tasks
         items:
-          $ref: '#/definitions/models.TaskResponse'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskResponse'
         type: array
       total:
+        description: total number of tasks matching the query
         type: integer
     type: object
-  models.TaskResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskResponse:
     properties:
       completed_at:
+        description: completion timestamp (UTC)
         type: string
       created_at:
+        description: creation timestamp (UTC)
+        type: string
+      created_by:
+        description: identity that created this task
         type: string
       error:
+        description: error message if failed
         type: string
       id:
+        description: unique task ID (UUID)
         type: string
       opts:
         additionalProperties:
           type: string
+        description: task-specific options
         type: object
       progress:
+        description: completion percentage (0-100)
         type: integer
       started_at:
+        description: execution start timestamp (UTC)
         type: string
       status:
+        description: '"pending", "running", "completed", "failed", "cancelled"'
         type: string
       timeout:
+        description: Go duration string (e.g. "6h")
         type: string
       type:
+        description: task type ("scrub", "test")
         type: string
     type: object
-  models.VolumeCloneRequest:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeCloneRequest:
     properties:
       labels:
         additionalProperties:
@@ -322,7 +450,7 @@ definitions:
         description: source volume name
         type: string
     type: object
-  models.VolumeCreateRequest:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeCreateRequest:
     properties:
       compression:
         description: '"zstd", "zstd:3", "zlib", "zlib:5", "lzo", or ""'
@@ -354,44 +482,62 @@ definitions:
         description: owner UID (0-65534)
         type: integer
     type: object
-  models.VolumeDetailResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse:
     properties:
       clients:
+        description: active NFS exports
         items:
-          $ref: '#/definitions/models.ExportDetailResponse'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportDetailResponse'
         type: array
       compression:
+        description: compression algorithm (e.g. "zstd", "zlib", "lzo", "")
         type: string
       created_at:
+        description: creation timestamp (UTC)
+        type: string
+      created_by:
+        description: identity that created this volume
         type: string
       gid:
+        description: owner GID
         type: integer
       labels:
         additionalProperties:
           type: string
+        description: user-defined labels
         type: object
       last_attach_at:
+        description: last NFS export attach timestamp (UTC)
         type: string
       mode:
+        description: octal permission string (e.g. "0755")
         type: string
       name:
+        description: volume name
         type: string
       nocow:
+        description: copy-on-write disabled (chattr +C)
         type: boolean
       path:
+        description: absolute path on the agent host
         type: string
       quota_bytes:
+        description: btrfs qgroup limit in bytes
         type: integer
       size_bytes:
+        description: subvolume size in bytes
         type: integer
       uid:
+        description: owner UID
         type: integer
       updated_at:
+        description: last update timestamp (UTC)
         type: string
       used_bytes:
+        description: bytes used (btrfs qgroup accounting)
         type: integer
     type: object
-  models.VolumeExportCreateRequest:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeExportCreateRequest:
     properties:
       client:
         description: client IP address (IPv4 or IPv6)
@@ -401,7 +547,7 @@ definitions:
           type: string
         type: object
     type: object
-  models.VolumeExportDeleteRequest:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeExportDeleteRequest:
     properties:
       client:
         description: client IP address (IPv4 or IPv6)
@@ -411,31 +557,42 @@ definitions:
           type: string
         type: object
     type: object
-  models.VolumeListResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeListResponse:
     properties:
       next:
+        description: opaque cursor for the next page (empty on last page)
         type: string
       total:
+        description: total number of volumes matching the query
         type: integer
       volumes:
+        description: list of volumes
         items:
-          $ref: '#/definitions/models.VolumeResponse'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeResponse'
         type: array
     type: object
-  models.VolumeResponse:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeResponse:
     properties:
       clients:
+        description: number of active NFS exports
         type: integer
       created_at:
+        description: creation timestamp (UTC)
+        type: string
+      created_by:
+        description: identity that created this volume (e.g. "cli", "controller")
         type: string
       name:
+        description: volume name
         type: string
       size_bytes:
+        description: subvolume size in bytes
         type: integer
       used_bytes:
+        description: bytes used (btrfs qgroup accounting)
         type: integer
     type: object
-  models.VolumeUpdateRequest:
+  github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeUpdateRequest:
     properties:
       compression:
         description: see VolumeCreateRequest.Compression
@@ -463,10 +620,6 @@ definitions:
     type: object
 info:
   contact: {}
-  description: REST API for managing btrfs volumes, snapshots, clones, NFS exports,
-    and background tasks.
-  title: btrfs-nfs-csi Agent API
-  version: "1.0"
 paths:
   /healthz:
     get:
@@ -478,7 +631,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.HealthResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.HealthResponse'
       summary: Health check
       tags:
       - health
@@ -493,22 +646,22 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.CloneCreateRequest'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.CloneCreateRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.VolumeDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
         "409":
           description: Volume already exists
           schema:
-            $ref: '#/definitions/models.VolumeDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse'
       security:
       - BearerAuth: []
       summary: Create a clone from snapshot
@@ -546,7 +699,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.ExportListResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportListResponse'
       security:
       - BearerAuth: []
       summary: List NFS exports
@@ -584,7 +737,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.SnapshotListResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotListResponse'
       security:
       - BearerAuth: []
       summary: List snapshots
@@ -601,22 +754,22 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.SnapshotCreateRequest'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotCreateRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.SnapshotDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
         "409":
           description: Snapshot already exists
           schema:
-            $ref: '#/definitions/models.SnapshotDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse'
       security:
       - BearerAuth: []
       summary: Create a snapshot
@@ -637,7 +790,7 @@ paths:
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete a snapshot
@@ -657,11 +810,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.SnapshotDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get a snapshot
@@ -676,11 +829,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.StatsResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatsResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get filesystem statistics
@@ -725,7 +878,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.TaskListResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskListResponse'
       security:
       - BearerAuth: []
       summary: List tasks
@@ -746,7 +899,7 @@ paths:
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Cancel a task
@@ -766,11 +919,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.TaskDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskDetailResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get a task
@@ -795,18 +948,18 @@ paths:
         in: body
         name: request
         schema:
-          $ref: '#/definitions/models.TaskCreateRequest'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskCreateRequest'
       produces:
       - application/json
       responses:
         "202":
           description: Accepted
           schema:
-            $ref: '#/definitions/models.TaskCreateResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskCreateResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a background task
@@ -844,7 +997,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.VolumeListResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeListResponse'
       security:
       - BearerAuth: []
       summary: List volumes
@@ -860,22 +1013,22 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.VolumeCreateRequest'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeCreateRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.VolumeDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
         "409":
           description: Volume already exists
           schema:
-            $ref: '#/definitions/models.VolumeDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse'
       security:
       - BearerAuth: []
       summary: Create a volume
@@ -897,11 +1050,11 @@ paths:
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
         "423":
           description: Volume has active exports
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete a volume
@@ -921,11 +1074,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.VolumeDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get a volume
@@ -946,22 +1099,22 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.VolumeUpdateRequest'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeUpdateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.VolumeDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update a volume
@@ -983,18 +1136,18 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.VolumeExportDeleteRequest'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeExportDeleteRequest'
       responses:
         "204":
           description: No Content
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Remove NFS export
@@ -1015,18 +1168,18 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.VolumeExportCreateRequest'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeExportCreateRequest'
       responses:
         "204":
           description: No Content
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Add NFS export
@@ -1068,7 +1221,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.SnapshotListResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotListResponse'
       security:
       - BearerAuth: []
       summary: List snapshots for a volume
@@ -1086,31 +1239,25 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/models.VolumeCloneRequest'
+          $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeCloneRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.VolumeDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse'
         "409":
           description: Volume already exists
           schema:
-            $ref: '#/definitions/models.VolumeDetailResponse'
+            $ref: '#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse'
       security:
       - BearerAuth: []
       summary: Clone a volume
       tags:
       - clones
-securityDefinitions:
-  BearerAuth:
-    description: Tenant token as "Bearer <token>"
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"

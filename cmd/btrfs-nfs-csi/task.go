@@ -124,7 +124,7 @@ func listTasks(ctx context.Context, cmd *cli.Command, taskType, sortBy string, r
 				tw.writeRow(map[string]string{
 					"ID": t.ID, "TYPE": string(t.Type), "CREATED_BY": t.CreatedBy, "STATUS": string(t.Status), "PROGRESS": fmt.Sprintf("%d%%", t.Progress),
 					"LABELS": formatLabelsShort(t.Labels), "TIMEOUT": taskTimeout(t.Timeout), "TOOK": taskTook(t.CreatedAt, t.StartedAt, t.CompletedAt),
-					"CREATED": t.CreatedAt.Format(timeFmt), "RESULT": result, "ERROR": errMsg,
+					"CREATED": t.CreatedAt.Local().Format(timeFmt), "RESULT": result, "ERROR": errMsg,
 				})
 			}
 			tw.flush()
@@ -143,7 +143,7 @@ func listTasks(ctx context.Context, cmd *cli.Command, taskType, sortBy string, r
 			tw.writeRow(map[string]string{
 				"ID": t.ID, "TYPE": string(t.Type), "CREATED_BY": t.CreatedBy, "STATUS": string(t.Status), "PROGRESS": fmt.Sprintf("%d%%", t.Progress),
 				"TIMEOUT": taskTimeout(t.Timeout), "TOOK": taskTook(t.CreatedAt, t.StartedAt, t.CompletedAt),
-				"CREATED": t.CreatedAt.Format(timeFmt),
+				"CREATED": t.CreatedAt.Local().Format(timeFmt),
 			})
 		}
 		tw.flush()
@@ -179,12 +179,12 @@ func taskGet(ctx context.Context, cmd *cli.Command) error {
 		if resp.Error != "" {
 			fmt.Printf("Error:      %s\n", resp.Error)
 		}
-		fmt.Printf("Created:    %s\n", resp.CreatedAt.Format(timeFmt))
+		fmt.Printf("Created:    %s\n", resp.CreatedAt.Local().Format(timeFmt))
 		if resp.StartedAt != nil {
-			fmt.Printf("Started:    %s\n", resp.StartedAt.Format(timeFmt))
+			fmt.Printf("Started:    %s\n", resp.StartedAt.Local().Format(timeFmt))
 		}
 		if resp.CompletedAt != nil {
-			fmt.Printf("Completed:  %s\n", resp.CompletedAt.Format(timeFmt))
+			fmt.Printf("Completed:  %s\n", resp.CompletedAt.Local().Format(timeFmt))
 			fmt.Printf("Took:       %s\n", fmtDuration(resp.CompletedAt.Sub(resp.CreatedAt)))
 		}
 		if s := taskResultSummary(resp); s != "" {

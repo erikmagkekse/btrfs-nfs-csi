@@ -20,7 +20,8 @@ func newTestTracker() *AgentTracker {
 func TestAgentTrackerClient(t *testing.T) {
 	t.Run("returns_cached_client", func(t *testing.T) {
 		tr := newTestTracker()
-		c := agentclient.NewClient("http://agent:8080", "tok", config.IdentityK8sController)
+		c, err := agentclient.NewClient("http://agent:8080", "tok", config.IdentityK8sController)
+		require.NoError(t, err)
 		tr.agents["http://agent:8080"] = c
 		tr.scToURL["my-sc"] = "http://agent:8080"
 
@@ -60,7 +61,8 @@ func TestAgentTrackerAgentURL(t *testing.T) {
 
 func TestAgentTrackerTrack(t *testing.T) {
 	tr := newTestTracker()
-	c := agentclient.NewClient("http://agent:8080", "tok", config.IdentityK8sController)
+	c, err := agentclient.NewClient("http://agent:8080", "tok", config.IdentityK8sController)
+	require.NoError(t, err)
 	tr.Track("http://agent:8080", c)
 
 	tr.mu.RLock()
@@ -71,8 +73,10 @@ func TestAgentTrackerTrack(t *testing.T) {
 
 func TestAgentTrackerAgents(t *testing.T) {
 	tr := newTestTracker()
-	c1 := agentclient.NewClient("http://a1:8080", "tok", config.IdentityK8sController)
-	c2 := agentclient.NewClient("http://a2:8080", "tok", config.IdentityK8sController)
+	c1, err := agentclient.NewClient("http://a1:8080", "tok", config.IdentityK8sController)
+	require.NoError(t, err)
+	c2, err := agentclient.NewClient("http://a2:8080", "tok", config.IdentityK8sController)
+	require.NoError(t, err)
 	tr.agents["http://a1:8080"] = c1
 	tr.agents["http://a2:8080"] = c2
 	tr.scToURL["sc-1"] = "http://a1:8080"
@@ -86,7 +90,8 @@ func TestAgentTrackerAgents(t *testing.T) {
 
 func TestAgentTrackerConcurrent(t *testing.T) {
 	tr := newTestTracker()
-	c := agentclient.NewClient("http://agent:8080", "tok", config.IdentityK8sController)
+	c, err := agentclient.NewClient("http://agent:8080", "tok", config.IdentityK8sController)
+	require.NoError(t, err)
 	tr.agents["http://agent:8080"] = c
 	tr.scToURL["my-sc"] = "http://agent:8080"
 
@@ -116,7 +121,8 @@ func TestAgentTrackerConcurrent(t *testing.T) {
 func TestAgentClientFromStorageClass(t *testing.T) {
 	t.Run("uses_cached_client", func(t *testing.T) {
 		tr := newTestTracker()
-		c := agentclient.NewClient("http://agent:8080", "tok", config.IdentityK8sController)
+		c, err := agentclient.NewClient("http://agent:8080", "tok", config.IdentityK8sController)
+		require.NoError(t, err)
 		tr.agents["http://agent:8080"] = c
 		tr.scToURL["my-sc"] = "http://agent:8080"
 

@@ -176,6 +176,13 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			}
 			volCtx[csiserver.ParamNFSSharePath] = cloneResp.Path
 
+			if cloneResp.SizeBytes < sizeBytes {
+				expandSize := sizeBytes
+				if _, err := client.UpdateVolume(ctx, req.Name, models.VolumeUpdateRequest{SizeBytes: &expandSize}); err != nil {
+					log.Warn().Err(err).Str("volume", req.Name).Uint64("from", cloneResp.SizeBytes).Uint64("to", sizeBytes).Msg("failed to expand clone")
+				}
+			}
+
 			log.Info().Str("volume", req.Name).Str("source", srcName).Str("sc", sc).Str("agent", agentURL).Msg("volume cloned from volume")
 
 			return &csi.CreateVolumeResponse{
@@ -221,6 +228,13 @@ func (s *Server) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest)
 			agentOpsTotal.WithLabelValues("create_clone", "success", sc).Inc()
 		}
 		volCtx[csiserver.ParamNFSSharePath] = cloneResp.Path
+
+		if cloneResp.SizeBytes < sizeBytes {
+			expandSize := sizeBytes
+			if _, err := client.UpdateVolume(ctx, req.Name, models.VolumeUpdateRequest{SizeBytes: &expandSize}); err != nil {
+				log.Warn().Err(err).Str("volume", req.Name).Uint64("from", cloneResp.SizeBytes).Uint64("to", sizeBytes).Msg("failed to expand clone")
+			}
+		}
 
 		log.Info().Str("volume", req.Name).Str("snapshot", snapName).Str("sc", sc).Str("agent", agentURL).Msg("volume cloned from snapshot")
 

@@ -29,7 +29,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.HealthResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.HealthResponse"
                         }
                     }
                 }
@@ -60,7 +60,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.CloneCreateRequest"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.CloneCreateRequest"
                         }
                     }
                 ],
@@ -68,19 +68,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     },
                     "409": {
                         "description": "Volume already exists",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
                     }
                 }
@@ -138,7 +138,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.ExportListResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportListResponse"
                         }
                     }
                 }
@@ -196,7 +196,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.SnapshotListResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotListResponse"
                         }
                     }
                 }
@@ -225,7 +225,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.SnapshotCreateRequest"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotCreateRequest"
                         }
                     }
                 ],
@@ -233,19 +233,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.SnapshotDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     },
                     "409": {
                         "description": "Snapshot already exists",
                         "schema": {
-                            "$ref": "#/definitions/models.SnapshotDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse"
                         }
                     }
                 }
@@ -279,13 +279,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.SnapshotDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -317,7 +317,7 @@ const docTemplate = `{
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -342,13 +342,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.StatsResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -416,7 +416,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.TaskListResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskListResponse"
                         }
                     }
                 }
@@ -450,13 +450,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.TaskDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskDetailResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -488,7 +488,7 @@ const docTemplate = `{
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -529,7 +529,7 @@ const docTemplate = `{
                         "name": "request",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/models.TaskCreateRequest"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskCreateRequest"
                         }
                     }
                 ],
@@ -537,13 +537,13 @@ const docTemplate = `{
                     "202": {
                         "description": "Accepted",
                         "schema": {
-                            "$ref": "#/definitions/models.TaskCreateResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskCreateResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -601,7 +601,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeListResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeListResponse"
                         }
                     }
                 }
@@ -630,7 +630,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeCreateRequest"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeCreateRequest"
                         }
                     }
                 ],
@@ -638,19 +638,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     },
                     "409": {
                         "description": "Volume already exists",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
                     }
                 }
@@ -681,7 +681,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeCloneRequest"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeCloneRequest"
                         }
                     }
                 ],
@@ -689,19 +689,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     },
                     "409": {
                         "description": "Volume already exists",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
                     }
                 }
@@ -735,13 +735,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -773,13 +773,13 @@ const docTemplate = `{
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     },
                     "423": {
                         "description": "Volume has active exports",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -815,7 +815,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeUpdateRequest"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeUpdateRequest"
                         }
                     }
                 ],
@@ -823,19 +823,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeDetailResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -870,7 +870,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeExportCreateRequest"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeExportCreateRequest"
                         }
                     }
                 ],
@@ -881,13 +881,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -920,7 +920,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.VolumeExportDeleteRequest"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeExportDeleteRequest"
                         }
                     }
                 ],
@@ -931,13 +931,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -1001,7 +1001,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.SnapshotListResponse"
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotListResponse"
                         }
                     }
                 }
@@ -1009,7 +1009,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "models.CloneCreateRequest": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.CloneCreateRequest": {
             "type": "object",
             "properties": {
                 "labels": {
@@ -1028,85 +1028,114 @@ const docTemplate = `{
                 }
             }
         },
-        "models.DeviceErrorsResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceErrorsResponse": {
             "type": "object",
             "properties": {
                 "corruption_errs": {
+                    "description": "data corruption errors",
                     "type": "integer"
                 },
                 "flush_errs": {
+                    "description": "flush errors",
                     "type": "integer"
                 },
                 "generation_errs": {
+                    "description": "generation mismatch errors",
                     "type": "integer"
                 },
                 "read_errs": {
+                    "description": "read errors",
                     "type": "integer"
                 },
                 "write_errs": {
+                    "description": "write errors",
                     "type": "integer"
                 }
             }
         },
-        "models.DeviceIOStatsResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceIOStatsResponse": {
             "type": "object",
             "properties": {
                 "io_time_ms_total": {
+                    "description": "total I/O time in milliseconds",
                     "type": "integer"
                 },
                 "ios_in_progress": {
+                    "description": "I/O operations currently in flight",
                     "type": "integer"
                 },
                 "read_bytes_total": {
+                    "description": "total bytes read",
                     "type": "integer"
                 },
                 "read_ios_total": {
+                    "description": "total read I/O operations",
                     "type": "integer"
                 },
                 "read_time_ms_total": {
+                    "description": "total read time in milliseconds",
                     "type": "integer"
                 },
                 "weighted_io_time_ms_total": {
+                    "description": "weighted I/O time in milliseconds",
                     "type": "integer"
                 },
                 "write_bytes_total": {
+                    "description": "total bytes written",
                     "type": "integer"
                 },
                 "write_ios_total": {
+                    "description": "total write I/O operations",
                     "type": "integer"
                 },
                 "write_time_ms_total": {
+                    "description": "total write time in milliseconds",
                     "type": "integer"
                 }
             }
         },
-        "models.DeviceStatsResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceStatsResponse": {
             "type": "object",
             "properties": {
                 "allocated_bytes": {
+                    "description": "bytes allocated on this device",
                     "type": "integer"
                 },
                 "device": {
+                    "description": "block device path (e.g. \"/dev/sda1\")",
                     "type": "string"
                 },
                 "devid": {
+                    "description": "btrfs device ID",
                     "type": "string"
                 },
                 "errors": {
-                    "$ref": "#/definitions/models.DeviceErrorsResponse"
+                    "description": "btrfs error counters",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceErrorsResponse"
+                        }
+                    ]
                 },
                 "io": {
-                    "$ref": "#/definitions/models.DeviceIOStatsResponse"
+                    "description": "I/O counters from /sys/block",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceIOStatsResponse"
+                        }
+                    ]
                 },
                 "missing": {
+                    "description": "true if device is missing from the filesystem",
                     "type": "boolean"
                 },
                 "size_bytes": {
+                    "description": "device size in bytes",
                     "type": "integer"
                 }
             }
         },
-        "models.ErrorResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -1117,113 +1146,137 @@ const docTemplate = `{
                 }
             }
         },
-        "models.ExportDetailResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportDetailResponse": {
             "type": "object",
             "properties": {
                 "client": {
+                    "description": "client IP address (IPv4 or IPv6)",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "identity that created this export",
                     "type": "string"
                 },
                 "labels": {
+                    "description": "user-defined labels",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "name": {
+                    "description": "volume name",
                     "type": "string"
                 }
             }
         },
-        "models.ExportListResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportListResponse": {
             "type": "object",
             "properties": {
                 "exports": {
+                    "description": "list of exports",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.ExportResponse"
+                        "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportResponse"
                     }
                 },
                 "next": {
+                    "description": "opaque cursor for the next page",
                     "type": "string"
                 },
                 "total": {
+                    "description": "total number of exports matching the query",
                     "type": "integer"
                 }
             }
         },
-        "models.ExportResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportResponse": {
             "type": "object",
             "properties": {
                 "client": {
+                    "description": "client IP address (IPv4 or IPv6)",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "identity that created this export",
                     "type": "string"
                 },
                 "name": {
+                    "description": "volume name",
                     "type": "string"
                 }
             }
         },
-        "models.FilesystemStatsResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.FilesystemStatsResponse": {
             "type": "object",
             "properties": {
                 "data_ratio": {
+                    "description": "data replication ratio (e.g. 1.0 for single, 2.0 for RAID1)",
                     "type": "number"
                 },
                 "devices": {
+                    "description": "per-device statistics",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.DeviceStatsResponse"
+                        "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceStatsResponse"
                     }
                 },
                 "free_bytes": {
+                    "description": "bytes free (total - used)",
                     "type": "integer"
                 },
                 "metadata_total_bytes": {
+                    "description": "metadata bytes allocated",
                     "type": "integer"
                 },
                 "metadata_used_bytes": {
+                    "description": "metadata bytes used",
                     "type": "integer"
                 },
                 "total_bytes": {
+                    "description": "total filesystem size in bytes",
                     "type": "integer"
                 },
                 "unallocated_bytes": {
+                    "description": "bytes not yet allocated to any chunk",
                     "type": "integer"
                 },
                 "used_bytes": {
+                    "description": "bytes used",
                     "type": "integer"
                 }
             }
         },
-        "models.HealthResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.HealthResponse": {
             "type": "object",
             "properties": {
                 "commit": {
+                    "description": "git commit hash",
                     "type": "string"
                 },
-                "features": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
                 "status": {
+                    "description": "\"ok\" or \"degraded\"",
                     "type": "string"
                 },
                 "uptime_seconds": {
+                    "description": "seconds since agent start",
                     "type": "integer"
                 },
                 "version": {
+                    "description": "agent version string",
                     "type": "string"
                 }
             }
         },
-        "models.SnapshotCreateRequest": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotCreateRequest": {
             "type": "object",
             "properties": {
                 "labels": {
@@ -1242,107 +1295,170 @@ const docTemplate = `{
                 }
             }
         },
-        "models.SnapshotDetailResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse": {
             "type": "object",
             "properties": {
+                "compression": {
+                    "description": "compression algorithm from source volume",
+                    "type": "string"
+                },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "identity that created this snapshot",
                     "type": "string"
                 },
                 "exclusive_bytes": {
+                    "description": "exclusive bytes (not shared with other snapshots)",
+                    "type": "integer"
+                },
+                "gid": {
+                    "description": "owner GID from source volume",
                     "type": "integer"
                 },
                 "labels": {
+                    "description": "user-defined labels",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
+                "mode": {
+                    "description": "permission mode from source volume",
+                    "type": "string"
+                },
                 "name": {
+                    "description": "snapshot name",
                     "type": "string"
                 },
-                "path": {
-                    "type": "string"
-                },
-                "readonly": {
+                "nocow": {
+                    "description": "copy-on-write disabled on source volume",
                     "type": "boolean"
                 },
+                "path": {
+                    "description": "absolute path on the agent host",
+                    "type": "string"
+                },
+                "quota_bytes": {
+                    "description": "Source volume properties, preserved for clone fallback.",
+                    "type": "integer"
+                },
                 "size_bytes": {
+                    "description": "size in bytes (from source volume at snapshot time)",
+                    "type": "integer"
+                },
+                "uid": {
+                    "description": "owner UID from source volume",
                     "type": "integer"
                 },
                 "updated_at": {
+                    "description": "last update timestamp (UTC)",
                     "type": "string"
                 },
                 "used_bytes": {
+                    "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 },
                 "volume": {
+                    "description": "source volume name",
                     "type": "string"
                 }
             }
         },
-        "models.SnapshotListResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotListResponse": {
             "type": "object",
             "properties": {
                 "next": {
+                    "description": "opaque cursor for the next page",
                     "type": "string"
                 },
                 "snapshots": {
+                    "description": "list of snapshots",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.SnapshotResponse"
+                        "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotResponse"
                     }
                 },
                 "total": {
+                    "description": "total number of snapshots matching the query",
                     "type": "integer"
                 }
             }
         },
-        "models.SnapshotResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "identity that created this snapshot",
                     "type": "string"
                 },
                 "name": {
+                    "description": "snapshot name",
                     "type": "string"
                 },
                 "size_bytes": {
+                    "description": "size in bytes (from source volume at snapshot time)",
                     "type": "integer"
                 },
                 "used_bytes": {
+                    "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 },
                 "volume": {
+                    "description": "source volume name",
                     "type": "string"
                 }
             }
         },
-        "models.StatfsResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatfsResponse": {
             "type": "object",
             "properties": {
                 "free_bytes": {
+                    "description": "bytes free",
                     "type": "integer"
                 },
                 "total_bytes": {
+                    "description": "total filesystem size in bytes",
                     "type": "integer"
                 },
                 "used_bytes": {
+                    "description": "bytes used",
                     "type": "integer"
                 }
             }
         },
-        "models.StatsResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatsResponse": {
             "type": "object",
             "properties": {
                 "btrfs": {
-                    "$ref": "#/definitions/models.FilesystemStatsResponse"
+                    "description": "btrfs-specific filesystem statistics",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.FilesystemStatsResponse"
+                        }
+                    ]
                 },
                 "statfs": {
-                    "$ref": "#/definitions/models.StatfsResponse"
+                    "description": "statfs(2) counters",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatfsResponse"
+                        }
+                    ]
+                },
+                "tenant_name": {
+                    "description": "tenant name",
+                    "type": "string"
                 }
             }
         },
-        "models.TaskCreateRequest": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskCreateRequest": {
             "type": "object",
             "properties": {
                 "labels": {
@@ -1364,123 +1480,158 @@ const docTemplate = `{
                 }
             }
         },
-        "models.TaskCreateResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskCreateResponse": {
             "type": "object",
             "properties": {
                 "status": {
+                    "description": "initial status (\"pending\")",
                     "type": "string"
                 },
                 "task_id": {
+                    "description": "unique task ID (UUID)",
                     "type": "string"
                 }
             }
         },
-        "models.TaskDetailResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskDetailResponse": {
             "type": "object",
             "properties": {
                 "completed_at": {
+                    "description": "completion timestamp (UTC)",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "identity that created this task",
                     "type": "string"
                 },
                 "error": {
+                    "description": "error message if failed",
                     "type": "string"
                 },
                 "id": {
+                    "description": "unique task ID (UUID)",
                     "type": "string"
                 },
                 "labels": {
+                    "description": "user-defined labels",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "opts": {
+                    "description": "task-specific options",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "progress": {
+                    "description": "completion percentage (0-100)",
                     "type": "integer"
                 },
                 "result": {
+                    "description": "task-specific result payload (JSON)",
                     "type": "array",
                     "items": {
                         "type": "integer"
                     }
                 },
                 "started_at": {
+                    "description": "execution start timestamp (UTC)",
                     "type": "string"
                 },
                 "status": {
+                    "description": "\"pending\", \"running\", \"completed\", \"failed\", \"cancelled\"",
                     "type": "string"
                 },
                 "timeout": {
+                    "description": "Go duration string (e.g. \"6h\")",
                     "type": "string"
                 },
                 "type": {
+                    "description": "task type (\"scrub\", \"test\")",
                     "type": "string"
                 }
             }
         },
-        "models.TaskListResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskListResponse": {
             "type": "object",
             "properties": {
                 "next": {
+                    "description": "opaque cursor for the next page",
                     "type": "string"
                 },
                 "tasks": {
+                    "description": "list of tasks",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.TaskResponse"
+                        "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskResponse"
                     }
                 },
                 "total": {
+                    "description": "total number of tasks matching the query",
                     "type": "integer"
                 }
             }
         },
-        "models.TaskResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskResponse": {
             "type": "object",
             "properties": {
                 "completed_at": {
+                    "description": "completion timestamp (UTC)",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "identity that created this task",
                     "type": "string"
                 },
                 "error": {
+                    "description": "error message if failed",
                     "type": "string"
                 },
                 "id": {
+                    "description": "unique task ID (UUID)",
                     "type": "string"
                 },
                 "opts": {
+                    "description": "task-specific options",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "progress": {
+                    "description": "completion percentage (0-100)",
                     "type": "integer"
                 },
                 "started_at": {
+                    "description": "execution start timestamp (UTC)",
                     "type": "string"
                 },
                 "status": {
+                    "description": "\"pending\", \"running\", \"completed\", \"failed\", \"cancelled\"",
                     "type": "string"
                 },
                 "timeout": {
+                    "description": "Go duration string (e.g. \"6h\")",
                     "type": "string"
                 },
                 "type": {
+                    "description": "task type (\"scrub\", \"test\")",
                     "type": "string"
                 }
             }
         },
-        "models.VolumeCloneRequest": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeCloneRequest": {
             "type": "object",
             "properties": {
                 "labels": {
@@ -1499,7 +1650,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.VolumeCreateRequest": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeCreateRequest": {
             "type": "object",
             "properties": {
                 "compression": {
@@ -1543,63 +1694,82 @@ const docTemplate = `{
                 }
             }
         },
-        "models.VolumeDetailResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse": {
             "type": "object",
             "properties": {
                 "clients": {
+                    "description": "active NFS exports",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.ExportDetailResponse"
+                        "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportDetailResponse"
                     }
                 },
                 "compression": {
+                    "description": "compression algorithm (e.g. \"zstd\", \"zlib\", \"lzo\", \"\")",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "identity that created this volume",
                     "type": "string"
                 },
                 "gid": {
+                    "description": "owner GID",
                     "type": "integer"
                 },
                 "labels": {
+                    "description": "user-defined labels",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "last_attach_at": {
+                    "description": "last NFS export attach timestamp (UTC)",
                     "type": "string"
                 },
                 "mode": {
+                    "description": "octal permission string (e.g. \"0755\")",
                     "type": "string"
                 },
                 "name": {
+                    "description": "volume name",
                     "type": "string"
                 },
                 "nocow": {
+                    "description": "copy-on-write disabled (chattr +C)",
                     "type": "boolean"
                 },
                 "path": {
+                    "description": "absolute path on the agent host",
                     "type": "string"
                 },
                 "quota_bytes": {
+                    "description": "btrfs qgroup limit in bytes",
                     "type": "integer"
                 },
                 "size_bytes": {
+                    "description": "subvolume size in bytes",
                     "type": "integer"
                 },
                 "uid": {
+                    "description": "owner UID",
                     "type": "integer"
                 },
                 "updated_at": {
+                    "description": "last update timestamp (UTC)",
                     "type": "string"
                 },
                 "used_bytes": {
+                    "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 }
             }
         },
-        "models.VolumeExportCreateRequest": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeExportCreateRequest": {
             "type": "object",
             "properties": {
                 "client": {
@@ -1614,7 +1784,7 @@ const docTemplate = `{
                 }
             }
         },
-        "models.VolumeExportDeleteRequest": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeExportDeleteRequest": {
             "type": "object",
             "properties": {
                 "client": {
@@ -1629,44 +1799,56 @@ const docTemplate = `{
                 }
             }
         },
-        "models.VolumeListResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeListResponse": {
             "type": "object",
             "properties": {
                 "next": {
+                    "description": "opaque cursor for the next page (empty on last page)",
                     "type": "string"
                 },
                 "total": {
+                    "description": "total number of volumes matching the query",
                     "type": "integer"
                 },
                 "volumes": {
+                    "description": "list of volumes",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/models.VolumeResponse"
+                        "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeResponse"
                     }
                 }
             }
         },
-        "models.VolumeResponse": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeResponse": {
             "type": "object",
             "properties": {
                 "clients": {
+                    "description": "number of active NFS exports",
                     "type": "integer"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "identity that created this volume (e.g. \"cli\", \"controller\")",
                     "type": "string"
                 },
                 "name": {
+                    "description": "volume name",
                     "type": "string"
                 },
                 "size_bytes": {
+                    "description": "subvolume size in bytes",
                     "type": "integer"
                 },
                 "used_bytes": {
+                    "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 }
             }
         },
-        "models.VolumeUpdateRequest": {
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeUpdateRequest": {
             "type": "object",
             "properties": {
                 "compression": {
@@ -1702,25 +1884,17 @@ const docTemplate = `{
                 }
             }
         }
-    },
-    "securityDefinitions": {
-        "BearerAuth": {
-            "description": "Tenant token as \"Bearer \u003ctoken\u003e\"",
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
-        }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
+	Version:          "",
 	Host:             "",
-	BasePath:         "/",
+	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "btrfs-nfs-csi Agent API",
-	Description:      "REST API for managing btrfs volumes, snapshots, clones, NFS exports, and background tasks.",
+	Title:            "",
+	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

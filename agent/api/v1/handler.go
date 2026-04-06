@@ -1,3 +1,9 @@
+// Swagger/OpenAPI spec regeneration:
+//
+//	swag init -g agent/api/v1/handler.go -o agent/api/v1/swagger --parseDependency --parseInternal
+//
+// Annotations live in handler_*.go, wire types in models/models.go.
+// Run after changing annotations or model field comments.
 package v1
 
 import (

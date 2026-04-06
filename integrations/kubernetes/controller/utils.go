@@ -41,7 +41,7 @@ func agentClientFromSecrets(agentURL string, secrets map[string]string) (*agentc
 	if token == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing agentToken secret")
 	}
-	return agentclient.NewClient(agentURL, token, config.IdentityK8sController), nil
+	return agentclient.NewClient(agentURL, token, config.IdentityK8sController)
 }
 
 func agentClientFromStorageClass(tracker *AgentTracker, scName string, secrets map[string]string) (*agentclient.Client, error) {

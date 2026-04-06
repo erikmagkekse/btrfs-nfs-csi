@@ -50,7 +50,7 @@ func listExports(ctx context.Context, cmd *cli.Command, sortBy string, rev bool,
 			for _, e := range resp.Exports {
 				created := ""
 				if !e.CreatedAt.IsZero() {
-					created = e.CreatedAt.Format(timeFmt)
+					created = e.CreatedAt.Local().Format(timeFmt)
 				}
 				tw.writeRow(map[string]string{
 					"NAME":       e.Name,
@@ -75,7 +75,7 @@ func listExports(ctx context.Context, cmd *cli.Command, sortBy string, rev bool,
 		for _, e := range resp.Exports {
 			created := ""
 			if !e.CreatedAt.IsZero() {
-				created = e.CreatedAt.Format(timeFmt)
+				created = e.CreatedAt.Local().Format(timeFmt)
 			}
 			tw.writeRow(map[string]string{
 				"NAME":       e.Name,

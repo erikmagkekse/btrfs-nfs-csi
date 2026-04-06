@@ -54,14 +54,19 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 
 	now := time.Now().UTC()
 	meta := SnapshotMetadata{
-		Name:      req.Name,
-		Volume:    req.Volume,
-		Path:      snapDir,
-		SizeBytes: volMeta.SizeBytes,
-		ReadOnly:  true,
-		Labels:    req.Labels,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:        req.Name,
+		Volume:      req.Volume,
+		Path:        snapDir,
+		SizeBytes:   volMeta.SizeBytes,
+		QuotaBytes:  volMeta.QuotaBytes,
+		NoCOW:       volMeta.NoCOW,
+		Compression: volMeta.Compression,
+		UID:         volMeta.UID,
+		GID:         volMeta.GID,
+		Mode:        volMeta.Mode,
+		Labels:      req.Labels,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	if err := s.snapshots.Store(tenant, req.Name, &meta); err != nil {
