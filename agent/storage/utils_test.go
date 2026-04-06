@@ -309,6 +309,13 @@ func TestProtectImmutableLabels(t *testing.T) {
 		assert.Equal(t, "k8s", updated["created-by"])
 	})
 
+	t.Run("allows_setting_when_previously_empty", func(t *testing.T) {
+		cur := map[string]string{}
+		updated := map[string]string{"created-by": "k8s"}
+		require.NoError(t, protectImmutableLabels(keys, cur, updated))
+		assert.Equal(t, "k8s", updated["created-by"])
+	})
+
 	t.Run("rejects_adding_clone_source_to_non_clone", func(t *testing.T) {
 		cur := map[string]string{"created-by": "k8s"}
 		updated := map[string]string{"clone.source.type": "snapshot"}
