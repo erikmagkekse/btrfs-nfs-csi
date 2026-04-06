@@ -16,6 +16,9 @@ access to volumes via the CLI over WebSockets, mTLS support, moving snapshots
 between agents, VolumeGroupSnapshots, and automated repeatable tasks. There is
 so much we can build on top of this, this release is the new foundation for a multi-purpose storage driver!
 
+> **⚠️ This release contains breaking API changes.** If you are upgrading
+> from v0.9.x, please read the Upgrade guide down below, before updating.
+
 ---
 
 ## New Features
@@ -158,6 +161,44 @@ so much we can build on top of this, this release is the new foundation for a mu
 - `github.com/rs/zerolog` 1.34.0 -> 1.35.0
 - `azure/setup-helm` 4 -> 5
 - Added: `swaggo/swag` v1.16.6, `urfave/cli/v3` v3.8.0, CSI snapshotter client v8.4.0
+
+---
+
+## Upgrade Guide
+
+### Setting `created-by` on pre-0.10.0 volumes
+
+Volumes created before v0.10.0 have no `created-by` label. The v0.10.0 agent
+allows setting this label once via update if it was previously empty. After it
+is set, it becomes immutable like on any new volume.
+
+> **Note:** If you are using the Kubernetes CSI driver integration, set the
+> value to `k8s` to match the identity used by the controller. If you used
+> the agent without the CSI driver, set it to any value that identifies your
+> integration (e.g. `cli`, `nomad`, `custom`). In the future you can also use
+> the `AGENT_CSI_IDENTITY` env var to configure the identity for new resources.
+
+**Via CLI** (per volume):
+```bash
+btrfs-nfs-csi volume update <volume-name> --label created-by=k8s
+```
+
+**Via CLI** (all volumes without `created-by`):
+```bash
+btrfs-nfs-csi volume list --format json | jq -r '.volumes[] | select(.created_by == "") | .name' | \
+  xargs -I{} btrfs-nfs-csi volume update {} --label created-by=k8s
+```
+
+**Via API**:
+```bash
+curl -X PATCH http://<agent>:8080/v1/volumes/<name> \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"labels": {"created-by": "k8s"}}'
+```
+
+NFS exports are re-created on each publish and will already carry the correct
+`created-by` label after upgrading the controller, no manual action needed.
 
 ---
 

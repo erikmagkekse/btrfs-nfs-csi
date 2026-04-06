@@ -51,6 +51,11 @@ func protectImmutableLabels(keys []string, cur, updated map[string]string) error
 	}
 	for k := range allKeys {
 		if v, ok := updated[k]; ok && v != cur[k] {
+			// Allow initial set of created-by on volumes migrated from older versions.
+			// TODO: remove in future release once all pre-0.10.0 volumes have been backfilled.
+			if k == config.LabelCreatedBy && cur[k] == "" {
+				continue
+			}
 			return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("label %q cannot be changed", k)}
 		}
 		if v := cur[k]; v != "" {
