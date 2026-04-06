@@ -292,6 +292,29 @@ func TestProtectImmutableLabels(t *testing.T) {
 		updated := map[string]string{"created-by": "csi", "env": "prod"}
 		require.NoError(t, protectImmutableLabels(keys, map[string]string{"created-by": "csi"}, updated))
 	})
+
+	t.Run("rejects_clone_source_change", func(t *testing.T) {
+		cur := map[string]string{"created-by": "k8s", "clone.source.type": "snapshot", "clone.source.name": "snap-1"}
+		updated := map[string]string{"clone.source.type": "volume"}
+		err := protectImmutableLabels(keys, cur, updated)
+		requireStorageError(t, err, ErrInvalid)
+	})
+
+	t.Run("preserves_clone_source_on_omit", func(t *testing.T) {
+		cur := map[string]string{"created-by": "k8s", "clone.source.type": "snapshot", "clone.source.name": "snap-1"}
+		updated := map[string]string{"env": "prod"}
+		require.NoError(t, protectImmutableLabels(keys, cur, updated))
+		assert.Equal(t, "snapshot", updated["clone.source.type"])
+		assert.Equal(t, "snap-1", updated["clone.source.name"])
+		assert.Equal(t, "k8s", updated["created-by"])
+	})
+
+	t.Run("rejects_adding_clone_source_to_non_clone", func(t *testing.T) {
+		cur := map[string]string{"created-by": "k8s"}
+		updated := map[string]string{"clone.source.type": "snapshot"}
+		err := protectImmutableLabels(keys, cur, updated)
+		requireStorageError(t, err, ErrInvalid)
+	})
 }
 
 func TestFileMode(t *testing.T) {

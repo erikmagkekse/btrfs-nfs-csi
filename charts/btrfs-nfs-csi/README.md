@@ -54,7 +54,7 @@ driver:
   storageInterface: "eth1"    # or storageCIDR: "10.10.0.0/24"
 ```
 
-`hostNetwork` is auto-enabled when either is set.
+`hostNetwork` is enabled by default so NFS4 sessions survive driver pod restarts (e.g. during `helm upgrade`). It is also required when `storageInterface` or `storageCIDR` is set.
 
 ## Values
 
@@ -139,7 +139,7 @@ Sidecars: `provisioner`, `attacher`, `snapshotter`, `resizer`, `livenessProbe`
 | `driver.priorityClassName` | `system-node-critical` | Priority class |
 | `driver.storageInterface` | `""` | Dedicated storage NIC |
 | `driver.storageCIDR` | `""` | Storage subnet CIDR |
-| `driver.hostNetwork` | `false` | Host networking (auto-enabled for storage NIC/CIDR) |
+| `driver.hostNetwork` | `true` | Host networking; required for NFS4 session stability across pod restarts |
 | `driver.updateStrategy` | RollingUpdate, maxUnavailable 1 | DaemonSet update strategy |
 | `driver.podSecurityContext` | `{}` | Pod security context |
 | `driver.resources` | 10m CPU, 32Mi/128Mi memory | Resource requests/limits |

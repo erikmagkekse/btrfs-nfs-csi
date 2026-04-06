@@ -182,7 +182,7 @@ driver:
   # Set one of these for dedicated storage networks (both require hostNetwork):
   storageInterface: "" # NIC name, e.g. "eth1"
   storageCIDR: "" # subnet CIDR, e.g. "10.10.0.0/24"
-  hostNetwork: false # auto-enabled when storageInterface or storageCIDR is set
+  hostNetwork: true # NFS4 sessions must survive driver pod restarts; also required for storageInterface/storageCIDR
   healthCheckInterval: "30s" # NFS mount health check interval, set to "0" to disable
 
   updateStrategy:

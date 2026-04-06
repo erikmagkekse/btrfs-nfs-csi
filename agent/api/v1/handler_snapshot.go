@@ -97,7 +97,7 @@ func (h *Handler) listSnapshotsPage(c *echo.Context, volume string) error {
 // @Tags         snapshots
 // @Produce      json
 // @Param        detail query string false "Return full detail" Enums(true)
-// @Param        limit  query int    false "Items per page"
+// @Param        limit  query int    false "Items per page (0 = pagination disabled)"
 // @Param        after  query string false "Pagination cursor"
 // @Param        label  query []string false "Label filter (key=value), repeatable"
 // @Success      200 {object} models.SnapshotListResponse

@@ -111,7 +111,7 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 // @Produce      json
 // @Param        type   query string false "Filter by task type" Enums(scrub, test)
 // @Param        detail query string false "Return full detail" Enums(true)
-// @Param        limit  query int    false "Items per page"
+// @Param        limit  query int    false "Items per page (0 = pagination disabled)"
 // @Param        after  query string false "Pagination cursor"
 // @Param        label  query []string false "Label filter (key=value), repeatable"
 // @Success      200 {object} models.TaskListResponse

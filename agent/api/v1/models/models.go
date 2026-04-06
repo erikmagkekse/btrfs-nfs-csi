@@ -403,18 +403,18 @@ const (
 // ListOpts configures list endpoint queries (pagination + label filtering).
 type ListOpts struct {
 	After  string   // opaque cursor from a previous response's Next field
-	Limit  int      // items per page (0 = use client/server default)
+	Limit  int      // items per page (0 = pagination disabled, negative = use client default)
 	Labels []string // label filters in "key=value" format
 }
 
-// Query builds url.Values for a list request. defaultLimit is used when Limit is 0.
+// Query builds url.Values for a list request. defaultLimit is used when Limit is negative.
 func (o ListOpts) Query(defaultLimit int) url.Values {
 	q := GenerateLabelQuery(o.Labels)
 	if o.After != "" {
 		q.Set("after", o.After)
 	}
 	limit := o.Limit
-	if limit <= 0 {
+	if limit < 0 {
 		limit = defaultLimit
 	}
 	if limit > 0 {

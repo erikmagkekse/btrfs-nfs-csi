@@ -39,7 +39,17 @@ func requireImmutableLabels(keys []string, labels map[string]string) error {
 }
 
 func protectImmutableLabels(keys []string, cur, updated map[string]string) error {
+	// Protect explicitly configured immutable keys and soft-reserved keys
+	// (clone.source.*, created-by). Soft-reserved labels are set automatically
+	// on create and must not be changed or added via update.
+	allKeys := make(map[string]struct{}, len(keys)+len(config.SoftReservedLabelKeys))
 	for _, k := range keys {
+		allKeys[k] = struct{}{}
+	}
+	for _, k := range config.SoftReservedLabelKeys {
+		allKeys[k] = struct{}{}
+	}
+	for k := range allKeys {
 		if v, ok := updated[k]; ok && v != cur[k] {
 			return &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("label %q cannot be changed", k)}
 		}

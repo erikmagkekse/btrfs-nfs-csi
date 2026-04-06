@@ -291,8 +291,9 @@ spec:
           effect: NoExecute
         - operator: Exists
           effect: NoSchedule
-      # Uncomment if using DRIVER_STORAGE_INTERFACE or DRIVER_STORAGE_CIDR
-      #hostNetwork: true
+      # hostNetwork is recommended: NFS4 sessions survive driver pod restarts.
+      # Required when using DRIVER_STORAGE_INTERFACE or DRIVER_STORAGE_CIDR.
+      hostNetwork: true
       containers:
         - name: csi-driver
           image: ghcr.io/erikmagkekse/btrfs-nfs-csi:0.10.0

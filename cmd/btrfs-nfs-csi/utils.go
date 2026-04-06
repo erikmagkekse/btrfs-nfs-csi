@@ -369,12 +369,17 @@ var (
 
 func initClient(cmd *cli.Command) error {
 	var err error
-	apiClient, err = agentclient.NewClient(cmd.Root().String("agent-url"), cmd.Root().String("agent-token"), config.IdentityCLI)
+	apiClient, err = agentclient.NewClient(cmd.String("agent-url"), cmd.String("agent-token"), config.IdentityCLI)
 	return err
 }
 
 func withCLIHooks(cmds ...*cli.Command) []*cli.Command {
 	for _, cmd := range cmds {
+		cmd.Flags = append(cmd.Flags,
+			&cli.StringFlag{Name: "agent-url", Sources: cli.EnvVars("AGENT_URL"), Usage: "agent API URL"},
+			&cli.StringFlag{Name: "agent-token", Sources: cli.EnvVars("AGENT_TOKEN"), Usage: "tenant token"},
+			&cli.StringFlag{Name: "output", Aliases: []string{"o"}, Value: outputTable, Usage: "output format: table, wide, json, json,wide"},
+		)
 		cmd.Before = func(ctx context.Context, c *cli.Command) (context.Context, error) {
 			if err := initClient(c); err != nil {
 				return ctx, err
@@ -408,7 +413,7 @@ func watchAction(fn cli.ActionFunc) cli.ActionFunc {
 }
 
 func outputFormat(cmd *cli.Command) string {
-	return cmd.Root().String("output")
+	return cmd.String("output")
 }
 
 func isWide(cmd *cli.Command) bool {

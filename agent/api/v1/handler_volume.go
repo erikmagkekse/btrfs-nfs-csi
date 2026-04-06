@@ -88,7 +88,7 @@ func (h *Handler) CreateVolume(c *echo.Context) error {
 // @Tags         volumes
 // @Produce      json
 // @Param        detail query string false "Return full detail" Enums(true)
-// @Param        limit  query int    false "Items per page"
+// @Param        limit  query int    false "Items per page (0 = pagination disabled)"
 // @Param        after  query string false "Pagination cursor from previous response"
 // @Param        label  query []string false "Label filter (key=value), repeatable"
 // @Success      200 {object} models.VolumeListResponse

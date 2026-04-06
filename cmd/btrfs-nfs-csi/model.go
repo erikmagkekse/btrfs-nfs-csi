@@ -15,7 +15,7 @@ func versionCmd() *cli.Command {
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			fmt.Printf("Local:\n")
 			fmt.Printf("  btrfs-nfs-csi %s (%s)\n", version, commit)
-			if cmd.Root().String("agent-url") != "" && cmd.Root().String("agent-token") != "" {
+			if cmd.String("agent-url") != "" && cmd.String("agent-token") != "" {
 				fmt.Printf("Agent:\n")
 				if h, err := apiClient.Healthz(ctx); err == nil {
 					fmt.Printf("  btrfs-nfs-csi %s (%s)\n", h.Version, h.Commit)
@@ -49,12 +49,12 @@ func healthCmd() *cli.Command {
 func volumeCmd() *cli.Command {
 	return &cli.Command{
 		Name:    "volume",
-		Aliases: []string{"volumes", "vol"},
+		Aliases: []string{"volumes", "vol", "v"},
 		Usage:   "manage volumes",
 		Commands: []*cli.Command{
 			{
 				Name:    "list",
-				Aliases: []string{"ls"},
+				Aliases: []string{"ls", "l"},
 				Usage:   "list all volumes",
 				Flags:   []cli.Flag{allFlag(), sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -71,6 +71,7 @@ func volumeCmd() *cli.Command {
 			},
 			{
 				Name:      "get",
+				Aliases:   []string{"g"},
 				Usage:     "get volume details",
 				ArgsUsage: "<name>",
 				Flags:     []cli.Flag{watchFlag()},
@@ -78,6 +79,7 @@ func volumeCmd() *cli.Command {
 			},
 			{
 				Name:      "create",
+				Aliases:   []string{"c"},
 				Usage:     "create a volume",
 				ArgsUsage: "<name> <size>",
 				Flags: []cli.Flag{
@@ -92,7 +94,7 @@ func volumeCmd() *cli.Command {
 			},
 			{
 				Name:      "delete",
-				Aliases:   []string{"rm"},
+				Aliases:   []string{"rm", "d"},
 				Usage:     "delete volumes",
 				ArgsUsage: "<name> [name...]",
 				Flags: []cli.Flag{
@@ -121,12 +123,12 @@ func volumeCmd() *cli.Command {
 func snapshotCmd() *cli.Command {
 	return &cli.Command{
 		Name:    "snapshot",
-		Aliases: []string{"snapshots", "snap"},
+		Aliases: []string{"snapshots", "snap", "s"},
 		Usage:   "manage snapshots",
 		Commands: []*cli.Command{
 			{
 				Name:      "list",
-				Aliases:   []string{"ls"},
+				Aliases:   []string{"ls", "l"},
 				Usage:     "list snapshots (optionally filter by volume)",
 				ArgsUsage: "[volume]",
 				Flags:     []cli.Flag{allFlag(), sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
@@ -145,6 +147,7 @@ func snapshotCmd() *cli.Command {
 			},
 			{
 				Name:      "get",
+				Aliases:   []string{"g"},
 				Usage:     "get snapshot details",
 				ArgsUsage: "<name>",
 				Flags:     []cli.Flag{watchFlag()},
@@ -152,6 +155,7 @@ func snapshotCmd() *cli.Command {
 			},
 			{
 				Name:      "create",
+				Aliases:   []string{"c"},
 				Usage:     "create a snapshot",
 				ArgsUsage: "<volume> <name>",
 				Flags:     []cli.Flag{labelFlag()},
@@ -159,7 +163,7 @@ func snapshotCmd() *cli.Command {
 			},
 			{
 				Name:      "delete",
-				Aliases:   []string{"rm"},
+				Aliases:   []string{"rm", "d"},
 				Usage:     "delete snapshots",
 				ArgsUsage: "<name> [name...]",
 				Flags: []cli.Flag{
@@ -182,11 +186,12 @@ func snapshotCmd() *cli.Command {
 func exportCmd() *cli.Command {
 	return &cli.Command{
 		Name:    "export",
-		Aliases: []string{"exports"},
+		Aliases: []string{"exports", "e"},
 		Usage:   "manage NFS exports",
 		Commands: []*cli.Command{
 			{
 				Name:      "add",
+				Aliases:   []string{"a"},
 				Usage:     "add NFS export",
 				ArgsUsage: "<volume> <client-ip>",
 				Flags:     []cli.Flag{labelFlag()},
@@ -194,7 +199,7 @@ func exportCmd() *cli.Command {
 			},
 			{
 				Name:      "remove",
-				Aliases:   []string{"rm"},
+				Aliases:   []string{"rm", "r"},
 				Usage:     "remove NFS export",
 				ArgsUsage: "<volume> <client-ip>",
 				Flags:     []cli.Flag{labelFlag()},
@@ -202,7 +207,7 @@ func exportCmd() *cli.Command {
 			},
 			{
 				Name:    "list",
-				Aliases: []string{"ls"},
+				Aliases: []string{"ls", "l"},
 				Usage:   "list active NFS exports",
 				Flags:   []cli.Flag{allFlag(), sortFlag(), ascFlag(), labelFlag(), columnsFlag(), watchFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -221,12 +226,12 @@ func exportCmd() *cli.Command {
 func taskCmd() *cli.Command {
 	return &cli.Command{
 		Name:    "task",
-		Aliases: []string{"tasks"},
+		Aliases: []string{"tasks", "t"},
 		Usage:   "manage background tasks",
 		Commands: []*cli.Command{
 			{
 				Name:    "list",
-				Aliases: []string{"ls"},
+				Aliases: []string{"ls", "l"},
 				Usage:   "list tasks",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: "filter by type (e.g. scrub)"},
@@ -252,6 +257,7 @@ func taskCmd() *cli.Command {
 			},
 			{
 				Name:      "get",
+				Aliases:   []string{"g"},
 				Usage:     "get task details",
 				ArgsUsage: "<id>",
 				Flags:     []cli.Flag{watchFlag()},
@@ -264,8 +270,9 @@ func taskCmd() *cli.Command {
 				Action:    taskCancel,
 			},
 			{
-				Name:  "create",
-				Usage: "create a background task",
+				Name:    "create",
+				Aliases: []string{"c"},
+				Usage:   "create a background task",
 				Commands: []*cli.Command{
 					{
 						Name:  models.TaskTypeScrub,

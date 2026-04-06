@@ -73,7 +73,7 @@ type ClientConfig struct {
 	Timeout       time.Duration `env:"AGENT_HTTP_CLIENT_TIMEOUT" envDefault:"30s"`
 	TLSSkipVerify bool          `env:"AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY"`
 	Identity      string        `env:"AGENT_CSI_IDENTITY"`
-	PageLimit     int           `env:"AGENT_HTTP_CLIENT_PAGE_LIMIT" envDefault:"100"`
+	PageLimit     int           `env:"AGENT_HTTP_CLIENT_PAGE_LIMIT" envDefault:"0"`
 	Prefetch      int           `env:"AGENT_HTTP_CLIENT_PREFETCH" envDefault:"8"`
 	PrefetchMB    int           `env:"AGENT_HTTP_CLIENT_PREFETCH_MB" envDefault:"4"`
 	HTTPClient    *http.Client  `env:"-"`
@@ -91,7 +91,7 @@ func DefaultClientConfig() ClientConfig {
 	if err != nil {
 		return ClientConfig{
 			Timeout:    DefaultTimeout,
-			PageLimit:  100,
+			PageLimit:  0,
 			Prefetch:   8,
 			PrefetchMB: 4,
 		}
