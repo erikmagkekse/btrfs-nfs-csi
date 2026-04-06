@@ -1032,18 +1032,23 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "corruption_errs": {
+                    "description": "data corruption errors",
                     "type": "integer"
                 },
                 "flush_errs": {
+                    "description": "flush errors",
                     "type": "integer"
                 },
                 "generation_errs": {
+                    "description": "generation mismatch errors",
                     "type": "integer"
                 },
                 "read_errs": {
+                    "description": "read errors",
                     "type": "integer"
                 },
                 "write_errs": {
+                    "description": "write errors",
                     "type": "integer"
                 }
             }
@@ -1052,30 +1057,39 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "io_time_ms_total": {
+                    "description": "total I/O time in milliseconds",
                     "type": "integer"
                 },
                 "ios_in_progress": {
+                    "description": "I/O operations currently in flight",
                     "type": "integer"
                 },
                 "read_bytes_total": {
+                    "description": "total bytes read",
                     "type": "integer"
                 },
                 "read_ios_total": {
+                    "description": "total read I/O operations",
                     "type": "integer"
                 },
                 "read_time_ms_total": {
+                    "description": "total read time in milliseconds",
                     "type": "integer"
                 },
                 "weighted_io_time_ms_total": {
+                    "description": "weighted I/O time in milliseconds",
                     "type": "integer"
                 },
                 "write_bytes_total": {
+                    "description": "total bytes written",
                     "type": "integer"
                 },
                 "write_ios_total": {
+                    "description": "total write I/O operations",
                     "type": "integer"
                 },
                 "write_time_ms_total": {
+                    "description": "total write time in milliseconds",
                     "type": "integer"
                 }
             }
@@ -1084,24 +1098,39 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "allocated_bytes": {
+                    "description": "bytes allocated on this device",
                     "type": "integer"
                 },
                 "device": {
+                    "description": "block device path (e.g. \"/dev/sda1\")",
                     "type": "string"
                 },
                 "devid": {
+                    "description": "btrfs device ID",
                     "type": "string"
                 },
                 "errors": {
-                    "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceErrorsResponse"
+                    "description": "btrfs error counters",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceErrorsResponse"
+                        }
+                    ]
                 },
                 "io": {
-                    "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceIOStatsResponse"
+                    "description": "I/O counters from /sys/block",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceIOStatsResponse"
+                        }
+                    ]
                 },
                 "missing": {
+                    "description": "true if device is missing from the filesystem",
                     "type": "boolean"
                 },
                 "size_bytes": {
+                    "description": "device size in bytes",
                     "type": "integer"
                 }
             }
@@ -1121,21 +1150,26 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "client": {
+                    "description": "client IP address (IPv4 or IPv6)",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "identity that created this export",
                     "type": "string"
                 },
                 "labels": {
+                    "description": "user-defined labels",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "name": {
+                    "description": "volume name",
                     "type": "string"
                 }
             }
@@ -1144,15 +1178,18 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "exports": {
+                    "description": "list of exports",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportResponse"
                     }
                 },
                 "next": {
+                    "description": "opaque cursor for the next page",
                     "type": "string"
                 },
                 "total": {
+                    "description": "total number of exports matching the query",
                     "type": "integer"
                 }
             }
@@ -1161,15 +1198,19 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "client": {
+                    "description": "client IP address (IPv4 or IPv6)",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "identity that created this export",
                     "type": "string"
                 },
                 "name": {
+                    "description": "volume name",
                     "type": "string"
                 }
             }
@@ -1178,30 +1219,38 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "data_ratio": {
+                    "description": "data replication ratio (e.g. 1.0 for single, 2.0 for RAID1)",
                     "type": "number"
                 },
                 "devices": {
+                    "description": "per-device statistics",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.DeviceStatsResponse"
                     }
                 },
                 "free_bytes": {
+                    "description": "bytes free (total - used)",
                     "type": "integer"
                 },
                 "metadata_total_bytes": {
+                    "description": "metadata bytes allocated",
                     "type": "integer"
                 },
                 "metadata_used_bytes": {
+                    "description": "metadata bytes used",
                     "type": "integer"
                 },
                 "total_bytes": {
+                    "description": "total filesystem size in bytes",
                     "type": "integer"
                 },
                 "unallocated_bytes": {
+                    "description": "bytes not yet allocated to any chunk",
                     "type": "integer"
                 },
                 "used_bytes": {
+                    "description": "bytes used",
                     "type": "integer"
                 }
             }
@@ -1210,15 +1259,19 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "commit": {
+                    "description": "git commit hash",
                     "type": "string"
                 },
                 "status": {
+                    "description": "\"ok\" or \"degraded\"",
                     "type": "string"
                 },
                 "uptime_seconds": {
+                    "description": "seconds since agent start",
                     "type": "integer"
                 },
                 "version": {
+                    "description": "agent version string",
                     "type": "string"
                 }
             }
@@ -1250,12 +1303,15 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "identity that created this snapshot",
                     "type": "string"
                 },
                 "exclusive_bytes": {
+                    "description": "exclusive bytes (not shared with other snapshots)",
                     "type": "integer"
                 },
                 "gid": {
@@ -1263,6 +1319,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "labels": {
+                    "description": "user-defined labels",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
@@ -1273,6 +1330,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "description": "snapshot name",
                     "type": "string"
                 },
                 "nocow": {
@@ -1280,6 +1338,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "path": {
+                    "description": "absolute path on the agent host",
                     "type": "string"
                 },
                 "quota_bytes": {
@@ -1287,6 +1346,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "size_bytes": {
+                    "description": "size in bytes (from source volume at snapshot time)",
                     "type": "integer"
                 },
                 "uid": {
@@ -1294,12 +1354,15 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "updated_at": {
+                    "description": "last update timestamp (UTC)",
                     "type": "string"
                 },
                 "used_bytes": {
+                    "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 },
                 "volume": {
+                    "description": "source volume name",
                     "type": "string"
                 }
             }
@@ -1308,15 +1371,18 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "next": {
+                    "description": "opaque cursor for the next page",
                     "type": "string"
                 },
                 "snapshots": {
+                    "description": "list of snapshots",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotResponse"
                     }
                 },
                 "total": {
+                    "description": "total number of snapshots matching the query",
                     "type": "integer"
                 }
             }
@@ -1325,21 +1391,27 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "identity that created this snapshot",
                     "type": "string"
                 },
                 "name": {
+                    "description": "snapshot name",
                     "type": "string"
                 },
                 "size_bytes": {
+                    "description": "size in bytes (from source volume at snapshot time)",
                     "type": "integer"
                 },
                 "used_bytes": {
+                    "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 },
                 "volume": {
+                    "description": "source volume name",
                     "type": "string"
                 }
             }
@@ -1348,12 +1420,15 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "free_bytes": {
+                    "description": "bytes free",
                     "type": "integer"
                 },
                 "total_bytes": {
+                    "description": "total filesystem size in bytes",
                     "type": "integer"
                 },
                 "used_bytes": {
+                    "description": "bytes used",
                     "type": "integer"
                 }
             }
@@ -1362,12 +1437,23 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "btrfs": {
-                    "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.FilesystemStatsResponse"
+                    "description": "btrfs-specific filesystem statistics",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.FilesystemStatsResponse"
+                        }
+                    ]
                 },
                 "statfs": {
-                    "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatfsResponse"
+                    "description": "statfs(2) counters",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.StatfsResponse"
+                        }
+                    ]
                 },
                 "tenant_name": {
+                    "description": "tenant name",
                     "type": "string"
                 }
             }
@@ -1398,9 +1484,11 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "status": {
+                    "description": "initial status (\"pending\")",
                     "type": "string"
                 },
                 "task_id": {
+                    "description": "unique task ID (UUID)",
                     "type": "string"
                 }
             }
@@ -1409,51 +1497,64 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "completed_at": {
+                    "description": "completion timestamp (UTC)",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "identity that created this task",
                     "type": "string"
                 },
                 "error": {
+                    "description": "error message if failed",
                     "type": "string"
                 },
                 "id": {
+                    "description": "unique task ID (UUID)",
                     "type": "string"
                 },
                 "labels": {
+                    "description": "user-defined labels",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "opts": {
+                    "description": "task-specific options",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "progress": {
+                    "description": "completion percentage (0-100)",
                     "type": "integer"
                 },
                 "result": {
+                    "description": "task-specific result payload (JSON)",
                     "type": "array",
                     "items": {
                         "type": "integer"
                     }
                 },
                 "started_at": {
+                    "description": "execution start timestamp (UTC)",
                     "type": "string"
                 },
                 "status": {
+                    "description": "\"pending\", \"running\", \"completed\", \"failed\", \"cancelled\"",
                     "type": "string"
                 },
                 "timeout": {
+                    "description": "Go duration string (e.g. \"6h\")",
                     "type": "string"
                 },
                 "type": {
+                    "description": "task type (\"scrub\", \"test\")",
                     "type": "string"
                 }
             }
@@ -1462,15 +1563,18 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "next": {
+                    "description": "opaque cursor for the next page",
                     "type": "string"
                 },
                 "tasks": {
+                    "description": "list of tasks",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TaskResponse"
                     }
                 },
                 "total": {
+                    "description": "total number of tasks matching the query",
                     "type": "integer"
                 }
             }
@@ -1479,39 +1583,50 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "completed_at": {
+                    "description": "completion timestamp (UTC)",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "identity that created this task",
                     "type": "string"
                 },
                 "error": {
+                    "description": "error message if failed",
                     "type": "string"
                 },
                 "id": {
+                    "description": "unique task ID (UUID)",
                     "type": "string"
                 },
                 "opts": {
+                    "description": "task-specific options",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "progress": {
+                    "description": "completion percentage (0-100)",
                     "type": "integer"
                 },
                 "started_at": {
+                    "description": "execution start timestamp (UTC)",
                     "type": "string"
                 },
                 "status": {
+                    "description": "\"pending\", \"running\", \"completed\", \"failed\", \"cancelled\"",
                     "type": "string"
                 },
                 "timeout": {
+                    "description": "Go duration string (e.g. \"6h\")",
                     "type": "string"
                 },
                 "type": {
+                    "description": "task type (\"scrub\", \"test\")",
                     "type": "string"
                 }
             }
@@ -1583,57 +1698,73 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "clients": {
+                    "description": "active NFS exports",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ExportDetailResponse"
                     }
                 },
                 "compression": {
+                    "description": "compression algorithm (e.g. \"zstd\", \"zlib\", \"lzo\", \"\")",
                     "type": "string"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "identity that created this volume",
                     "type": "string"
                 },
                 "gid": {
+                    "description": "owner GID",
                     "type": "integer"
                 },
                 "labels": {
+                    "description": "user-defined labels",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "last_attach_at": {
+                    "description": "last NFS export attach timestamp (UTC)",
                     "type": "string"
                 },
                 "mode": {
+                    "description": "octal permission string (e.g. \"0755\")",
                     "type": "string"
                 },
                 "name": {
+                    "description": "volume name",
                     "type": "string"
                 },
                 "nocow": {
+                    "description": "copy-on-write disabled (chattr +C)",
                     "type": "boolean"
                 },
                 "path": {
+                    "description": "absolute path on the agent host",
                     "type": "string"
                 },
                 "quota_bytes": {
+                    "description": "btrfs qgroup limit in bytes",
                     "type": "integer"
                 },
                 "size_bytes": {
+                    "description": "subvolume size in bytes",
                     "type": "integer"
                 },
                 "uid": {
+                    "description": "owner UID",
                     "type": "integer"
                 },
                 "updated_at": {
+                    "description": "last update timestamp (UTC)",
                     "type": "string"
                 },
                 "used_bytes": {
+                    "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 }
             }
@@ -1672,12 +1803,15 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "next": {
+                    "description": "opaque cursor for the next page (empty on last page)",
                     "type": "string"
                 },
                 "total": {
+                    "description": "total number of volumes matching the query",
                     "type": "integer"
                 },
                 "volumes": {
+                    "description": "list of volumes",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeResponse"
@@ -1689,21 +1823,27 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "clients": {
+                    "description": "number of active NFS exports",
                     "type": "integer"
                 },
                 "created_at": {
+                    "description": "creation timestamp (UTC)",
                     "type": "string"
                 },
                 "created_by": {
+                    "description": "identity that created this volume (e.g. \"cli\", \"controller\")",
                     "type": "string"
                 },
                 "name": {
+                    "description": "volume name",
                     "type": "string"
                 },
                 "size_bytes": {
+                    "description": "subvolume size in bytes",
                     "type": "integer"
                 },
                 "used_bytes": {
+                    "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 }
             }

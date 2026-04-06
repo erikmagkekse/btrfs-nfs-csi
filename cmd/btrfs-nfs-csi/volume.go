@@ -27,7 +27,7 @@ func listVolumes(ctx context.Context, cmd *cli.Command, sortBy string, rev bool,
 					"NAME": v.Name, "CREATED BY": v.CreatedBy, "SIZE": utils.FormatBytes(v.SizeBytes), "USED": utils.FormatBytes(v.UsedBytes),
 					"QUOTA": utils.FormatBytes(v.QuotaBytes), "COMPRESSION": v.Compression, "NOCOW": fmt.Sprintf("%v", v.NoCOW),
 					"UID": fmt.Sprintf("%d", v.UID), "GID": fmt.Sprintf("%d", v.GID), "MODE": v.Mode,
-					"LABELS": formatLabelsShort(v.Labels), "CLIENTS": fmt.Sprintf("%d", len(v.Exports)), "CREATED": v.CreatedAt.Format(timeFmt),
+					"LABELS": formatLabelsShort(v.Labels), "CLIENTS": fmt.Sprintf("%d", len(v.Exports)), "CREATED": v.CreatedAt.Local().Format(timeFmt),
 				})
 			}
 			tw.flush()
@@ -46,7 +46,7 @@ func listVolumes(ctx context.Context, cmd *cli.Command, sortBy string, rev bool,
 			tw.writeRow(map[string]string{
 				"NAME": v.Name, "CREATED BY": v.CreatedBy, "SIZE": utils.FormatBytes(v.SizeBytes), "USED": utils.FormatBytes(v.UsedBytes),
 				"USED%":   fmt.Sprintf("%.0f%%", usedPct(v.UsedBytes, v.SizeBytes)),
-				"CLIENTS": fmt.Sprintf("%d", v.Exports), "CREATED": v.CreatedAt.Format(timeFmt),
+				"CLIENTS": fmt.Sprintf("%d", v.Exports), "CREATED": v.CreatedAt.Local().Format(timeFmt),
 			})
 		}
 		tw.flush()
@@ -79,8 +79,8 @@ func volumeGet(ctx context.Context, cmd *cli.Command) error {
 		} else {
 			fmt.Printf("Exports:      %s\n", formatExports(resp.Exports))
 		}
-		fmt.Printf("Created:      %s\n", resp.CreatedAt.Format(timeFmt))
-		fmt.Printf("Updated:      %s\n", resp.UpdatedAt.Format(timeFmt))
+		fmt.Printf("Created:      %s\n", resp.CreatedAt.Local().Format(timeFmt))
+		fmt.Printf("Updated:      %s\n", resp.UpdatedAt.Local().Format(timeFmt))
 	})
 }
 

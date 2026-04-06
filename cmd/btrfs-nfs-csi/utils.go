@@ -99,7 +99,7 @@ func formatExports(refs []models.ExportDetailResponse) string {
 			s += " (" + formatLabelsShort(r.Labels) + ")"
 		}
 		if !r.CreatedAt.IsZero() {
-			s += " since " + r.CreatedAt.Format(timeFmt)
+			s += " since " + r.CreatedAt.Local().Format(timeFmt)
 		}
 		parts = append(parts, s)
 	}
