@@ -253,7 +253,7 @@ func (tm *Manager) persist(t *Task) {
 	}
 	path := tm.taskFile(t.ID)
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		log.Error().Err(err).Str("task", t.ID).Msg("failed to persist task")
 		return
 	}

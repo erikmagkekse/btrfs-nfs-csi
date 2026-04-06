@@ -11,6 +11,7 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/integrations/kubernetes/csiserver"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sys/unix"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/mount-utils"
@@ -141,9 +142,11 @@ func (s *NodeServer) healMount(ctx context.Context, mp mount.MountPoint, vi *vol
 		return
 	}
 
-	// No forceUnmount needed: mounting over a stale NFS mount works and is faster
-	// than waiting for the unmount timeout (which fails with "Resource busy" anyway
-	// because bind mounts are still active).
+	// Mount over the stale NFS mount. The kernel stacks the fresh mount on top;
+	// the stale one becomes hidden but stays as a fallback if remount fails on
+	// the next health check cycle. We intentionally do NOT lazy-unmount the
+	// globalmount first -- if the fresh mount fails, the stale entry is still
+	// present so the health checker can retry.
 	log.Info().Str("source", mp.Device).Str("mountpoint", mp.Path).Str("fstype", mp.Type).Strs("opts", mp.Opts).Msg("health check: remounting")
 	start := time.Now()
 	if err := s.mounter.Mount(mp.Device, mp.Path, mp.Type, mp.Opts); err != nil {
@@ -157,9 +160,44 @@ func (s *NodeServer) healMount(ctx context.Context, mp mount.MountPoint, vi *vol
 
 	mountOpsTotal.WithLabelValues("health_remount", "success").Inc()
 	mountDuration.WithLabelValues("health_remount").Observe(time.Since(start).Seconds())
-	log.Info().Str("mountpoint", mp.Path).Msg("health check: remount succeeded, bind mounts healed")
 	healthChecksTotal.WithLabelValues("remounted").Inc()
+
+	// Pod bind mounts still reference the old (stale) globalmount. Lazy-unmount
+	// each and re-bind from the fresh globalmount so pods get working I/O.
+	healed := s.healBindMounts(mp.Device, mp.Path)
+	log.Info().Str("mountpoint", mp.Path).Int("bind_mounts_healed", healed).Msg("health check: remount succeeded")
 	s.reportVolumeEvent(ctx, vi, eventMountRemounted, "NFS mount was stale, auto-healed by driver")
+}
+
+// healBindMounts lazy-unmounts and re-binds pod bind mounts that reference the
+// given NFS globalmount device. Returns the number of healed bind mounts.
+func (s *NodeServer) healBindMounts(globalDevice, globalMountPath string) int {
+	dataDir := globalMountPath + "/" + config.DataDir
+	mounts, err := s.mounter.List()
+	if err != nil {
+		log.Warn().Err(err).Msg("health check: failed to list mounts for bind healing")
+		return 0
+	}
+	healed := 0
+	for _, m := range mounts {
+		// In /proc/mounts, bind mounts from an NFS subpath show the parent NFS
+		// device (e.g. "10.0.0.5:/exports/vol"), not the subpath. Match on the
+		// device and filter to pod volume paths.
+		if m.Device != globalDevice || !strings.Contains(m.Path, "/pods/") {
+			continue
+		}
+		if err := unix.Unmount(m.Path, unix.MNT_DETACH); err != nil {
+			log.Warn().Err(err).Str("path", m.Path).Msg("health check: lazy unmount bind failed")
+			continue
+		}
+		if err := s.mounter.Mount(dataDir, m.Path, "", []string{"bind"}); err != nil {
+			log.Error().Err(err).Str("path", m.Path).Msg("health check: re-bind failed")
+			continue
+		}
+		log.Info().Str("path", m.Path).Msg("health check: bind mount healed")
+		healed++
+	}
+	return healed
 }
 
 func (s *NodeServer) reportVolumeEvent(ctx context.Context, vi *volumeInfo, reason, message string) {

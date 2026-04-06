@@ -92,7 +92,7 @@ type AgentConfig struct {
 	TaskDefaultTimeout     time.Duration `env:"AGENT_TASK_DEFAULT_TIMEOUT" envDefault:"6h"`
 	TaskScrubTimeout       time.Duration `env:"AGENT_TASK_SCRUB_TIMEOUT" envDefault:"24h"`
 	TaskPollInterval       time.Duration `env:"AGENT_TASK_POLL_INTERVAL" envDefault:"5s"`
-	DefaultPageLimit       int           `env:"AGENT_DEFAULT_PAGE_LIMIT" envDefault:"100"`
+	DefaultPageLimit       int           `env:"AGENT_DEFAULT_PAGE_LIMIT" envDefault:"0"`
 	PaginationSnapshotTTL  time.Duration `env:"AGENT_API_PAGINATION_SNAPSHOT_TTL" envDefault:"30s"`
 	PaginationMaxSnapshots int           `env:"AGENT_API_PAGINATION_MAX_SNAPSHOTS" envDefault:"100"`
 	SwaggerEnabled         bool          `env:"AGENT_API_SWAGGER_ENABLED"`

@@ -84,7 +84,7 @@ func (h *Handler) deleteSnapshot(id string) {
 func paginatedList[T labeled, R any](h *Handler, c *echo.Context, items []T, mapFn func(*T) R, wrapFn func([]R, int, string) any) error {
 	after := c.QueryParam("after")
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
-	if limit <= 0 {
+	if limit < 0 {
 		limit = h.DefaultPageLimit
 	}
 

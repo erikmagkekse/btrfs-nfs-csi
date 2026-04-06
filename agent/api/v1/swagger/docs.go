@@ -113,7 +113,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "Items per page",
+                        "description": "Items per page (0 = pagination disabled)",
                         "name": "limit",
                         "in": "query"
                     },
@@ -171,7 +171,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "Items per page",
+                        "description": "Items per page (0 = pagination disabled)",
                         "name": "limit",
                         "in": "query"
                     },
@@ -391,7 +391,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "Items per page",
+                        "description": "Items per page (0 = pagination disabled)",
                         "name": "limit",
                         "in": "query"
                     },
@@ -576,7 +576,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "Items per page",
+                        "description": "Items per page (0 = pagination disabled)",
                         "name": "limit",
                         "in": "query"
                     },

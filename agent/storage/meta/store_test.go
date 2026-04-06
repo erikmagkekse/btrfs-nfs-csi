@@ -45,7 +45,7 @@ func TestStore_GetCacheMiss_DiskFallback(t *testing.T) {
 	s, dir := testStore(t)
 	entryDir := filepath.Join(dir, "t", "k1")
 	require.NoError(t, os.MkdirAll(entryDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(entryDir, "metadata.json"), []byte(`{"name":"disk","value":99}`), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(entryDir, "metadata.json"), []byte(`{"name":"disk","value":99}`), 0o644))
 
 	got, err := s.Get("t", "k1")
 	require.NoError(t, err)

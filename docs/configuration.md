@@ -27,7 +27,7 @@
 | `AGENT_TASK_SCRUB_TIMEOUT` | `24h` | Timeout for btrfs scrub tasks. `0` = no timeout |
 | `AGENT_TASK_POLL_INTERVAL` | `5s` | Progress update interval for background tasks |
 | `AGENT_IMMUTABLE_LABELS` | - | Comma-separated label keys that cannot be changed after creation |
-| `AGENT_DEFAULT_PAGE_LIMIT` | `100` | Default page size for list API responses |
+| `AGENT_DEFAULT_PAGE_LIMIT` | `0` | Default page size for list API responses (0 = pagination disabled) |
 | `AGENT_API_PAGINATION_SNAPSHOT_TTL` | `30s` | TTL for cursor-based pagination snapshots |
 | `AGENT_API_PAGINATION_MAX_SNAPSHOTS` | `100` | Max concurrent pagination snapshots |
 | `AGENT_API_SWAGGER_ENABLED` | `false` | Enable `GET /swagger.json` endpoint |
@@ -42,7 +42,7 @@ Shared by CLI and controller (any `v1.Client` user).
 | `AGENT_CSI_IDENTITY` | `cli` (CLI), `k8s` (controller) | Caller identity for `created-by` label, injected automatically on every create |
 | `AGENT_HTTP_CLIENT_TIMEOUT` | `30s` | API request timeout (Go duration) |
 | `AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY` | `false` | Skip TLS certificate verification |
-| `AGENT_HTTP_CLIENT_PAGE_LIMIT` | `100` | Items per page for auto-pagination |
+| `AGENT_HTTP_CLIENT_PAGE_LIMIT` | `0` | Items per page for auto-pagination (0 = pagination disabled) |
 | `AGENT_HTTP_CLIENT_PREFETCH` | `8` | Max pages to prefetch concurrently (`0` = sequential) |
 | `AGENT_HTTP_CLIENT_PREFETCH_MB` | `4` | Prefetch byte budget in MB (`0` = unlimited) |
 
@@ -78,7 +78,7 @@ Also configurable via `--agent-url` and `--agent-token` flags.
 
 **IP resolution order:** `DRIVER_STORAGE_INTERFACE` > `DRIVER_STORAGE_CIDR` > `DRIVER_NODE_IP`. At least one required.
 
-**Note:** `DRIVER_STORAGE_INTERFACE` and `DRIVER_STORAGE_CIDR` resolve IPs from the host's network interfaces. The node DaemonSet must have `hostNetwork: true` for this to work.
+**Note:** `hostNetwork: true` is the default and recommended setting. NFS4 client sessions are tied to the pod's hostname; without host networking, every DaemonSet rolling update (e.g. `helm upgrade`) orphans all active NFS4 sessions, causing stale mounts. `DRIVER_STORAGE_INTERFACE` and `DRIVER_STORAGE_CIDR` also require `hostNetwork: true` to resolve IPs from the host's network interfaces.
 
 ## StorageClass Parameters
 

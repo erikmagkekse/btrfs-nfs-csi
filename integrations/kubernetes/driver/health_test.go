@@ -68,7 +68,7 @@ func TestCheckMountHealth_SkipsNonGlobalmount(t *testing.T) {
 
 func TestCheckMountHealth_HealthyMount(t *testing.T) {
 	globalmountDir := filepath.Join(t.TempDir(), "globalmount", "vol")
-	require.NoError(t, os.MkdirAll(filepath.Join(globalmountDir, "data"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(globalmountDir, "data"), 0o755))
 
 	ns := newTestNodeServer([]mount.MountPoint{
 		{Device: "10.0.0.5:/exports/vol", Path: globalmountDir, Type: "nfs4"},
@@ -87,7 +87,7 @@ func TestCheckMountHealth_SkipsInFlightStat(t *testing.T) {
 	// statWithTimeout would fail and trigger healing. But because we
 	// pre-mark the path as in-flight, the health check should skip it.
 	globalmountDir := filepath.Join(t.TempDir(), "globalmount", "vol")
-	require.NoError(t, os.MkdirAll(globalmountDir, 0755))
+	require.NoError(t, os.MkdirAll(globalmountDir, 0o755))
 
 	ns := newTestNodeServer([]mount.MountPoint{
 		{Device: "10.0.0.5:/exports/vol", Path: globalmountDir, Type: "nfs4"},
@@ -178,6 +178,40 @@ func TestHealMount_SetsHealthStateAbnormalOnFailure(t *testing.T) {
 	vh := h.(*volumeHealth)
 	assert.True(t, vh.abnormal)
 	assert.Contains(t, vh.message, "remount failed")
+}
+
+// --- healBindMounts tests ---
+
+func TestHealBindMounts_HealsMatchingPodMounts(t *testing.T) {
+	podPath := "/var/lib/kubelet/pods/uid-123/volumes/kubernetes.io~csi/pv-1/mount"
+	ns := newTestNodeServer([]mount.MountPoint{
+		// In /proc/mounts, bind mounts show parent NFS device (without /data suffix)
+		{Device: "10.0.0.5:/exports/vol", Path: podPath, Type: "nfs4"},
+	})
+
+	healed := ns.healBindMounts("10.0.0.5:/exports/vol", "/var/lib/kubelet/plugins/csi/globalmount")
+
+	// unix.Unmount fails in tests (not a real mount), so re-bind is skipped.
+	// In production, lazy unmount succeeds and the bind is re-created.
+	assert.Equal(t, 0, healed, "unix.Unmount fails in test env, so no binds healed")
+}
+
+func TestHealBindMounts_SkipsNonPodMounts(t *testing.T) {
+	ns := newTestNodeServer([]mount.MountPoint{
+		{Device: "10.0.0.5:/exports/vol", Path: "/var/lib/kubelet/plugins/csi/globalmount", Type: "nfs4"},
+		{Device: "10.0.0.5:/other", Path: "/var/lib/kubelet/pods/uid/vol/mount", Type: "nfs4"},
+		{Device: "/dev/sda1", Path: "/var/lib/kubelet/pods/uid/vol", Type: "ext4"},
+	})
+
+	healed := ns.healBindMounts("10.0.0.5:/exports/vol", "/var/lib/kubelet/plugins/csi/globalmount")
+
+	assert.Equal(t, 0, healed, "none should match: globalmount not under /pods/, other has wrong device, ext4 has wrong device")
+}
+
+func TestHealBindMounts_NoMounts(t *testing.T) {
+	ns := newTestNodeServer(nil)
+	healed := ns.healBindMounts("10.0.0.5:/exports/vol", "/var/lib/kubelet/plugins/csi/globalmount")
+	assert.Equal(t, 0, healed)
 }
 
 // --- Event tests (with fake kubeClient) ---

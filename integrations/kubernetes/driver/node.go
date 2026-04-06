@@ -44,7 +44,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
-	if err := os.MkdirAll(stagingPath, 0755); err != nil {
+	if err := os.MkdirAll(stagingPath, 0o755); err != nil {
 		return nil, status.Errorf(codes.Internal, "mkdir staging for volume %s: %v", vol, err)
 	}
 
@@ -118,7 +118,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 		log.Warn().Err(err).Str("volume", vol).Str("sc", sc).Str("path", req.TargetPath).Msg("stale bind mount detected, remounting over it")
 	}
 
-	if err := os.MkdirAll(req.TargetPath, 0755); err != nil {
+	if err := os.MkdirAll(req.TargetPath, 0o755); err != nil {
 		return nil, status.Errorf(codes.Internal, "mkdir target for volume %s: %v", vol, err)
 	}
 

@@ -678,7 +678,7 @@ paths:
         in: query
         name: detail
         type: string
-      - description: Items per page
+      - description: Items per page (0 = pagination disabled)
         in: query
         name: limit
         type: integer
@@ -716,7 +716,7 @@ paths:
         in: query
         name: detail
         type: string
-      - description: Items per page
+      - description: Items per page (0 = pagination disabled)
         in: query
         name: limit
         type: integer
@@ -857,7 +857,7 @@ paths:
         in: query
         name: detail
         type: string
-      - description: Items per page
+      - description: Items per page (0 = pagination disabled)
         in: query
         name: limit
         type: integer
@@ -976,7 +976,7 @@ paths:
         in: query
         name: detail
         type: string
-      - description: Items per page
+      - description: Items per page (0 = pagination disabled)
         in: query
         name: limit
         type: integer
