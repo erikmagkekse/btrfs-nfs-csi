@@ -11,7 +11,6 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
-    if: github.event.base_ref == 'refs/heads/main' || github.event.base_ref == 'refs/heads/edge'
     outputs:
       version: ${{ steps.version.outputs.version }}
       commit: ${{ steps.version.outputs.commit }}
@@ -22,6 +21,16 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Verify tag is on main or edge
+        run: |
+          BRANCHES=$(git branch -r --contains "$GITHUB_SHA" | sed 's/^ *//')
+          echo "Tag ${GITHUB_REF_NAME} found on:"
+          echo "$BRANCHES"
+          if ! echo "$BRANCHES" | grep -qxE 'origin/(main|edge)'; then
+            echo "::error::Tag ${GITHUB_REF_NAME} is not on main or edge branch"
+            exit 1
+          fi
 
       - name: Determine version
         id: version
