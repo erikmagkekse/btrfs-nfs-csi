@@ -176,23 +176,23 @@ type SnapshotResponse struct {
 
 // SnapshotDetailResponse is the full representation of a snapshot.
 type SnapshotDetailResponse struct {
-	Name           string            `json:"name"`
-	CreatedBy      string            `json:"created_by,omitempty"`
-	Volume         string            `json:"volume"`
-	Path           string            `json:"path"`
-	SizeBytes      uint64            `json:"size_bytes"`
-	UsedBytes      uint64            `json:"used_bytes"`
-	ExclusiveBytes uint64            `json:"exclusive_bytes"`
+	Name           string `json:"name"`
+	CreatedBy      string `json:"created_by,omitempty"`
+	Volume         string `json:"volume"`
+	Path           string `json:"path"`
+	SizeBytes      uint64 `json:"size_bytes"`
+	UsedBytes      uint64 `json:"used_bytes"`
+	ExclusiveBytes uint64 `json:"exclusive_bytes"`
 	// Source volume properties, preserved for clone fallback.
-	QuotaBytes  uint64 `json:"quota_bytes,omitempty"` // btrfs qgroup limit from source volume
-	NoCOW       bool   `json:"nocow,omitempty"`       // copy-on-write disabled on source volume
-	Compression string `json:"compression,omitempty"` // compression algorithm from source volume
-	UID         int    `json:"uid,omitempty"`          // owner UID from source volume
-	GID         int    `json:"gid,omitempty"`          // owner GID from source volume
-	Mode        string `json:"mode,omitempty"`         // permission mode from source volume
-	Labels         map[string]string `json:"labels,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
+	QuotaBytes  uint64            `json:"quota_bytes,omitempty"` // btrfs qgroup limit from source volume
+	NoCOW       bool              `json:"nocow,omitempty"`       // copy-on-write disabled on source volume
+	Compression string            `json:"compression,omitempty"` // compression algorithm from source volume
+	UID         int               `json:"uid,omitempty"`         // owner UID from source volume
+	GID         int               `json:"gid,omitempty"`         // owner GID from source volume
+	Mode        string            `json:"mode,omitempty"`        // permission mode from source volume
+	Labels      map[string]string `json:"labels,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
 // SnapshotListResponse is returned by GET /v1/snapshots.

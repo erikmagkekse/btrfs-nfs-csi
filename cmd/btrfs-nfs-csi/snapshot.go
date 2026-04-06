@@ -32,7 +32,7 @@ func listSnapshots(ctx context.Context, cmd *cli.Command, vol, sortBy string, re
 				tw.writeRow(map[string]string{
 					"NAME": s.Name, "CREATED BY": s.CreatedBy, "VOLUME": s.Volume, "SIZE": utils.FormatBytes(s.SizeBytes), "USED": utils.FormatBytes(s.UsedBytes),
 					"EXCLUSIVE": utils.FormatBytes(s.ExclusiveBytes),
-					"LABELS": formatLabelsShort(s.Labels), "CREATED": s.CreatedAt.Format(timeFmt),
+					"LABELS":    formatLabelsShort(s.Labels), "CREATED": s.CreatedAt.Format(timeFmt),
 				})
 			}
 			tw.flush()
