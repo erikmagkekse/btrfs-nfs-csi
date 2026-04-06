@@ -159,8 +159,8 @@ fi
 if [[ -n "${AGENT_BLOCK_DISK}" ]] && ! ${UPGRADE}; then
     [[ -b "${AGENT_BLOCK_DISK}" ]] || fatal "${AGENT_BLOCK_DISK} is not a block device."
 
-    if findmnt -n --source "${AGENT_BLOCK_DISK}" &>/dev/null; then
-        existing_mount=$(findmnt -n -o TARGET --source "${AGENT_BLOCK_DISK}")
+    existing_mount=$(findmnt -n -o TARGET --source "${AGENT_BLOCK_DISK}" 2>/dev/null)
+    if [[ -n "${existing_mount}" ]]; then
         fatal "${AGENT_BLOCK_DISK} is already mounted at ${existing_mount}. Unmount it first or remove AGENT_BLOCK_DISK."
     fi
 
@@ -278,6 +278,10 @@ fi
 # 10. summary
 if ${UPGRADE}; then ACTION="upgraded"; else ACTION="installed"; fi
 
+HOST_IP=$(ip -4 route get 1 2>/dev/null | awk '{print $7; exit}')
+HOST_IP="${HOST_IP:-localhost}"
+AGENT_URL="http://${HOST_IP}:${LISTEN_PORT}"
+
 cat <<EOF
 
   btrfs-nfs-csi agent ${ACTION} successfully!
@@ -291,16 +295,20 @@ cat <<EOF
   Tenant config:
     ${AGENT_TENANTS}
 
+  CLI quickstart:
+    export AGENT_URL=${AGENT_URL}
+    export AGENT_TOKEN=${AGENT_TENANTS#*:}
+    # export AGENT_CSI_IDENTITY=cli          # optional, default: cli
+
 EOF
 
 if ! ${UPGRADE}; then
     cat <<EOF
   Next steps:
-    1. Save the tenant token above - you'll need it for the
-       Kubernetes StorageClass secret.
-    2. Deploy the CSI driver in your cluster:
-       kubectl apply -f ${REPO_RAW}/deploy/driver/setup.yaml
-    3. See full docs: https://github.com/erikmagkekse/btrfs-nfs-csi/blob/main/docs/installation.md
+    1. Save the tenant token above.
+    2. Check out the available integrations (Kubernetes, Nomad, ...):
+       https://github.com/erikmagkekse/btrfs-nfs-csi/blob/main/docs/integrations/
+    3. Full docs: https://github.com/erikmagkekse/btrfs-nfs-csi#readme
 
 EOF
 fi
