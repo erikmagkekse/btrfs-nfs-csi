@@ -11,34 +11,6 @@ Instant snapshots, writable clones, per-volume quotas, compression, NoCOW (no co
 
 ---
 
-## See It in Action
-
-### Volumes
-
-Create, expand, compress, and label volumes with per-volume quotas and NoCOW for databases.
-
-![Volumes](docs/assets/vhs/volumes.gif)
-
-### Snapshots & Clones
-
-Instant btrfs snapshots. Writable clones from snapshots or volumes, zero-copy and zero-wait.
-
-![Snapshots & Clones](docs/assets/vhs/snapshots.gif)
-
-### NFS Exports
-
-Add and remove NFS exports per volume, per client, directly from the CLI.
-
-![NFS Exports](docs/assets/vhs/exports.gif)
-
-### Stats & Health
-
-Per-device I/O stats, error tracking, and filesystem scrubs, all from the CLI.
-
-![Stats & Health](docs/assets/vhs/stats.gif)
-
----
-
 ## Why btrfs-nfs-csi?
 
 Most storage solutions are built for the data center. Ceph, Longhorn, and OpenEBS bring clustering overhead that doesn't make sense when you have one server (or two for HA) and a btrfs filesystem.
@@ -71,11 +43,39 @@ btrfs-nfs-csi is not a distributed storage system. If you need data replication 
 | **Quotas** | btrfs qgroups | Scheduling | ZFS | -- | -- |
 | **Multi-tenant** | Built-in | -- | -- | -- | -- |
 | **Overhead** | <128 MB (1k volumes) | 500+ MB | ~50 MB | ~50 MB | ~10 MB |
-| **Setup** | Single binary | Helm | Helm | Helm | Helm |
+| **Setup** | Single container + Helm chart | Helm | Helm | Helm | Helm |
 | **Integrations** | REST API, CLI, Kubernetes, more planned | Kubernetes | Kubernetes | Kubernetes | Kubernetes |
 | **Best for** | Homelab, single-server, small teams | Multi-node HA | ZFS users | Existing NFS server | Local disk |
 
 > This comparison represents my personal point of view. No offense intended to any of these great projects. Improvements are welcome.
+
+---
+
+## See It in Action
+
+### Volumes
+
+Create, expand, compress, and label volumes with per-volume quotas and NoCOW for databases.
+
+![Volumes](docs/assets/vhs/volumes.gif)
+
+### Snapshots & Clones
+
+Instant btrfs snapshots. Writable clones from snapshots or volumes, zero-copy and zero-wait.
+
+![Snapshots & Clones](docs/assets/vhs/snapshots.gif)
+
+### NFS Exports
+
+Add and remove NFS exports per volume, per client, directly from the CLI.
+
+![NFS Exports](docs/assets/vhs/exports.gif)
+
+### Stats & Health
+
+Per-device I/O stats, error tracking, and filesystem scrubs, all from the CLI.
+
+![Stats & Health](docs/assets/vhs/stats.gif)
 
 ---
 
