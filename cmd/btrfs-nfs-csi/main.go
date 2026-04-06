@@ -44,8 +44,8 @@ func main() {
 	}).With().Timestamp().Logger()
 
 	app := &cli.Command{
-		Name:        "btrfs-nfs-csi",
-		Usage:       "btrfs-nfs-csi storage driver",
+		Name:  "btrfs-nfs-csi",
+		Usage: "btrfs-nfs-csi storage driver",
 		Description: `Turns any btrfs filesystem into a full-featured NFS storage backend with
 instant snapshots, clones, and quotas. Includes a standalone REST agent,
 a CLI, and several CSI integrations.
@@ -142,9 +142,9 @@ func integrationCmd() *cli.Command {
 
 func kubernetesCmd() *cli.Command {
 	return &cli.Command{
-		Name:        "kubernetes",
-		Aliases:     []string{"k8s"},
-		Usage:       "Kubernetes integration",
+		Name:    "kubernetes",
+		Aliases: []string{"k8s"},
+		Usage:   "Kubernetes integration",
 		Description: `Dynamic provisioning of btrfs volumes and snapshots via PVCs.
 Supports volume expansion, cloning, snapshots, NFS exports,
 health monitoring with auto-heal, and multi-node access.
