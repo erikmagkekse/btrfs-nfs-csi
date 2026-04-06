@@ -2,9 +2,7 @@
 
 ## Prerequisites
 
-**Agent host:** Linux >= 5.15, `btrfs-progs` >= 6.x, `nfs-utils`, mounted btrfs filesystem, root (until NFS-Ganesha support)
-
-**Kubernetes:** >= 1.30, VolumeSnapshot CRDs + snapshot controller installed (RKE2 includes these out-of-the-box), NFSv4.2 client on all nodes
+Linux >= 5.15, `btrfs-progs` >= 6.x, `nfs-utils`, mounted btrfs filesystem, root
 
 ## Agent Setup
 
@@ -163,83 +161,18 @@ Verify:
 curl http://localhost:8080/healthz
 ```
 
-For multiple clusters/tenants on one agent:
+For multiple tenants on one agent:
 
 ```bash
 AGENT_TENANTS=cluster-a:token-aaa,cluster-b:token-bbb
 ```
 
-Each tenant maps to one Kubernetes StorageClass. The StorageClass references the agent via `agentURL` and the tenant via `agentToken` in a Secret.
+Each tenant is isolated (separate directory, separate token). See [multi-tenancy](architecture.md#multi-tenancy) for details.
 
 </details>
 
-## Driver Setup
+## Integrations
 
-### Helm (Recommended)
+With the agent running, deploy an integration to connect your workload orchestrator. See [Integrations](integrations/) for available options.
 
-```bash
-helm install btrfs-nfs-csi oci://ghcr.io/erikmagkekse/charts/btrfs-nfs-csi \
-  -n btrfs-nfs-csi --create-namespace \
-  -f values.yaml
-```
-
-Minimal `values.yaml`:
-
-```yaml
-storageClasses:
-  - name: btrfs-nfs
-    nfsServer: "10.0.0.5"
-    agentURL: "http://10.0.0.5:8080"
-    existingSecret: "btrfs-nfs-creds"
-    isDefault: true
-```
-
-See the [Helm chart README](../charts/btrfs-nfs-csi/README.md) for all options.
-
-### Static Manifests
-
-```bash
-kubectl apply -f https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/deploy/driver/setup.yaml
-# Download storageclass.yaml, edit it: set nfsServer, agentURL, agentToken
-# Each StorageClass binds one agent + one tenant (via agentToken secret).
-curl -LO https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/deploy/driver/storageclass.yaml
-# edit storageclass.yaml
-kubectl apply -f storageclass.yaml
-```
-
-**Important: `nfsServer` must be reachable from the same IP that NFS exports are created for.** The node driver resolves a storage IP per node (via `DRIVER_NODE_IP`, `DRIVER_STORAGE_INTERFACE`, or `DRIVER_STORAGE_CIDR`) and tells the agent to create NFS exports for that IP. If the node then connects to the NFS server from a different source IP (e.g. a different network), the mount will fail with "No such file or directory" or not be reachable at all. Make sure `nfsServer` and the node storage IPs are on the same network.
-
-Wait until the controller logs show a successful agent connection:
-
-```
-kubectl logs -n btrfs-nfs-csi deploy/btrfs-nfs-csi-controller -c csi-driver
-```
-
-```
-INF agent healthy - vibes immaculate, bits aligned, absolutely bussin sc=btrfs-nfs version=0.10.0
-```
-
-> **Note:** If the agent and driver were built from slightly different commits of the same version, you'll see "agent healthy - commit mismatch" instead. This is normal and everything works fine. Only a WRN-level "version mismatch" indicates a real problem.
-
-## Use it
-
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: my-data
-  annotations:
-    btrfs-nfs-csi/compression: "zstd"   # optional
-    btrfs-nfs-csi/nocow: "false"        # optional
-    btrfs-nfs-csi/uid: "1000"           # optional
-    btrfs-nfs-csi/gid: "1000"           # optional
-    btrfs-nfs-csi/mode: "0750"          # optional
-spec:
-  accessModes: [ReadWriteOnce] # of course supports ReadWriteMany
-  storageClassName: btrfs-nfs
-  resources:
-    requests:
-      storage: 10Gi
-```
-
-See [operations.md](operations.md) for snapshots, clones, expansion, and more.
+For Kubernetes: [Deploy the CSI driver](integrations/kubernetes/)
