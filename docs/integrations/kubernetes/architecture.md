@@ -5,7 +5,7 @@
 | Component | Runs on | Role |
 |---|---|---|
 | **CSI Controller** | Kubernetes Deployment (1 replica) | Translates CSI calls to agent API |
-| **CSI Node Driver** | DaemonSet on every node | NFS mounts, bind mounts, health checks |
+| **CSI Node Driver** | DaemonSet on every node | NFS mounts, bind mounts, volume stats |
 
 Each StorageClass binds one agent and one tenant. Volume IDs use the StorageClass name, so agent URLs can change without breaking existing volumes.
 
@@ -43,7 +43,7 @@ Volume IDs use the StorageClass name (`{storageClassName}|{name}`), not the agen
 
 **Controller:** `CREATE_DELETE_VOLUME`, `CREATE_DELETE_SNAPSHOT`, `EXPAND_VOLUME`, `CLONE_VOLUME`, `PUBLISH_UNPUBLISH_VOLUME`, `LIST_VOLUMES`, `LIST_SNAPSHOTS`
 
-**Node:** `STAGE_UNSTAGE_VOLUME`, `GET_VOLUME_STATS`, `VOLUME_CONDITION`
+**Node:** `STAGE_UNSTAGE_VOLUME`, `GET_VOLUME_STATS`
 
 | Capability | Supported |
 |---|---|
@@ -54,8 +54,6 @@ Volume IDs use the StorageClass name (`{storageClassName}|{name}`), not the agen
 | Clones (volume -> volume) | Yes (zero-copy) |
 | ReadWriteMany | Yes (NFS) |
 | Volume stats | Yes |
-| Volume health | Yes |
-| NFS stale mount detection | Yes (auto-heal) |
 
 ## Sidecars
 
@@ -74,13 +72,12 @@ All controller sidecars use `--leader-election`.
 
 **Controller** (`btrfs-nfs-csi-controller`): PV/PVC/SC/VolumeAttachment/events/nodes/pods/secrets/leases + snapshot CRDs (full access)
 
-**Node** (`btrfs-nfs-csi-node`): PVC get/patch, VolumeAttachments get/list, PV get, events create
+**Node** (`btrfs-nfs-csi-node`): PVC get/patch
 
 ## HA
 
 - **Controller:** 1 replica + leader election. Sidecars elect independently.
 - **Node:** DaemonSet, rolling update max 1 unavailable.
-- **Node health checker:** Background goroutine detects stale NFS mounts via `statWithTimeout` and auto-heals by remounting. Uses per-volume locking to avoid racing with unstage/unpublish. Heals all bind mounts automatically. Reports `VOLUME_CONDITION` and writes k8s events on PVCs. Configurable via `DRIVER_HEALTH_CHECK_INTERVAL` (default 30s).
 
 | Failure | Impact | Recovery |
 |---|---|---|

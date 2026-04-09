@@ -36,17 +36,15 @@ jobs:
         id: version
         run: |
           VERSION=$(cat VERSION)
-          SUFFIX=""
-          if [[ "${GITHUB_REF_NAME}" == *-edge* ]]; then
-            SUFFIX="-edge"
-          fi
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           # Allow optional revision suffix on edge tags (e.g. v0.10.0-edge-r1)
           TAG_BASE="${TAG_VERSION%-r[0-9]*}"
-          if [[ "${TAG_BASE}" != "${VERSION}${SUFFIX}" ]]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION file (${VERSION}${SUFFIX})"
+          if [[ "${TAG_BASE}" != "${VERSION}" && "${TAG_BASE}" != "${VERSION}-edge" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION file (${VERSION} or ${VERSION}-edge)"
             exit 1
           fi
+          # Suffix carries the full -edge-rN so helm retags get a unique chart version
+          SUFFIX="${TAG_VERSION#${VERSION}}"
           echo "version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
           echo "commit=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           echo "suffix=${SUFFIX}" >> "$GITHUB_OUTPUT"
@@ -63,6 +61,26 @@ jobs:
             exit 0
           fi
           echo "Comparing against: ${PREV_TAG}"
+
+          # Edge retags share the same VERSION/Chart version; only the -rN bumps.
+          CURR_BASE="${GITHUB_REF_NAME%-r[0-9]*}"
+          PREV_BASE="${PREV_TAG%-r[0-9]*}"
+          if [[ "${CURR_BASE}" == "${PREV_BASE}" ]]; then
+            CURR_REV=0
+            PREV_REV=0
+            if [[ "${GITHUB_REF_NAME}" =~ -r([0-9]+)$ ]]; then
+              CURR_REV="${BASH_REMATCH[1]}"
+            fi
+            if [[ "${PREV_TAG}" =~ -r([0-9]+)$ ]]; then
+              PREV_REV="${BASH_REMATCH[1]}"
+            fi
+            if (( CURR_REV <= PREV_REV )); then
+              echo "::error::Revision (r${CURR_REV}) must be greater than r${PREV_REV} (${PREV_TAG})"
+              exit 1
+            fi
+            echo "Edge retag: ${PREV_TAG} -> ${GITHUB_REF_NAME}, skipping VERSION/Chart bump check"
+            exit 0
+          fi
 
           PREV_VERSION=$(git show "${PREV_TAG}:VERSION")
           CURR_VERSION=$(cat VERSION)
@@ -193,7 +211,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PRERELEASE=""
-          if [[ "${{ needs.check.outputs.suffix }}" == "-edge" ]]; then
+          if [[ "${{ needs.check.outputs.suffix }}" == -edge* ]]; then
             PRERELEASE="--prerelease"
           fi
           gh release create "${{ github.ref_name }}" \

@@ -186,7 +186,6 @@ Enable `AGENT_API_SWAGGER_ENABLED=true` and the agent serves the full spec at `/
 ### Networking
 - **Automatic NFS exports.** Managed per volume, per client.
 - **ReadWriteMany.** The default access mode, not a special case.
-- **NFS health checker.** Detects stale mounts, auto-heals without restarts.
 - **Dedicated storage network.** Select NIC by name or subnet CIDR.
 
 ### Operations

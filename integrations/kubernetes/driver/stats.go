@@ -57,24 +57,18 @@ func (s *NodeServer) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolum
 						avail = 0
 					}
 					volumeStatsOpsTotal.WithLabelValues("success").Inc()
-					resp := &csi.NodeGetVolumeStatsResponse{
+					return &csi.NodeGetVolumeStatsResponse{
 						Usage: []*csi.VolumeUsage{{
 							Available: avail,
 							Total:     total,
 							Used:      used,
 							Unit:      csi.VolumeUsage_BYTES,
 						}},
-					}
-					s.attachVolumeCondition(req.VolumeId, resp)
-					return resp, nil
+					}, nil
 				}
 				// Quota disabled: fallback to statfs
 				log.Debug().Str("volume", vol).Str("sc", sc).Msg("quota not configured, falling back to statfs")
-				resp, err := statfsResponse(req.VolumePath)
-				if err == nil {
-					s.attachVolumeCondition(req.VolumeId, resp)
-				}
-				return resp, err
+				return statfsResponse(req.VolumePath)
 			}
 		}
 	}
@@ -111,18 +105,6 @@ func (s *NodeServer) findStagingPath(volumeId string) string {
 
 	log.Debug().Str("volume", volumeId).Msg("no staging path found in mounts")
 	return ""
-}
-
-func (s *NodeServer) attachVolumeCondition(volumeID string, resp *csi.NodeGetVolumeStatsResponse) {
-	if h, ok := s.healthState.Load(volumeID); ok {
-		vh := h.(*volumeHealth)
-		if vh.abnormal {
-			resp.VolumeCondition = &csi.VolumeCondition{
-				Abnormal: true,
-				Message:  vh.message,
-			}
-		}
-	}
 }
 
 func statfsResponse(path string) (*csi.NodeGetVolumeStatsResponse, error) {

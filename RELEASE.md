@@ -57,13 +57,6 @@ so much we can build on top of this, this release is the new foundation for a mu
 - **Clone resilience**, Clones preserve source volume properties in snapshot metadata; fallback to snapshot properties if source volume is deleted.
 - **Snapshot volume properties**, Snapshots store original volume compression, nocow, quota, uid, gid, mode for clone fallback.
 
-### NFS Mount Auto-Heal
-
-- **Stale mount detection**, Background daemon detects stale NFS mounts with 5s stat timeout using `/proc/self/mountinfo`.
-- **Automatic remount**, Stale mounts remounted at staging path without pod restart; existing bind mounts heal transparently.
-- **Kubernetes event reporting**, Health events (`MountHealthy`, `MountRemounted`, `MountRemountFailed`) written to PVC; `VOLUME_CONDITION` reported via `NodeGetVolumeStats`.
-- **Configurable interval**, `DRIVER_HEALTH_CHECK_INTERVAL` (default 30s), disable with 0.
-
 ### API Pagination & Documentation
 
 - **Cursor-based pagination**, All list endpoints support `limit` and `after` cursor with snapshot isolation for consistent paging across requests.
@@ -149,7 +142,6 @@ so much we can build on top of this, this release is the new foundation for a mu
 - **Delete protection**, Volumes/snapshots can only be deleted by their creator identity; override requires `--force --yes` or `BTRFS_NFS_CSI_FORCE=true`.
 - **Export reference counting**, Kernel NFS export created on first reference, removed on last; prevents orphaned exports.
 - **Volume deletion blocked with active exports**, Returns "busy (active exports?)" error when NFS exports exist, preventing accidental data loss.
-- **Stale mount detection**, Node driver parses `/proc/self/mountinfo` and detects ESTALE/EIO mounts; auto-remounts without pod restart.
 - **CI workflow hardening**, Explicit `permissions: contents: read` on GitHub Actions workflows; pre-release checks for semver, chart version, and vendorHash consistency.
 
 ---
@@ -178,24 +170,7 @@ is set, it becomes immutable like on any new volume.
 > integration (e.g. `cli`, `nomad`, `custom`). In the future you can also use
 > the `AGENT_CSI_IDENTITY` env var to configure the identity for new resources.
 
-**Via CLI** (per volume):
-```bash
-btrfs-nfs-csi volume update <volume-name> --label created-by=k8s
-```
-
-**Via CLI** (all volumes without `created-by`):
-```bash
-btrfs-nfs-csi volume list --format json | jq -r '.volumes[] | select(.created_by == "") | .name' | \
-  xargs -I{} btrfs-nfs-csi volume update {} --label created-by=k8s
-```
-
-**Via API**:
-```bash
-curl -X PATCH http://<agent>:8080/v1/volumes/<name> \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"labels": {"created-by": "k8s"}}'
-```
+Placeholder for release...
 
 NFS exports are re-created on each publish and will already carry the correct
 `created-by` label after upgrading the controller, no manual action needed.
