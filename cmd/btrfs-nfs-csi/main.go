@@ -147,7 +147,7 @@ func kubernetesCmd() *cli.Command {
 		Usage:   "Kubernetes integration",
 		Description: `Dynamic provisioning of btrfs volumes and snapshots via PVCs.
 Supports volume expansion, cloning, snapshots, NFS exports,
-health monitoring with auto-heal, and multi-node access.
+and multi-node access.
 
 https://github.com/erikmagkekse/btrfs-nfs-csi
 Author: Erik Groh <me@eriks.life>`,

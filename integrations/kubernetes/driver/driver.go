@@ -14,8 +14,6 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/mount-utils"
 )
 
@@ -52,29 +50,16 @@ func Start(version, commit string) error {
 		return fmt.Errorf("create CSI server on %s: %w", cfg.Endpoint, err)
 	}
 	ns := &NodeServer{nodeID: cfg.NodeID, nodeIP: nodeIP, mounter: mount.New("")}
-	if cfg.HealthCheckInterval > 0 {
-		k8sCfg, err := rest.InClusterConfig()
-		if err != nil {
-			log.Warn().Err(err).Msg("k8s in-cluster config unavailable, health checker events disabled")
-		} else {
-			ns.kubeClient = kubernetes.NewForConfigOrDie(k8sCfg)
-			log.Debug().Str("host", k8sCfg.Host).Msg("health checker: k8s API endpoint")
-		}
-		go ns.startHealthChecker(ctx, cfg.HealthCheckInterval)
-	}
 	csi.RegisterNodeServer(srv.GRPC(), ns)
 	return srv.Run(ctx, "driver")
 }
 
 type NodeServer struct {
 	csi.UnimplementedNodeServer
-	nodeID       string
-	nodeIP       string
-	mounter      mount.Interface
-	kubeClient   kubernetes.Interface
-	locks        sync.Map
-	healthState  sync.Map
-	statInFlight sync.Map
+	nodeID  string
+	nodeIP  string
+	mounter mount.Interface
+	locks   sync.Map
 }
 
 func (s *NodeServer) volumeLock(id string) func() {
@@ -99,13 +84,6 @@ func (s *NodeServer) NodeGetCapabilities(_ context.Context, _ *csi.NodeGetCapabi
 				Type: &csi.NodeServiceCapability_Rpc{
 					Rpc: &csi.NodeServiceCapability_RPC{
 						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
-					},
-				},
-			},
-			{
-				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{
-						Type: csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
 					},
 				},
 			},

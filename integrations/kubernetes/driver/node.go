@@ -2,7 +2,6 @@ package driver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -37,11 +36,22 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 
 	stagingPath := req.StagingTargetPath
 
-	// Healthy mount check: stat the data dir to see if staging is already done.
-	// Stale staging mounts are handled by the background health checker, not here.
-	if err := statWithTimeout(stagingPath+"/"+config.DataDir, staleCheckTimeout); err == nil {
+	// After a worker-node reboot the staging path survives as a plain local
+	// directory from kubelet state, so a stat-based check would wrongly skip
+	// the remount. IsMountPoint consults /proc/self/mountinfo and is reliable.
+	isMnt, err := s.mounter.IsMountPoint(stagingPath)
+	switch {
+	case err == nil && isMnt:
 		log.Info().Str("volume", vol).Str("sc", sc).Str("path", stagingPath).Msg("already mounted at staging path")
 		return &csi.NodeStageVolumeResponse{}, nil
+	case err == nil, os.IsNotExist(err):
+	case mount.IsCorruptedMnt(err):
+		log.Warn().Err(err).Str("volume", vol).Str("sc", sc).Str("path", stagingPath).Msg("stale staging mount detected, cleaning up before remount")
+		if cleanErr := cleanupMountPoint(ctx, s.mounter, stagingPath); cleanErr != nil {
+			return nil, status.Errorf(codes.Internal, "cleanup stale staging for volume %s: %v", vol, cleanErr)
+		}
+	default:
+		return nil, status.Errorf(codes.Internal, "check staging mount for volume %s: %v", vol, err)
 	}
 
 	if err := os.MkdirAll(stagingPath, 0o755); err != nil {
@@ -66,7 +76,7 @@ func (s *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolu
 	log.Debug().Str("volume", vol).Str("sc", sc).Str("source", source).Str("target", stagingPath).Strs("opts", opts).Msg("mounting NFS")
 
 	start := time.Now()
-	err := s.mounter.Mount(source, stagingPath, "nfs", opts)
+	err = s.mounter.Mount(source, stagingPath, "nfs", opts)
 	elapsed := time.Since(start)
 	mountDuration.WithLabelValues("nfs_mount").Observe(elapsed.Seconds())
 	if err != nil {
@@ -95,8 +105,6 @@ func (s *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstage
 		return nil, status.Errorf(codes.Internal, "cleanup staging for volume %s at %s: %v", vol, req.StagingTargetPath, err)
 	}
 
-	s.healthState.Delete(req.VolumeId)
-
 	log.Info().Str("volume", vol).Str("sc", sc).Str("node", s.nodeID).Str("path", req.StagingTargetPath).Msg("unstage complete")
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
@@ -111,11 +119,22 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	unlock := s.volumeLock(req.VolumeId)
 	defer unlock()
 
-	if err := statWithTimeout(req.TargetPath, staleCheckTimeout); err == nil {
+	// After a worker-node reboot the pod target dir survives as a plain local
+	// directory from kubelet state, so a stat-based check would wrongly skip
+	// the bind mount and silently route pod writes to the local root fs.
+	isMnt, err := s.mounter.IsMountPoint(req.TargetPath)
+	switch {
+	case err == nil && isMnt:
 		log.Info().Str("volume", vol).Str("sc", sc).Str("path", req.TargetPath).Msg("already mounted, skipping publish")
 		return &csi.NodePublishVolumeResponse{}, nil
-	} else if mount.IsCorruptedMnt(err) || errors.Is(err, errStatTimeout) {
-		log.Warn().Err(err).Str("volume", vol).Str("sc", sc).Str("path", req.TargetPath).Msg("stale bind mount detected, remounting over it")
+	case err == nil, os.IsNotExist(err):
+	case mount.IsCorruptedMnt(err):
+		log.Warn().Err(err).Str("volume", vol).Str("sc", sc).Str("path", req.TargetPath).Msg("stale bind mount detected, cleaning up before remount")
+		if cleanErr := cleanupMountPoint(ctx, s.mounter, req.TargetPath); cleanErr != nil {
+			return nil, status.Errorf(codes.Internal, "cleanup stale target for volume %s: %v", vol, cleanErr)
+		}
+	default:
+		return nil, status.Errorf(codes.Internal, "check target mount for volume %s: %v", vol, err)
 	}
 
 	if err := os.MkdirAll(req.TargetPath, 0o755); err != nil {
@@ -126,7 +145,7 @@ func (s *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublish
 	log.Debug().Str("volume", vol).Str("sc", sc).Str("source", dataDir).Str("target", req.TargetPath).Bool("readonly", req.Readonly).Msg("bind mounting")
 
 	start := time.Now()
-	err := s.mounter.Mount(dataDir, req.TargetPath, "", []string{"bind"})
+	err = s.mounter.Mount(dataDir, req.TargetPath, "", []string{"bind"})
 	elapsed := time.Since(start)
 	mountDuration.WithLabelValues("bind_mount").Observe(elapsed.Seconds())
 	if err != nil {
@@ -171,21 +190,4 @@ func (s *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 
 	log.Info().Str("volume", vol).Str("sc", sc).Str("node", s.nodeID).Str("path", req.TargetPath).Msg("unpublish complete")
 	return &csi.NodeUnpublishVolumeResponse{}, nil
-}
-
-// statWithTimeout runs os.Stat in a goroutine with a timeout.
-// Returns nil if stat succeeds, error if it fails or times out.
-// Needed because os.Stat on a stale NFS hard mount hangs indefinitely.
-func statWithTimeout(path string, timeout time.Duration) error {
-	ch := make(chan error, 1)
-	go func() {
-		_, err := os.Stat(path)
-		ch <- err
-	}()
-	select {
-	case err := <-ch:
-		return err
-	case <-time.After(timeout):
-		return fmt.Errorf("stat %s after %s: %w", path, timeout, errStatTimeout)
-	}
 }
