@@ -191,4 +191,3 @@ func (s *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpub
 	log.Info().Str("volume", vol).Str("sc", sc).Str("node", s.nodeID).Str("path", req.TargetPath).Msg("unpublish complete")
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
-
