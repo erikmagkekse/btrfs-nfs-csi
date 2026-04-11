@@ -72,6 +72,8 @@ Trade-off: no snapshots/clones, no checksums, no compression. Better random writ
 
 Enabled by default (`AGENT_FEATURE_QUOTA_ENABLED=true`).
 
+Both classic quotas (`btrfs quota enable`) and simple quotas (`btrfs quota enable -s`) are supported. Simple quotas (squota, kernel 6.7+) have lower write overhead because they track ownership by extent lifetime instead of backref walks. The agent uses the same qgroup commands for both modes.
+
 - Create: `btrfs qgroup limit <bytes> <path>`
 - Usage updater: polls `btrfs qgroup show` at `AGENT_FEATURE_QUOTA_UPDATE_INTERVAL`
 

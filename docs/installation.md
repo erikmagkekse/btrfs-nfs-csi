@@ -64,7 +64,11 @@ lsblk -f
 mkfs.btrfs /dev/sdX
 mkdir -p /export/data
 mount /dev/sdX /export/data
-btrfs quota enable /export/data
+# simple quotas (squota) -- recommended, requires kernel 6.7+ and btrfs-progs 6.7+
+btrfs quota enable -s /export/data
+
+# classic quotas -- fallback for older kernels
+# btrfs quota enable /export/data
 ```
 
 Add to `/etc/fstab` (use UUID for stability):
