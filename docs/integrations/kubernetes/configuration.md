@@ -67,8 +67,11 @@ On snapshots:
 
 | Label | Value |
 |---|---|
+| `kubernetes.pv.name` | PV name |
+| `kubernetes.pv.storageclassname` | StorageClass name |
 | `kubernetes.source.pvc.name` | Source PVC name |
 | `kubernetes.source.pvc.namespace` | Source PVC namespace |
+| `kubernetes.source.pvc.storageclassname` | Source StorageClass name |
 | `kubernetes.snapshot.name` | VolumeSnapshot name |
 | `kubernetes.snapshot.namespace` | VolumeSnapshot namespace |
 | `created-by` | `k8s` |
@@ -78,9 +81,11 @@ On NFS exports:
 | Label | Value |
 |---|---|
 | `kubernetes.pv.name` | PV name |
-| `kubernetes.pvc.name` | PVC name |
+| `kubernetes.pv.storageclassname` | StorageClass name |
 | `kubernetes.node.name` | Node hostname |
 | `kubernetes.volumeattachment.name` | VolumeAttachment name |
+| `kubernetes.pvc.name` | PVC name (if available) |
+| `kubernetes.pvc.namespace` | PVC namespace (if available) |
 | `created-by` | `k8s` |
 
 Clones always receive `clone.source.type` and `clone.source.name` automatically. All `kubernetes.*` and `clone.*` keys are reserved and cannot be overridden via annotations. Max 8 user labels, max 32 total.

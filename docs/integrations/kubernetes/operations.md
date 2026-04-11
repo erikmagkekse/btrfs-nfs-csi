@@ -106,6 +106,6 @@ ControllerPublish creates an export with K8s metadata labels, NodeStage mounts v
 
 Exports are [reference-counted per client IP](../../operations.md#nfs-exports).
 
-**Retries:** Controller retries export/unexport 3x with 3s timeout each.
+**Timeouts:** Export/unexport calls have a 10s context timeout. On failure, Kubernetes retries the operation.
 
-**Mount timeouts:** NFS/bind mount 2min, unmount falls back to `umount -f`.
+**Mounts:** Uses `k8s.io/mount-utils` for all mount/unmount operations, including stale NFS mount detection (ESTALE, EACCES, EIO) and force unmount fallback (30s timeout).

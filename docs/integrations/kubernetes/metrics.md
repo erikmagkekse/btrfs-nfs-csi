@@ -17,7 +17,7 @@ See also: [Agent metrics](../../metrics.md) for agent Prometheus metrics and Pro
 | Operation | Status |
 |---|---|
 | `create_volume` | `success`, `error`, `conflict` |
-| `delete_volume` | `success`, `error`, `not_found` |
+| `delete_volume` | `success`, `error`, `not_found`, `busy` |
 | `create_snapshot` | `success`, `error`, `conflict` |
 | `delete_snapshot` | `success`, `error`, `not_found` |
 | `create_clone` | `success`, `error`, `conflict` |
@@ -31,7 +31,7 @@ See also: [Agent metrics](../../metrics.md) for agent Prometheus metrics and Pro
 
 **Buckets (agent_duration):** `[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`
 
-## Node (7) - port 9090
+## Node (5) - port 9090
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -41,7 +41,7 @@ See also: [Agent metrics](../../metrics.md) for agent Prometheus metrics and Pro
 | `btrfs_nfs_csi_node_mount_duration_seconds` | Histogram | `operation` |
 | `btrfs_nfs_csi_node_volume_stats_ops_total` | Counter | `status` |
 
-**Mount operations:** `nfs_mount`, `bind_mount`, `umount`, `force_umount`, `remount_ro`
+**Mount operations:** `nfs_mount`, `bind_mount`, `umount`, `remount_ro`
 
 **Buckets (grpc_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]`
 
@@ -55,9 +55,6 @@ sum(rate(btrfs_nfs_csi_controller_agent_ops_total{status="error"}[5m]))
 
 # NFS mount failures
 rate(btrfs_nfs_csi_node_mount_ops_total{operation="nfs_mount",status="error"}[5m])
-
-# Force unmounts (stuck mounts)
-increase(btrfs_nfs_csi_node_mount_ops_total{operation="force_umount"}[1h])
 
 # Agent health check errors
 rate(btrfs_nfs_csi_controller_agent_ops_total{operation="health_check",status="error"}[5m])
