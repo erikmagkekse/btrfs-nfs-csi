@@ -20,17 +20,17 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 				return authFailed(c, "missing authorization header")
 			}
 
-			parts := strings.SplitN(auth, " ", 2)
-			if len(parts) != 2 {
+			scheme, token, ok := strings.Cut(auth, " ")
+			if !ok {
 				return authFailed(c, "malformed authorization header")
 			}
 
 			var providedToken string
-			switch parts[0] {
+			switch scheme {
 			case "Bearer":
-				providedToken = parts[1]
+				providedToken = token
 			case "Basic":
-				decoded, err := base64.StdEncoding.DecodeString(parts[1])
+				decoded, err := base64.StdEncoding.DecodeString(token)
 				if err != nil {
 					return authFailed(c, "invalid basic auth encoding")
 				}
@@ -40,7 +40,7 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 				}
 				providedToken = pass
 			default:
-				return authFailed(c, "unsupported auth scheme: "+parts[0])
+				return authFailed(c, "unsupported auth scheme: "+scheme)
 			}
 
 			tenant, ok := tenants[providedToken]

@@ -3,7 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"maps"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -117,7 +117,7 @@ func uniqueExportIPs(clients []ExportMetadata) []string {
 	for ip := range seen {
 		ips = append(ips, ip)
 	}
-	sort.Strings(ips)
+	slices.Sort(ips)
 	return ips
 }
 

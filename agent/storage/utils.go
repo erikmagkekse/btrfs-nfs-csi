@@ -119,7 +119,7 @@ func ImmutableLabelKeys(extra string) []string {
 			seen[k] = true
 		}
 	}
-	for _, k := range strings.Split(extra, ",") {
+	for k := range strings.SplitSeq(extra, ",") {
 		k = strings.TrimSpace(k)
 		if k != "" && !seen[k] {
 			keys = append(keys, k)

@@ -21,7 +21,7 @@ func FindMountPoint(path string) (string, error) {
 	}
 
 	var bestMount string
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 5 {
 			continue

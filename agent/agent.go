@@ -171,12 +171,12 @@ func parseTenants(s string) map[string]string {
 		return nil
 	}
 	m := make(map[string]string)
-	for _, entry := range strings.Split(s, ",") {
-		parts := strings.SplitN(strings.TrimSpace(entry), ":", 2)
-		if len(parts) == 2 {
-			name := strings.TrimSpace(parts[0])
-			token := strings.TrimSpace(parts[1])
-			m[token] = name
+	for entry := range strings.SplitSeq(s, ",") {
+		name, tok, ok := strings.Cut(strings.TrimSpace(entry), ":")
+		if ok {
+			name = strings.TrimSpace(name)
+			tok = strings.TrimSpace(tok)
+			m[tok] = name
 		}
 	}
 	if len(m) == 0 {

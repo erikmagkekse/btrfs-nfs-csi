@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"sort"
+	"cmp"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -44,7 +45,7 @@ func formatLabels(labels map[string]string) string {
 	for k, v := range labels {
 		parts = append(parts, k+"="+v)
 	}
-	sort.Strings(parts)
+	slices.Sort(parts)
 	return strings.Join(parts, ", ")
 }
 
@@ -57,7 +58,7 @@ func printLabels(header string, labels map[string]string, indent int) {
 	for k := range labels {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for i, k := range keys {
 		if i == 0 {
 			fmt.Printf("%-*s%s=%s\n", indent, header, k, labels[k])
@@ -82,7 +83,7 @@ func formatLabelsShort(labels map[string]string) string {
 		}
 		rest = append(rest, k+"="+v)
 	}
-	sort.Strings(rest)
+	slices.Sort(rest)
 	parts = append(parts, rest...)
 	s := strings.Join(parts, ", ")
 	if len(s) > 48 {
@@ -154,7 +155,7 @@ func newTableWriter(cmd *cli.Command, all []string) *tableWriter {
 			avail[key] = col
 		}
 		var filtered []string
-		for _, r := range strings.Split(raw, ",") {
+		for r := range strings.SplitSeq(raw, ",") {
 			key := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(r), " ", ""))
 			if col, ok := avail[key]; ok {
 				filtered = append(filtered, col)
@@ -197,166 +198,166 @@ func (tw *tableWriter) flush() {
 }
 
 func sortVolumes(vols []models.VolumeResponse, field string, reverse bool) {
-	sort.Slice(vols, func(i, j int) bool {
-		var less bool
+	slices.SortFunc(vols, func(a, b models.VolumeResponse) int {
+		var c int
 		switch field {
 		case sortSize:
-			less = vols[i].SizeBytes < vols[j].SizeBytes
+			c = cmp.Compare(a.SizeBytes, b.SizeBytes)
 		case sortUsed:
-			less = vols[i].UsedBytes < vols[j].UsedBytes
+			c = cmp.Compare(a.UsedBytes, b.UsedBytes)
 		case sortUsedPct:
-			less = usedPct(vols[i].UsedBytes, vols[i].SizeBytes) < usedPct(vols[j].UsedBytes, vols[j].SizeBytes)
+			c = cmp.Compare(usedPct(a.UsedBytes, a.SizeBytes), usedPct(b.UsedBytes, b.SizeBytes))
 		case sortCreated:
-			less = vols[i].CreatedAt.Before(vols[j].CreatedAt)
+			c = a.CreatedAt.Compare(b.CreatedAt)
 		case sortExports:
-			less = vols[i].Exports < vols[j].Exports
+			c = cmp.Compare(a.Exports, b.Exports)
 		default:
-			less = vols[i].Name < vols[j].Name
+			c = cmp.Compare(a.Name, b.Name)
 		}
 		if reverse {
-			return !less
+			return -c
 		}
-		return less
+		return c
 	})
 }
 
 func sortVolumesDetail(vols []models.VolumeDetailResponse, field string, reverse bool) {
-	sort.Slice(vols, func(i, j int) bool {
-		var less bool
+	slices.SortFunc(vols, func(a, b models.VolumeDetailResponse) int {
+		var c int
 		switch field {
 		case sortSize:
-			less = vols[i].SizeBytes < vols[j].SizeBytes
+			c = cmp.Compare(a.SizeBytes, b.SizeBytes)
 		case sortUsed:
-			less = vols[i].UsedBytes < vols[j].UsedBytes
+			c = cmp.Compare(a.UsedBytes, b.UsedBytes)
 		case sortUsedPct:
-			less = usedPct(vols[i].UsedBytes, vols[i].SizeBytes) < usedPct(vols[j].UsedBytes, vols[j].SizeBytes)
+			c = cmp.Compare(usedPct(a.UsedBytes, a.SizeBytes), usedPct(b.UsedBytes, b.SizeBytes))
 		case sortCreated:
-			less = vols[i].CreatedAt.Before(vols[j].CreatedAt)
+			c = a.CreatedAt.Compare(b.CreatedAt)
 		case sortExports:
-			less = len(vols[i].Exports) < len(vols[j].Exports)
+			c = cmp.Compare(len(a.Exports), len(b.Exports))
 		default:
-			less = vols[i].Name < vols[j].Name
+			c = cmp.Compare(a.Name, b.Name)
 		}
 		if reverse {
-			return !less
+			return -c
 		}
-		return less
+		return c
 	})
 }
 
 func sortSnapshots(snaps []models.SnapshotResponse, field string, reverse bool) {
-	sort.Slice(snaps, func(i, j int) bool {
-		var less bool
+	slices.SortFunc(snaps, func(a, b models.SnapshotResponse) int {
+		var c int
 		switch field {
 		case sortSize:
-			less = snaps[i].SizeBytes < snaps[j].SizeBytes
+			c = cmp.Compare(a.SizeBytes, b.SizeBytes)
 		case sortUsed:
-			less = snaps[i].UsedBytes < snaps[j].UsedBytes
+			c = cmp.Compare(a.UsedBytes, b.UsedBytes)
 		case sortCreated:
-			less = snaps[i].CreatedAt.Before(snaps[j].CreatedAt)
+			c = a.CreatedAt.Compare(b.CreatedAt)
 		case sortVolume:
-			less = snaps[i].Volume < snaps[j].Volume
+			c = cmp.Compare(a.Volume, b.Volume)
 		default:
-			less = snaps[i].Name < snaps[j].Name
+			c = cmp.Compare(a.Name, b.Name)
 		}
 		if reverse {
-			return !less
+			return -c
 		}
-		return less
+		return c
 	})
 }
 
 func sortSnapshotsDetail(snaps []models.SnapshotDetailResponse, field string, reverse bool) {
-	sort.Slice(snaps, func(i, j int) bool {
-		var less bool
+	slices.SortFunc(snaps, func(a, b models.SnapshotDetailResponse) int {
+		var c int
 		switch field {
 		case sortSize:
-			less = snaps[i].SizeBytes < snaps[j].SizeBytes
+			c = cmp.Compare(a.SizeBytes, b.SizeBytes)
 		case sortUsed:
-			less = snaps[i].UsedBytes < snaps[j].UsedBytes
+			c = cmp.Compare(a.UsedBytes, b.UsedBytes)
 		case sortCreated:
-			less = snaps[i].CreatedAt.Before(snaps[j].CreatedAt)
+			c = a.CreatedAt.Compare(b.CreatedAt)
 		case sortVolume:
-			less = snaps[i].Volume < snaps[j].Volume
+			c = cmp.Compare(a.Volume, b.Volume)
 		default:
-			less = snaps[i].Name < snaps[j].Name
+			c = cmp.Compare(a.Name, b.Name)
 		}
 		if reverse {
-			return !less
+			return -c
 		}
-		return less
+		return c
 	})
 }
 
 func sortExportsList(exports []models.ExportResponse, field string, reverse bool) {
-	sort.Slice(exports, func(i, j int) bool {
-		var less bool
+	slices.SortFunc(exports, func(a, b models.ExportResponse) int {
+		var c int
 		switch field {
 		case "client":
-			less = exports[i].Client < exports[j].Client
+			c = cmp.Compare(a.Client, b.Client)
 		case sortCreated:
-			less = exports[i].CreatedAt.Before(exports[j].CreatedAt)
+			c = a.CreatedAt.Compare(b.CreatedAt)
 		default:
-			less = exports[i].Name < exports[j].Name
+			c = cmp.Compare(a.Name, b.Name)
 		}
 		if reverse {
-			return !less
+			return -c
 		}
-		return less
+		return c
 	})
 }
 
 func sortExportsDetailList(exports []models.ExportDetailResponse, field string, reverse bool) {
-	sort.Slice(exports, func(i, j int) bool {
-		var less bool
+	slices.SortFunc(exports, func(a, b models.ExportDetailResponse) int {
+		var c int
 		switch field {
 		case "client":
-			less = exports[i].Client < exports[j].Client
+			c = cmp.Compare(a.Client, b.Client)
 		case sortCreated:
-			less = exports[i].CreatedAt.Before(exports[j].CreatedAt)
+			c = a.CreatedAt.Compare(b.CreatedAt)
 		default:
-			less = exports[i].Name < exports[j].Name
+			c = cmp.Compare(a.Name, b.Name)
 		}
 		if reverse {
-			return !less
+			return -c
 		}
-		return less
+		return c
 	})
 }
 
 func sortTasks(tasks []models.TaskResponse, field string, reverse bool) {
-	sort.Slice(tasks, func(i, j int) bool {
-		var less bool
+	slices.SortFunc(tasks, func(a, b models.TaskResponse) int {
+		var c int
 		switch field {
 		case sortType:
-			less = tasks[i].Type < tasks[j].Type
+			c = cmp.Compare(a.Type, b.Type)
 		case sortStatus:
-			less = tasks[i].Status < tasks[j].Status
+			c = cmp.Compare(a.Status, b.Status)
 		default:
-			less = tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+			c = a.CreatedAt.Compare(b.CreatedAt)
 		}
 		if reverse {
-			return !less
+			return -c
 		}
-		return less
+		return c
 	})
 }
 
 func sortTasksDetail(tasks []models.TaskDetailResponse, field string, reverse bool) {
-	sort.Slice(tasks, func(i, j int) bool {
-		var less bool
+	slices.SortFunc(tasks, func(a, b models.TaskDetailResponse) int {
+		var c int
 		switch field {
 		case sortType:
-			less = tasks[i].Type < tasks[j].Type
+			c = cmp.Compare(a.Type, b.Type)
 		case sortStatus:
-			less = tasks[i].Status < tasks[j].Status
+			c = cmp.Compare(a.Status, b.Status)
 		default:
-			less = tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+			c = a.CreatedAt.Compare(b.CreatedAt)
 		}
 		if reverse {
-			return !less
+			return -c
 		}
-		return less
+		return c
 	})
 }
 

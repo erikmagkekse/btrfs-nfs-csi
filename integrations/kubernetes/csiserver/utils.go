@@ -10,11 +10,11 @@ func MakeVolumeID(storageClass, name string) string {
 }
 
 func ParseVolumeID(id string) (storageClass, name string, err error) {
-	parts := strings.SplitN(id, VolumeIDSep, 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	sc, n, ok := strings.Cut(id, VolumeIDSep)
+	if !ok || sc == "" || n == "" {
 		return "", "", fmt.Errorf("invalid volume ID: %s", id)
 	}
-	return parts[0], parts[1], nil
+	return sc, n, nil
 }
 
 func MakeNodeID(hostname, ip string) string {
@@ -22,9 +22,9 @@ func MakeNodeID(hostname, ip string) string {
 }
 
 func ParseNodeID(nodeID string) (hostname, ip string, err error) {
-	parts := strings.SplitN(nodeID, NodeIDSep, 2)
-	if len(parts) != 2 || parts[1] == "" {
+	h, i, ok := strings.Cut(nodeID, NodeIDSep)
+	if !ok || i == "" {
 		return "", "", fmt.Errorf("invalid node ID %q (expected hostname%sip)", nodeID, NodeIDSep)
 	}
-	return parts[0], parts[1], nil
+	return h, i, nil
 }

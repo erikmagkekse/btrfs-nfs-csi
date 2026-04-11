@@ -1,8 +1,9 @@
 package v1
 
 import (
+	"cmp"
 	"net/http"
-	"sort"
+	"slices"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
@@ -100,7 +101,7 @@ func (h *Handler) ListVolumes(c *echo.Context) error {
 	if err != nil {
 		return StorageError(c, err)
 	}
-	sort.Slice(vols, func(i, j int) bool { return vols[i].Name < vols[j].Name })
+	slices.SortFunc(vols, func(a, b storage.VolumeMetadata) int { return cmp.Compare(a.Name, b.Name) })
 
 	if c.QueryParam("detail") == "true" {
 		return paginatedList(h, c, vols, volumeDetailResponseFrom, func(r []models.VolumeDetailResponse, total int, next string) any {

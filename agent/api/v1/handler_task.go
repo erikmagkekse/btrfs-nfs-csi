@@ -2,7 +2,7 @@ package v1
 
 import (
 	"net/http"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
@@ -119,7 +119,7 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 // @Security     BearerAuth
 func (h *Handler) ListTasks(c *echo.Context) error {
 	tasks := h.Store.Tasks().List(c.QueryParam("type"))
-	sort.Slice(tasks, func(i, j int) bool { return tasks[i].CreatedAt.After(tasks[j].CreatedAt) })
+	slices.SortFunc(tasks, func(a, b task.Task) int { return b.CreatedAt.Compare(a.CreatedAt) })
 
 	if c.QueryParam("detail") == "true" {
 		return paginatedList(h, c, tasks, taskDetailResponseFrom, func(r []models.TaskDetailResponse, total int, next string) any {
