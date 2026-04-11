@@ -26,7 +26,6 @@ const (
 	outputJSON  = "json"
 	timeFmt     = "2006-01-02 15:04"
 
-	sortName    = "name"
 	sortSize    = "size"
 	sortUsed    = "used"
 	sortUsedPct = "used%"
@@ -36,18 +35,6 @@ const (
 	sortType    = "type"
 	sortStatus  = "status"
 )
-
-func formatLabels(labels map[string]string) string {
-	if len(labels) == 0 {
-		return "none"
-	}
-	parts := make([]string, 0, len(labels))
-	for k, v := range labels {
-		parts = append(parts, k+"="+v)
-	}
-	slices.Sort(parts)
-	return strings.Join(parts, ", ")
-}
 
 func printLabels(header string, labels map[string]string, indent int) {
 	if len(labels) == 0 {
@@ -399,10 +386,7 @@ func withCLIHooks(cmds ...*cli.Command) []*cli.Command {
 }
 
 func fmtTiming(d time.Duration) string {
-	if d.Milliseconds() == 0 {
-		return ""
-	}
-	return fmt.Sprintf("took %s, %s", fmtDuration(d), time.Now().Format("2006-01-02 15:04:05"))
+	return fmt.Sprintf("took %s, %s", d.Truncate(time.Millisecond), time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func watchAction(fn cli.ActionFunc) cli.ActionFunc {
@@ -413,17 +397,13 @@ func watchAction(fn cli.ActionFunc) cli.ActionFunc {
 	}
 }
 
-func outputFormat(cmd *cli.Command) string {
-	return cmd.String("output")
-}
-
 func isWide(cmd *cli.Command) bool {
-	o := outputFormat(cmd)
+	o := cmd.String("output")
 	return o == outputWide || strings.Contains(o, "wide")
 }
 
 func isJSON(cmd *cli.Command) bool {
-	return strings.Contains(outputFormat(cmd), outputJSON)
+	return strings.Contains(cmd.String("output"), outputJSON)
 }
 
 func output(cmd *cli.Command, data any, tableFn func()) error {
@@ -443,13 +423,6 @@ func printJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(v)
-}
-
-func fmtDuration(d time.Duration) string {
-	if d >= time.Second {
-		return fmt.Sprintf("%.0fs", d.Seconds())
-	}
-	return fmt.Sprintf("%dms", d.Milliseconds())
 }
 
 func wrapErr(err error, resource, name string) error {

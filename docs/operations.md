@@ -184,6 +184,15 @@ btrfs-nfs-csi volume ls -l env=prod          # filter by label
 btrfs-nfs-csi volume ls -l env=prod,team=be  # comma-separated (AND)
 btrfs-nfs-csi volume delete my-vol           # safe: only deletes if created-by matches caller
 btrfs-nfs-csi volume delete my-vol --confirm --yes  # force delete any volume
+btrfs-nfs-csi volume set my-vol --uid 1000 --gid 1000  # change owner
+btrfs-nfs-csi volume set my-vol --mode 0755            # change permissions
+btrfs-nfs-csi volume set my-vol --compression zstd     # change compression
+btrfs-nfs-csi volume set my-vol --nocow                # disable copy-on-write
+btrfs-nfs-csi volume label list my-vol       # show labels
+btrfs-nfs-csi volume label add my-vol env=prod tier=hot  # add/update labels
+btrfs-nfs-csi volume label remove my-vol tier            # remove by key
+btrfs-nfs-csi volume label remove my-vol tier=hot        # remove by key+value (must match)
+btrfs-nfs-csi volume label patch my-vol env=staging  # replace all labels (preserves reserved labels)
 
 # xargs pipeline: delete all CLI-created volumes matching a pattern
 btrfs-nfs-csi volume ls -c name | grep '^test-' | xargs btrfs-nfs-csi volume delete
@@ -194,6 +203,7 @@ btrfs-nfs-csi snapshot ls -l env=prod
 btrfs-nfs-csi snapshot create my-vol snap-1 --label env=prod
 btrfs-nfs-csi snapshot clone snap-1 new-vol --label env=dev
 btrfs-nfs-csi snapshot delete snap-1
+btrfs-nfs-csi snapshot label list snap-1     # show labels
 
 btrfs-nfs-csi export list
 btrfs-nfs-csi export add my-vol 10.1.0.50
@@ -236,4 +246,4 @@ btrfs-nfs-csi version
 
 **Default labels:** Every create command automatically adds `created-by=<identity>` (default `cli`). The `created-by` label cannot be set via `--label` flag or PVC annotations.
 
-**Command aliases:** `volume`/`volumes`/`vol`/`v`, `snapshot`/`snapshots`/`snap`/`s`, `export`/`exports`/`e`, `task`/`tasks`/`t`. `list`/`ls`/`l`, `create`/`c`, `get`/`g`, `delete`/`rm`/`d`.
+**Command aliases:** `volume`/`volumes`/`vol`/`v`, `snapshot`/`snapshots`/`snap`/`s`, `export`/`exports`/`e`, `task`/`tasks`/`t`. `list`/`ls`/`l`, `create`/`c`, `get`/`g`, `delete`/`rm`/`d`, `set`/`s`, `expand`/`e`, `clone`/`cl`, `label`/`labels`/`lb`, `add`/`a`, `remove`/`rm`/`r`, `patch`/`p`.

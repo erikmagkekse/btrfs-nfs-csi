@@ -75,6 +75,7 @@ func snapshotGet(ctx context.Context, cmd *cli.Command) error {
 	}
 	return output(cmd, resp, func() {
 		fmt.Printf("Name:       %s\n", resp.Name)
+		fmt.Printf("Path:       %s\n", resp.Path)
 		fmt.Printf("Volume:     %s\n", resp.Volume)
 		fmt.Printf("Size:       %s\n", utils.FormatBytes(resp.SizeBytes))
 		fmt.Printf("Used:       %s\n", utils.FormatBytes(resp.UsedBytes))
@@ -82,6 +83,20 @@ func snapshotGet(ctx context.Context, cmd *cli.Command) error {
 		printLabels("Labels:", resp.Labels, 12)
 		fmt.Printf("Created:    %s\n", resp.CreatedAt.Local().Format(timeFmt))
 		fmt.Printf("Updated:    %s\n", resp.UpdatedAt.Local().Format(timeFmt))
+	})
+}
+
+func snapshotLabelList(ctx context.Context, cmd *cli.Command) error {
+	name := cmd.Args().First()
+	if name == "" {
+		return fmt.Errorf("snapshot name required")
+	}
+	resp, err := apiClient.GetSnapshot(ctx, name)
+	if err != nil {
+		return wrapErr(err, "snapshot", name)
+	}
+	return output(cmd, resp.Labels, func() {
+		printLabels("", resp.Labels, 0)
 	})
 }
 

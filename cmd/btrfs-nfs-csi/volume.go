@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 
@@ -65,6 +66,7 @@ func volumeGet(ctx context.Context, cmd *cli.Command) error {
 	}
 	return output(cmd, resp, func() {
 		fmt.Printf("Name:         %s\n", resp.Name)
+		fmt.Printf("Path:         %s\n", resp.Path)
 		fmt.Printf("Size:         %s\n", utils.FormatBytes(resp.SizeBytes))
 		fmt.Printf("Used:         %s (%.0f%%)\n", utils.FormatBytes(resp.UsedBytes), usedPct(resp.UsedBytes, resp.SizeBytes))
 		fmt.Printf("Quota:        %s\n", utils.FormatBytes(resp.QuotaBytes))
@@ -93,16 +95,29 @@ func volumeCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	compression := cmd.String("compression")
-	if compression != "" && !utils.IsValidCompression(compression) {
+	if compression != "" && compression != "none" && !utils.IsValidCompression(compression) {
 		return fmt.Errorf("invalid compression %q, expected: zstd, lzo, zlib (with optional level, e.g. zstd:3)", compression)
+	}
+	uid := int(cmd.Int("uid"))
+	if err := utils.ValidateUID(uid); err != nil {
+		return err
+	}
+	gid := int(cmd.Int("gid"))
+	if err := utils.ValidateGID(gid); err != nil {
+		return err
+	}
+	if m := cmd.String("mode"); m != "" {
+		if _, err := utils.ValidateMode(m); err != nil {
+			return err
+		}
 	}
 	req := models.VolumeCreateRequest{
 		Name:        cmd.Args().Get(0),
 		SizeBytes:   size,
 		Compression: compression,
 		NoCOW:       cmd.Bool("nocow"),
-		UID:         int(cmd.Int("uid")),
-		GID:         int(cmd.Int("gid")),
+		UID:         uid,
+		GID:         gid,
 		Mode:        cmd.String("mode"),
 		Labels:      parseLabelsFlag(cmd),
 	}
@@ -190,6 +205,153 @@ func volumeExpand(ctx context.Context, cmd *cli.Command) error {
 	return output(cmd, resp, func() {
 		fmt.Printf("volume %q expanded to %s\n", resp.Name, utils.FormatBytes(resp.SizeBytes))
 	})
+}
+
+func volumeSet(ctx context.Context, cmd *cli.Command) error {
+	name := cmd.Args().First()
+	if name == "" {
+		return fmt.Errorf("volume name required")
+	}
+	var req models.VolumeUpdateRequest
+	if cmd.IsSet("uid") {
+		v := int(cmd.Int("uid"))
+		if err := utils.ValidateUID(v); err != nil {
+			return err
+		}
+		req.UID = &v
+	}
+	if cmd.IsSet("gid") {
+		v := int(cmd.Int("gid"))
+		if err := utils.ValidateGID(v); err != nil {
+			return err
+		}
+		req.GID = &v
+	}
+	if cmd.IsSet("mode") {
+		v := cmd.String("mode")
+		if _, err := utils.ValidateMode(v); err != nil {
+			return err
+		}
+		req.Mode = &v
+	}
+	if cmd.IsSet("compression") {
+		v := cmd.String("compression")
+		if v != "" && v != "none" && !utils.IsValidCompression(v) {
+			return fmt.Errorf("invalid compression %q, expected: zstd, lzo, zlib (with optional level, e.g. zstd:3)", v)
+		}
+		req.Compression = &v
+	}
+	if cmd.IsSet("nocow") {
+		v := cmd.Bool("nocow")
+		req.NoCOW = &v
+	}
+	if req == (models.VolumeUpdateRequest{}) {
+		return fmt.Errorf("no flags specified (use --uid, --gid, --mode, --compression, --nocow)")
+	}
+	resp, err := apiClient.UpdateVolume(ctx, name, req)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	return output(cmd, resp, func() {
+		fmt.Printf("volume %q updated\n", resp.Name)
+	})
+}
+
+func volumeLabelList(ctx context.Context, cmd *cli.Command) error {
+	name := cmd.Args().First()
+	if name == "" {
+		return fmt.Errorf("volume name required")
+	}
+	resp, err := apiClient.GetVolume(ctx, name)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	return output(cmd, resp.Labels, func() {
+		printLabels("", resp.Labels, 0)
+	})
+}
+
+func volumeLabelAdd(ctx context.Context, cmd *cli.Command) error {
+	if cmd.NArg() < 2 {
+		return fmt.Errorf("usage: volume label add <name> key=value [key=value...]")
+	}
+	name := cmd.Args().First()
+	vol, err := apiClient.GetVolume(ctx, name)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	labels := maps.Clone(vol.Labels)
+	for _, arg := range cmd.Args().Slice()[1:] {
+		k, v, ok := strings.Cut(arg, "=")
+		if !ok {
+			return fmt.Errorf("invalid label %q, expected key=value", arg)
+		}
+		labels[k] = v
+	}
+	if _, err := apiClient.UpdateVolume(ctx, name, models.VolumeUpdateRequest{Labels: &labels}); err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("labels updated on volume %q\n", name)
+	}
+	return nil
+}
+
+func volumeLabelRemove(ctx context.Context, cmd *cli.Command) error {
+	if cmd.NArg() < 2 {
+		return fmt.Errorf("usage: volume label remove <name> key [key...]")
+	}
+	name := cmd.Args().First()
+	vol, err := apiClient.GetVolume(ctx, name)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	labels := maps.Clone(vol.Labels)
+	for _, arg := range cmd.Args().Slice()[1:] {
+		key, val, hasVal := strings.Cut(arg, "=")
+		if hasVal && labels[key] != val {
+			return fmt.Errorf("label %q has value %q, not %q", key, labels[key], val)
+		}
+		delete(labels, key)
+	}
+	if _, err := apiClient.UpdateVolume(ctx, name, models.VolumeUpdateRequest{Labels: &labels}); err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("labels updated on volume %q\n", name)
+	}
+	return nil
+}
+
+func volumeLabelPatch(ctx context.Context, cmd *cli.Command) error {
+	name := cmd.Args().First()
+	if name == "" {
+		return fmt.Errorf("volume name required")
+	}
+	vol, err := apiClient.GetVolume(ctx, name)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	labels := make(map[string]string)
+	for _, k := range config.SoftReservedLabelKeys {
+		if v, ok := vol.Labels[k]; ok {
+			labels[k] = v
+		}
+	}
+	for _, arg := range cmd.Args().Slice()[1:] {
+		k, v, ok := strings.Cut(arg, "=")
+		if !ok {
+			return fmt.Errorf("invalid label %q, expected key=value", arg)
+		}
+		labels[k] = v
+	}
+	if _, err := apiClient.UpdateVolume(ctx, name, models.VolumeUpdateRequest{Labels: &labels}); err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("labels replaced on volume %q\n", name)
+	}
+	return nil
 }
 
 func volumeClone(ctx context.Context, cmd *cli.Command) error {
