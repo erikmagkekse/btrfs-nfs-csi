@@ -30,6 +30,7 @@ so much we can build on top of this, this release is the new foundation for a mu
 - **Column filtering**, `--columns` flag to select which table columns are displayed.
 - **Label filtering**, Repeatable `--label key=value` flags on all list operations.
 - **Delete protection**, Resources created by other identities require `--force` confirmation to delete.
+- **Volume label commands**, Add, remove, and list labels on volumes from the CLI (#128).
 - **Health check command**, Dedicated `health` subcommand for driver health status.
 - **Relative resize syntax**, Volume resize supports `+5Gi` relative notation.
 
@@ -74,6 +75,11 @@ so much we can build on top of this, this release is the new foundation for a mu
 - **Per-client reference counting**, Kernel NFS export created on first client reference, removed only when last reference is gone.
 - **Per-export metadata**, Each export reference stores IP, labels, and creation timestamp (replaces simple client string list).
 
+### Storage
+
+- **Squota support**, Detect simple quotas (`squota`) at startup and log the active quota mode (#127).
+- **Label backfill**, Volumes created before v0.10.0 get labels backfilled automatically on `ControllerPublishVolume` (#129).
+
 ### Deployment
 
 - **Integration subcommands**, `integration kubernetes controller` and `integration kubernetes driver` replace deprecated top-level commands.
@@ -117,10 +123,12 @@ so much we can build on top of this, this release is the new foundation for a mu
 ### Breaking Changes
 
 - Volume list responses return `Exports` (count) instead of `Clients` (array of IPs).
+- Export model changed from simple client IP list to reference-counted exports with labels. See [Upgrade Guide](#upgrade-guide) for migration steps.
 - Export endpoints now require request body with labels (was simple client IP string).
 - `/v1/exports` returns paginated response with summary/detail variants (was flat list).
-- Task creation requires `created-by` label (mandatory system label).
+- All create operations require a `created-by` label (mandatory system label).
 - `ExportVolume` renamed to `CreateVolumeExport`, `UnexportVolume` renamed to `DeleteVolumeExport`.
+- `controller` and `driver` top-level commands deprecated in favor of `integration kubernetes controller` and `integration kubernetes driver`.
 
 ### New & Changed Models
 
@@ -150,8 +158,10 @@ so much we can build on top of this, this release is the new foundation for a mu
 
 - `google.golang.org/grpc` 1.79.3 -> 1.80.0
 - `github.com/labstack/echo/v5` 5.0.4 -> 5.1.0
-- `github.com/rs/zerolog` 1.34.0 -> 1.35.0
-- `azure/setup-helm` 4 -> 5
+- `golang.org/x/sys` 0.42.0 -> 0.43.0
+- `golang.org/x/term` 0.41.0 -> 0.42.0
+- `actions/download-artifact` 4 -> 8
+- `actions/upload-artifact` 4 -> 7
 - Added: `swaggo/swag` v1.16.6, `urfave/cli/v3` v3.8.0, CSI snapshotter client v8.4.0
 
 ---
@@ -160,20 +170,16 @@ so much we can build on top of this, this release is the new foundation for a mu
 
 ### A note to existing Kubernetes users
 
-This release adds a lot of new surface area (CLI, REST API, task system, labels)
-and lays the groundwork for integrations beyond Kubernetes. If you are using
-btrfs-nfs-csi purely as a CSI driver, nothing changes for you. Your Helm values,
-StorageClasses, PVCs, and snapshots continue to work exactly as before. The new
-features are additive, the Kubernetes integration is fully backwards compatible.
+This release adds a lot of new surface area (CLI, REST API, task system, labels) and lays the groundwork for integrations beyond Kubernetes. If you are using btrfs-nfs-csi purely as a CSI driver, nothing changes for you. Your Helm values, StorageClasses, PVCs, and snapshots continue to work exactly as before. The new features are additive, the Kubernetes integration is fully backwards compatible. See the [CLI documentation](docs/operations.md#cli) for what's new.
 
 There are a few things to be aware of after upgrading:
 
 - **Volume labels**, Volumes created before v0.10.0 have no labels. Labels are backfilled automatically when pods are rescheduled (`ControllerPublishVolume` sets `created-by`, `kubernetes.pvc.name`, `kubernetes.pvc.namespace`, and `kubernetes.pvc.storageclassname`). No manual action required, labels appear gradually as pods restart (rolling updates, node drains, pod evictions).
 - **Snapshot labels**, Snapshots created before v0.10.0 will not have labels. This is purely cosmetic, they continue to work for restores and clones.
-- **Stale NFS exports**, The export model changed from a simple client IP list to reference-counted exports with labels. Pre-0.10.0 exports are migrated automatically but may leave orphaned entries. Volumes with stale exports cannot be deleted by the controller (the agent returns "busy"). If this happens, you will see it in the PVC events and controller logs. To clean up:
+- **Stale NFS exports**, The export model changed from a simple client IP list to reference-counted exports with labels. Pre-0.10.0 exports are migrated automatically(created-by=migrated) but may leave orphaned entries. Volumes with stale exports cannot be deleted by the controller (the agent returns "busy"). If this happens, you will see it in the PVC events and controller logs. To clean up:
   1. Scale down or delete the workloads using the affected volumes.
   2. Wait ~3 minutes until the VolumeAttachments are fully removed.
-  3. Remove the stale exports: `btrfs-nfs-csi export list`, then `btrfs-nfs-csi export remove <volume> <client>` for each stale entry.
+  3. Remove the stale exports: `btrfs-nfs-csi export list -o wide`, then `btrfs-nfs-csi export remove <volume> <client>` for each stale entry.
   4. Scale your workloads back up. The controller will create fresh exports with the new reference-counted model.
 
 ---
