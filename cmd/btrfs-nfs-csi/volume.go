@@ -95,16 +95,29 @@ func volumeCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	compression := cmd.String("compression")
-	if compression != "" && !utils.IsValidCompression(compression) {
+	if compression != "" && compression != "none" && !utils.IsValidCompression(compression) {
 		return fmt.Errorf("invalid compression %q, expected: zstd, lzo, zlib (with optional level, e.g. zstd:3)", compression)
+	}
+	uid := int(cmd.Int("uid"))
+	if err := utils.ValidateUID(uid); err != nil {
+		return err
+	}
+	gid := int(cmd.Int("gid"))
+	if err := utils.ValidateGID(gid); err != nil {
+		return err
+	}
+	if m := cmd.String("mode"); m != "" {
+		if _, err := utils.ValidateMode(m); err != nil {
+			return err
+		}
 	}
 	req := models.VolumeCreateRequest{
 		Name:        cmd.Args().Get(0),
 		SizeBytes:   size,
 		Compression: compression,
 		NoCOW:       cmd.Bool("nocow"),
-		UID:         int(cmd.Int("uid")),
-		GID:         int(cmd.Int("gid")),
+		UID:         uid,
+		GID:         gid,
 		Mode:        cmd.String("mode"),
 		Labels:      parseLabelsFlag(cmd),
 	}
@@ -191,6 +204,56 @@ func volumeExpand(ctx context.Context, cmd *cli.Command) error {
 	}
 	return output(cmd, resp, func() {
 		fmt.Printf("volume %q expanded to %s\n", resp.Name, utils.FormatBytes(resp.SizeBytes))
+	})
+}
+
+func volumeSet(ctx context.Context, cmd *cli.Command) error {
+	name := cmd.Args().First()
+	if name == "" {
+		return fmt.Errorf("volume name required")
+	}
+	var req models.VolumeUpdateRequest
+	if cmd.IsSet("uid") {
+		v := int(cmd.Int("uid"))
+		if err := utils.ValidateUID(v); err != nil {
+			return err
+		}
+		req.UID = &v
+	}
+	if cmd.IsSet("gid") {
+		v := int(cmd.Int("gid"))
+		if err := utils.ValidateGID(v); err != nil {
+			return err
+		}
+		req.GID = &v
+	}
+	if cmd.IsSet("mode") {
+		v := cmd.String("mode")
+		if _, err := utils.ValidateMode(v); err != nil {
+			return err
+		}
+		req.Mode = &v
+	}
+	if cmd.IsSet("compression") {
+		v := cmd.String("compression")
+		if v != "" && v != "none" && !utils.IsValidCompression(v) {
+			return fmt.Errorf("invalid compression %q, expected: zstd, lzo, zlib (with optional level, e.g. zstd:3)", v)
+		}
+		req.Compression = &v
+	}
+	if cmd.IsSet("nocow") {
+		v := cmd.Bool("nocow")
+		req.NoCOW = &v
+	}
+	if req == (models.VolumeUpdateRequest{}) {
+		return fmt.Errorf("no flags specified (use --uid, --gid, --mode, --compression, --nocow)")
+	}
+	resp, err := apiClient.UpdateVolume(ctx, name, req)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	return output(cmd, resp, func() {
+		fmt.Printf("volume %q updated\n", resp.Name)
 	})
 }
 
