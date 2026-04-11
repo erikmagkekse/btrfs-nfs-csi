@@ -158,22 +158,23 @@ so much we can build on top of this, this release is the new foundation for a mu
 
 ## Upgrade Guide
 
-### Setting `created-by` on pre-0.10.0 volumes
+### A note to existing Kubernetes users
 
-Volumes created before v0.10.0 have no `created-by` label. The v0.10.0 agent
-allows setting this label once via update if it was previously empty. After it
-is set, it becomes immutable like on any new volume.
+This release adds a lot of new surface area (CLI, REST API, task system, labels)
+and lays the groundwork for integrations beyond Kubernetes. If you are using
+btrfs-nfs-csi purely as a CSI driver, nothing changes for you. Your Helm values,
+StorageClasses, PVCs, and snapshots continue to work exactly as before. The new
+features are additive, the Kubernetes integration is fully backwards compatible.
 
-> **Note:** If you are using the Kubernetes CSI driver integration, set the
-> value to `k8s` to match the identity used by the controller. If you used
-> the agent without the CSI driver, set it to any value that identifies your
-> integration (e.g. `cli`, `nomad`, `custom`). In the future you can also use
-> the `AGENT_CSI_IDENTITY` env var to configure the identity for new resources.
+There are a few things to be aware of after upgrading:
 
-Placeholder for release...
-
-NFS exports are re-created on each publish and will already carry the correct
-`created-by` label after upgrading the controller, no manual action needed.
+- **Volume labels**, Volumes created before v0.10.0 have no labels. Labels are backfilled automatically when pods are rescheduled (`ControllerPublishVolume` sets `created-by`, `kubernetes.pvc.name`, `kubernetes.pvc.namespace`, and `kubernetes.pvc.storageclassname`). No manual action required, labels appear gradually as pods restart (rolling updates, node drains, pod evictions).
+- **Snapshot labels**, Snapshots created before v0.10.0 will not have labels. This is purely cosmetic, they continue to work for restores and clones.
+- **Stale NFS exports**, The export model changed from a simple client IP list to reference-counted exports with labels. Pre-0.10.0 exports are migrated automatically but may leave orphaned entries. Volumes with stale exports cannot be deleted by the controller (the agent returns "busy"). If this happens, you will see it in the PVC events and controller logs. To clean up:
+  1. Scale down or delete the workloads using the affected volumes.
+  2. Wait ~3 minutes until the VolumeAttachments are fully removed.
+  3. Remove the stale exports: `btrfs-nfs-csi export list`, then `btrfs-nfs-csi export remove <volume> <client>` for each stale entry.
+  4. Scale your workloads back up. The controller will create fresh exports with the new reference-counted model.
 
 ---
 

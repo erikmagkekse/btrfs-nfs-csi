@@ -118,9 +118,10 @@ func (s *Server) resolveVolumeParams(ctx context.Context, params map[string]stri
 	scName := ptr.Deref(pvc.Spec.StorageClassName, "")
 	vp.StorageClass = scName
 	vp.Labels = map[string]string{
-		labelPVCName:         pvcName,
-		labelPVCNamespace:    pvcNamespace,
-		labelPVCStorageClass: scName,
+		labelPVCName:          pvcName,
+		labelPVCNamespace:     pvcNamespace,
+		labelPVCStorageClass:  scName,
+		config.LabelCreatedBy: config.IdentityK8sController,
 	}
 	for k, v := range envDefaultLabels {
 		if _, exists := vp.Labels[k]; !exists {
