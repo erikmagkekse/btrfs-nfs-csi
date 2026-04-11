@@ -182,6 +182,11 @@ btrfs-nfs-csi volume ls -l env=prod          # filter by label
 btrfs-nfs-csi volume ls -l env=prod,team=be  # comma-separated (AND)
 btrfs-nfs-csi volume delete my-vol           # safe: only deletes if created-by matches caller
 btrfs-nfs-csi volume delete my-vol --confirm --yes  # force delete any volume
+btrfs-nfs-csi volume label list my-vol       # show labels
+btrfs-nfs-csi volume label add my-vol env=prod tier=hot  # add/update labels
+btrfs-nfs-csi volume label remove my-vol tier            # remove by key
+btrfs-nfs-csi volume label remove my-vol tier=hot        # remove by key+value (must match)
+btrfs-nfs-csi volume label patch my-vol env=staging  # replace all labels (preserves reserved labels)
 
 # xargs pipeline: delete all CLI-created volumes matching a pattern
 btrfs-nfs-csi volume ls -c name | grep '^test-' | xargs btrfs-nfs-csi volume delete

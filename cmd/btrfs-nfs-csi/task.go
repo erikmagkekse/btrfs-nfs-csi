@@ -87,10 +87,10 @@ func genericResultSummary(result json.RawMessage) string {
 
 func taskTook(createdAt time.Time, startedAt, completedAt *time.Time) string {
 	if completedAt != nil {
-		return fmtDuration(completedAt.Sub(createdAt))
+		return completedAt.Sub(createdAt).Truncate(time.Millisecond).String()
 	}
 	if startedAt != nil {
-		return fmtDuration(time.Since(*startedAt))
+		return time.Since(*startedAt).Truncate(time.Millisecond).String()
 	}
 	return "-"
 }
@@ -185,7 +185,7 @@ func taskGet(ctx context.Context, cmd *cli.Command) error {
 		}
 		if resp.CompletedAt != nil {
 			fmt.Printf("Completed:  %s\n", resp.CompletedAt.Local().Format(timeFmt))
-			fmt.Printf("Took:       %s\n", fmtDuration(resp.CompletedAt.Sub(resp.CreatedAt)))
+			fmt.Printf("Took:       %s\n", resp.CompletedAt.Sub(resp.CreatedAt).Truncate(time.Millisecond).String())
 		}
 		if s := taskResultSummary(resp); s != "" {
 			fmt.Printf("Result:     %s\n", s)

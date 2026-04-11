@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 
@@ -65,6 +66,7 @@ func volumeGet(ctx context.Context, cmd *cli.Command) error {
 	}
 	return output(cmd, resp, func() {
 		fmt.Printf("Name:         %s\n", resp.Name)
+		fmt.Printf("Path:         %s\n", resp.Path)
 		fmt.Printf("Size:         %s\n", utils.FormatBytes(resp.SizeBytes))
 		fmt.Printf("Used:         %s (%.0f%%)\n", utils.FormatBytes(resp.UsedBytes), usedPct(resp.UsedBytes, resp.SizeBytes))
 		fmt.Printf("Quota:        %s\n", utils.FormatBytes(resp.QuotaBytes))
@@ -190,6 +192,103 @@ func volumeExpand(ctx context.Context, cmd *cli.Command) error {
 	return output(cmd, resp, func() {
 		fmt.Printf("volume %q expanded to %s\n", resp.Name, utils.FormatBytes(resp.SizeBytes))
 	})
+}
+
+func volumeLabelList(ctx context.Context, cmd *cli.Command) error {
+	name := cmd.Args().First()
+	if name == "" {
+		return fmt.Errorf("volume name required")
+	}
+	resp, err := apiClient.GetVolume(ctx, name)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	return output(cmd, resp.Labels, func() {
+		printLabels("", resp.Labels, 0)
+	})
+}
+
+func volumeLabelAdd(ctx context.Context, cmd *cli.Command) error {
+	if cmd.NArg() < 2 {
+		return fmt.Errorf("usage: volume label add <name> key=value [key=value...]")
+	}
+	name := cmd.Args().First()
+	vol, err := apiClient.GetVolume(ctx, name)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	labels := maps.Clone(vol.Labels)
+	for _, arg := range cmd.Args().Slice()[1:] {
+		k, v, ok := strings.Cut(arg, "=")
+		if !ok {
+			return fmt.Errorf("invalid label %q, expected key=value", arg)
+		}
+		labels[k] = v
+	}
+	if _, err := apiClient.UpdateVolume(ctx, name, models.VolumeUpdateRequest{Labels: &labels}); err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("labels updated on volume %q\n", name)
+	}
+	return nil
+}
+
+func volumeLabelRemove(ctx context.Context, cmd *cli.Command) error {
+	if cmd.NArg() < 2 {
+		return fmt.Errorf("usage: volume label remove <name> key [key...]")
+	}
+	name := cmd.Args().First()
+	vol, err := apiClient.GetVolume(ctx, name)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	labels := maps.Clone(vol.Labels)
+	for _, arg := range cmd.Args().Slice()[1:] {
+		key, val, hasVal := strings.Cut(arg, "=")
+		if hasVal && labels[key] != val {
+			return fmt.Errorf("label %q has value %q, not %q", key, labels[key], val)
+		}
+		delete(labels, key)
+	}
+	if _, err := apiClient.UpdateVolume(ctx, name, models.VolumeUpdateRequest{Labels: &labels}); err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("labels updated on volume %q\n", name)
+	}
+	return nil
+}
+
+func volumeLabelPatch(ctx context.Context, cmd *cli.Command) error {
+	name := cmd.Args().First()
+	if name == "" {
+		return fmt.Errorf("volume name required")
+	}
+	vol, err := apiClient.GetVolume(ctx, name)
+	if err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	labels := make(map[string]string)
+	for _, k := range config.SoftReservedLabelKeys {
+		if v, ok := vol.Labels[k]; ok {
+			labels[k] = v
+		}
+	}
+	for _, arg := range cmd.Args().Slice()[1:] {
+		k, v, ok := strings.Cut(arg, "=")
+		if !ok {
+			return fmt.Errorf("invalid label %q, expected key=value", arg)
+		}
+		labels[k] = v
+	}
+	if _, err := apiClient.UpdateVolume(ctx, name, models.VolumeUpdateRequest{Labels: &labels}); err != nil {
+		return wrapErr(err, "volume", name)
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("labels replaced on volume %q\n", name)
+	}
+	return nil
 }
 
 func volumeClone(ctx context.Context, cmd *cli.Command) error {

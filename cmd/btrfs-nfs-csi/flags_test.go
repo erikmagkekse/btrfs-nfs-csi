@@ -30,10 +30,3 @@ func TestEmptyHint_NoOutput(t *testing.T) {
 	// count > 0 should not print
 	emptyHint("volumes", 1, false, false)
 }
-
-func TestFmtDuration(t *testing.T) {
-	assert.Equal(t, "0ms", fmtDuration(0))
-	assert.Equal(t, "50ms", fmtDuration(50_000_000))
-	assert.Equal(t, "1s", fmtDuration(1_000_000_000))
-	assert.Equal(t, "10s", fmtDuration(10_000_000_000))
-}

@@ -75,6 +75,7 @@ func snapshotGet(ctx context.Context, cmd *cli.Command) error {
 	}
 	return output(cmd, resp, func() {
 		fmt.Printf("Name:       %s\n", resp.Name)
+		fmt.Printf("Path:       %s\n", resp.Path)
 		fmt.Printf("Volume:     %s\n", resp.Volume)
 		fmt.Printf("Size:       %s\n", utils.FormatBytes(resp.SizeBytes))
 		fmt.Printf("Used:       %s\n", utils.FormatBytes(resp.UsedBytes))

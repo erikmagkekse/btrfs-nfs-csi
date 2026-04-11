@@ -23,13 +23,6 @@ func TestWrapErr(t *testing.T) {
 	assert.Nil(t, wrapErr(nil, "volume", "test"))
 }
 
-func TestFormatLabels(t *testing.T) {
-	assert.Equal(t, "none", formatLabels(nil))
-	assert.Equal(t, "none", formatLabels(map[string]string{}))
-	assert.Equal(t, "env=prod", formatLabels(map[string]string{"env": "prod"}))
-	assert.Equal(t, "env=prod, team=be", formatLabels(map[string]string{"team": "be", "env": "prod"}))
-}
-
 func TestFormatLabelsShort(t *testing.T) {
 	assert.Equal(t, "-", formatLabelsShort(nil))
 	assert.Equal(t, "-", formatLabelsShort(map[string]string{}))

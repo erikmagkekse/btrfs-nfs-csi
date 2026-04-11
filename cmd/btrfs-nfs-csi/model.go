@@ -116,6 +116,41 @@ func volumeCmd() *cli.Command {
 				Flags:     []cli.Flag{labelFlag()},
 				Action:    volumeClone,
 			},
+			{
+				Name:    "label",
+				Aliases: []string{"labels", "lb"},
+				Usage:   "manage volume labels",
+				Commands: []*cli.Command{
+					{
+						Name:      "list",
+						Aliases:   []string{"ls", "l"},
+						Usage:     "list labels on a volume",
+						ArgsUsage: "<name>",
+						Action:    volumeLabelList,
+					},
+					{
+						Name:      "add",
+						Aliases:   []string{"a"},
+						Usage:     "add or update labels on a volume",
+						ArgsUsage: "<name> key=value [key=value...]",
+						Action:    volumeLabelAdd,
+					},
+					{
+						Name:      "remove",
+						Aliases:   []string{"rm", "r"},
+						Usage:     "remove labels from a volume",
+						ArgsUsage: "<name> key[=value] [key[=value]...]",
+						Action:    volumeLabelRemove,
+					},
+					{
+						Name:      "patch",
+						Aliases:   []string{"p"},
+						Usage:     "replace all labels (preserves reserved labels)",
+						ArgsUsage: "<name> [key=value...]",
+						Action:    volumeLabelPatch,
+					},
+				},
+			},
 		},
 	}
 }
