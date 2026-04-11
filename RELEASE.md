@@ -176,6 +176,12 @@ There are a few things to be aware of after upgrading:
 
 - **Volume labels**, Volumes created before v0.10.0 have no labels. Labels are backfilled automatically when pods are rescheduled (`ControllerPublishVolume` sets `created-by`, `kubernetes.pvc.name`, `kubernetes.pvc.namespace`, and `kubernetes.pvc.storageclassname`). No manual action required, labels appear gradually as pods restart (rolling updates, node drains, pod evictions).
 - **Snapshot labels**, Snapshots created before v0.10.0 will not have labels. This is purely cosmetic, they continue to work for restores and clones.
+- **Manual setup.yaml users**, If you deploy from `deploy/driver/setup.yaml` instead of Helm, re-apply the updated manifest. Key changes:
+  - Container image updated to `0.10.0`.
+  - Controller args changed from `["controller"]` to `["integration", "kubernetes", "controller"]`.
+  - Driver args changed from `["driver"]` to `["integration", "kubernetes", "driver"]`.
+  - `--extra-create-metadata` added to csi-provisioner (required for PVC label propagation).
+  - `hostNetwork: true` is now enabled by default on the driver DaemonSet (NFS4 sessions survive driver pod restarts). Previously this was commented out.
 - **Stale NFS exports**, The export model changed from a simple client IP list to reference-counted exports with labels. Pre-0.10.0 exports are migrated automatically(created-by=migrated) but may leave orphaned entries. Volumes with stale exports cannot be deleted by the controller (the agent returns "busy"). If this happens, you will see it in the PVC events and controller logs. To clean up:
   1. Scale down or delete the workloads using the affected volumes.
   2. Wait ~3 minutes until the VolumeAttachments are fully removed.
