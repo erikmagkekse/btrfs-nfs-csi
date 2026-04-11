@@ -1,8 +1,9 @@
 package controller
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"slices"
 	"time"
 
 	agentclient "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/client"
@@ -26,7 +27,7 @@ func sortedAgents(agents map[string]*agentclient.Client) []agentEntry {
 	for sc, c := range agents {
 		entries = append(entries, agentEntry{sc: sc, client: c})
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].sc < entries[j].sc })
+	slices.SortFunc(entries, func(a, b agentEntry) int { return cmp.Compare(a.sc, b.sc) })
 	return entries
 }
 

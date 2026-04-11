@@ -3,7 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -178,7 +178,7 @@ func mergeUserLabels(dst, user map[string]string, maxUser int) (skippedKeys []st
 	for k := range user {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	merged := 0
 	truncated := false
@@ -209,7 +209,7 @@ func mergeUserLabels(dst, user map[string]string, maxUser int) (skippedKeys []st
 
 func parseLabels(raw string) map[string]string {
 	labels := make(map[string]string)
-	for _, pair := range strings.Split(raw, ",") {
+	for pair := range strings.SplitSeq(raw, ",") {
 		pair = strings.TrimSpace(pair)
 		if pair == "" {
 			continue

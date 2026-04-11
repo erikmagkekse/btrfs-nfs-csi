@@ -40,7 +40,7 @@ func splitLabelsFlag(cmd *cli.Command) []string {
 	raw := cmd.StringSlice("label")
 	var out []string
 	for _, entry := range raw {
-		for _, part := range strings.Split(entry, ",") {
+		for part := range strings.SplitSeq(entry, ",") {
 			if p := strings.TrimSpace(part); p != "" {
 				out = append(out, p)
 			}

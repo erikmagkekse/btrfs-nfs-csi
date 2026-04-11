@@ -66,10 +66,10 @@ func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, e
 		return QgroupInfo{}, err
 	}
 	var subvolID string
-	for _, line := range strings.Split(showOut, "\n") {
+	for line := range strings.SplitSeq(showOut, "\n") {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "Subvolume ID:") {
-			subvolID = strings.TrimSpace(strings.TrimPrefix(trimmed, "Subvolume ID:"))
+		if v, ok := strings.CutPrefix(trimmed, "Subvolume ID:"); ok {
+			subvolID = strings.TrimSpace(v)
 			break
 		}
 	}
@@ -77,26 +77,20 @@ func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, e
 		return QgroupInfo{}, fmt.Errorf("subvolume ID not found for %s", path)
 	}
 
-	qgroupID := "0/" + subvolID
-
 	out, err := m.cmd.Run(ctx, m.bin, "qgroup", "show", "-re", "--raw", path)
 	if err != nil {
 		return QgroupInfo{}, err
 	}
-	for _, line := range strings.Split(out, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 3 && fields[0] == qgroupID {
-			var info QgroupInfo
-			if _, err := fmt.Sscanf(fields[1], "%d", &info.Referenced); err != nil {
-				return QgroupInfo{}, fmt.Errorf("parse referenced bytes %q: %w", fields[1], err)
-			}
-			if _, err := fmt.Sscanf(fields[2], "%d", &info.Exclusive); err != nil {
-				return QgroupInfo{}, fmt.Errorf("parse exclusive bytes %q: %w", fields[2], err)
-			}
-			return info, nil
-		}
+	qgroups, err := parseQgroupMap(out)
+	if err != nil {
+		return QgroupInfo{}, err
 	}
-	return QgroupInfo{}, fmt.Errorf("qgroup %s not found for %s", qgroupID, path)
+	qgroupID := "0/" + subvolID
+	info, ok := qgroups[qgroupID]
+	if !ok {
+		return QgroupInfo{}, fmt.Errorf("qgroup %s not found for %s", qgroupID, path)
+	}
+	return info, nil
 }
 
 func (m *Manager) SetNoCOW(ctx context.Context, path string) error {
@@ -186,22 +180,43 @@ func (m *Manager) ScrubStatus(ctx context.Context, path string) (*ScrubStatus, e
 	return parseScrubStatus(out)
 }
 
+// QgroupUsageBulk returns qgroup usage for all subvolumes under path.
+// Runs `btrfs subvolume list -o` and `btrfs qgroup show -re --raw` once each,
+// joins by subvolume ID. Returns map keyed by relative subvolume path.
+func (m *Manager) QgroupUsageBulk(ctx context.Context, path string) (map[string]QgroupInfo, error) {
+	listOut, err := m.cmd.Run(ctx, m.bin, "subvolume", "list", "-o", path)
+	if err != nil {
+		return nil, fmt.Errorf("subvolume list: %w", err)
+	}
+	qgroupOut, err := m.cmd.Run(ctx, m.bin, "qgroup", "show", "-re", "--raw", path)
+	if err != nil {
+		return nil, fmt.Errorf("qgroup show: %w", err)
+	}
+
+	subvols := parseSubvolumeListFull(listOut)
+	qgroups, err := parseQgroupMap(qgroupOut)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]QgroupInfo, len(subvols))
+	for _, sv := range subvols {
+		if info, ok := qgroups["0/"+sv.ID]; ok {
+			result[sv.Path] = info
+		}
+	}
+	return result, nil
+}
+
 func (m *Manager) SubvolumeList(ctx context.Context, path string) ([]SubvolumeInfo, error) {
 	out, err := m.cmd.Run(ctx, m.bin, "subvolume", "list", "-o", path)
 	if err != nil {
 		return nil, err
 	}
-
-	var subs []SubvolumeInfo
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		if line == "" {
-			continue
-		}
-		// format: ID <id> gen <gen> top level <tl> path <path>
-		parts := strings.Fields(line)
-		if len(parts) >= 9 {
-			subs = append(subs, SubvolumeInfo{Path: parts[8]})
-		}
+	entries := parseSubvolumeListFull(out)
+	subs := make([]SubvolumeInfo, len(entries))
+	for i, e := range entries {
+		subs[i] = SubvolumeInfo{Path: e.Path}
 	}
 	return subs, nil
 }

@@ -44,16 +44,16 @@ func IsValidCompression(s string) bool {
 	if s == "" || s == "none" {
 		return true
 	}
-	parts := strings.SplitN(s, ":", 2)
-	maxLevel, ok := compressionMaxLevel[parts[0]]
+	algo, levelStr, hasLevel := strings.Cut(s, ":")
+	maxLevel, ok := compressionMaxLevel[algo]
 	if !ok {
 		return false
 	}
-	if len(parts) == 2 {
+	if hasLevel {
 		if maxLevel == 0 {
 			return false
 		}
-		level, err := strconv.Atoi(parts[1])
+		level, err := strconv.Atoi(levelStr)
 		if err != nil || level < 1 || level > maxLevel {
 			return false
 		}

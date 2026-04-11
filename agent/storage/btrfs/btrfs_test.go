@@ -603,3 +603,155 @@ func TestScrubStatus(t *testing.T) {
 		assert.Equal(t, []string{"scrub", "start", "-B", "/mnt/data"}, m.Calls[0])
 	})
 }
+
+func TestParseSubvolumeListFull(t *testing.T) {
+	t.Run("multiple entries", func(t *testing.T) {
+		out := strings.Join([]string{
+			"ID 259 gen 12 top level 5 path tenant/vol1/data",
+			"ID 260 gen 13 top level 5 path tenant/vol2/data",
+			"ID 261 gen 14 top level 5 path tenant/snapshots/snap1/data",
+		}, "\n")
+
+		entries := parseSubvolumeListFull(out)
+		require.Len(t, entries, 3)
+		assert.Equal(t, "259", entries[0].ID)
+		assert.Equal(t, "tenant/vol1/data", entries[0].Path)
+		assert.Equal(t, "260", entries[1].ID)
+		assert.Equal(t, "tenant/vol2/data", entries[1].Path)
+		assert.Equal(t, "261", entries[2].ID)
+		assert.Equal(t, "tenant/snapshots/snap1/data", entries[2].Path)
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		entries := parseSubvolumeListFull("")
+		assert.Empty(t, entries)
+	})
+
+	t.Run("skips non-ID lines", func(t *testing.T) {
+		out := "some header line\nID 259 gen 12 top level 5 path vol1\n"
+		entries := parseSubvolumeListFull(out)
+		require.Len(t, entries, 1)
+		assert.Equal(t, "259", entries[0].ID)
+	})
+}
+
+func TestParseQgroupMap(t *testing.T) {
+	t.Run("multiple entries", func(t *testing.T) {
+		out := strings.Join([]string{
+			"qgroupid         rfer         excl",
+			"--------         ----         ----",
+			"0/259        16384         8192",
+			"0/260        32768         4096",
+		}, "\n")
+
+		m, err := parseQgroupMap(out)
+		require.NoError(t, err)
+		require.Len(t, m, 2)
+		assert.Equal(t, uint64(16384), m["0/259"].Referenced)
+		assert.Equal(t, uint64(8192), m["0/259"].Exclusive)
+		assert.Equal(t, uint64(32768), m["0/260"].Referenced)
+		assert.Equal(t, uint64(4096), m["0/260"].Exclusive)
+	})
+
+	t.Run("skips headers", func(t *testing.T) {
+		out := "qgroupid         rfer         excl\n--------         ----         ----\n"
+		m, err := parseQgroupMap(out)
+		require.NoError(t, err)
+		assert.Empty(t, m)
+	})
+
+	t.Run("parse error", func(t *testing.T) {
+		out := "0/259        abc         8192\n"
+		_, err := parseQgroupMap(out)
+		assert.Error(t, err)
+	})
+}
+
+func TestQgroupUsageBulk(t *testing.T) {
+	listOutput := strings.Join([]string{
+		"ID 259 gen 12 top level 5 path tenant/vol1/data",
+		"ID 260 gen 13 top level 5 path tenant/vol2/data",
+		"ID 261 gen 14 top level 5 path tenant/snapshots/snap1/data",
+	}, "\n")
+
+	qgroupOutput := strings.Join([]string{
+		"qgroupid         rfer         excl",
+		"--------         ----         ----",
+		"0/5          16384        16384",
+		"0/259        10000         5000",
+		"0/260        20000         8000",
+		"0/261         3000         1000",
+	}, "\n")
+
+	t.Run("success", func(t *testing.T) {
+		m := &utils.MockRunner{
+			RunFn: func(args []string) (string, error) {
+				if slices.Contains(args, "list") {
+					return listOutput, nil
+				}
+				return qgroupOutput, nil
+			},
+		}
+		mgr := newTestManager(m)
+
+		result, err := mgr.QgroupUsageBulk(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		require.Len(t, result, 3)
+
+		assert.Equal(t, uint64(10000), result["tenant/vol1/data"].Referenced)
+		assert.Equal(t, uint64(5000), result["tenant/vol1/data"].Exclusive)
+		assert.Equal(t, uint64(20000), result["tenant/vol2/data"].Referenced)
+		assert.Equal(t, uint64(3000), result["tenant/snapshots/snap1/data"].Referenced)
+
+		require.Len(t, m.Calls, 2, "should make exactly 2 btrfs calls")
+	})
+
+	t.Run("subvol without qgroup is skipped", func(t *testing.T) {
+		// qgroup output missing 0/260
+		partialQgroup := strings.Join([]string{
+			"0/259        10000         5000",
+			"0/261         3000         1000",
+		}, "\n")
+
+		m := &utils.MockRunner{
+			RunFn: func(args []string) (string, error) {
+				if slices.Contains(args, "list") {
+					return listOutput, nil
+				}
+				return partialQgroup, nil
+			},
+		}
+		mgr := newTestManager(m)
+
+		result, err := mgr.QgroupUsageBulk(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Len(t, result, 2)
+		_, hasVol2 := result["tenant/vol2/data"]
+		assert.False(t, hasVol2)
+	})
+
+	t.Run("subvolume list error", func(t *testing.T) {
+		m := &utils.MockRunner{Err: fmt.Errorf("list failed")}
+		mgr := newTestManager(m)
+
+		_, err := mgr.QgroupUsageBulk(context.Background(), "/mnt/data")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "subvolume list")
+	})
+
+	t.Run("qgroup show error", func(t *testing.T) {
+		m := &utils.MockRunner{
+			RunFn: func(args []string) (string, error) {
+				if slices.Contains(args, "list") {
+					return listOutput, nil
+				}
+				return "", fmt.Errorf("qgroup show failed")
+			},
+		}
+		mgr := newTestManager(m)
+
+		_, err := mgr.QgroupUsageBulk(context.Background(), "/mnt/data")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "qgroup show")
+	})
+}

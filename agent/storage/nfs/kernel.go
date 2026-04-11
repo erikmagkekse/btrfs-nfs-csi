@@ -39,8 +39,8 @@ func exportfsClient(client string) string {
 
 // unwrapBrackets removes bracket wrapping from an IPv6 address returned by exportfs -v.
 func unwrapBrackets(client string) string {
-	if strings.HasPrefix(client, "[") && strings.Contains(client, "]") {
-		return strings.TrimPrefix(strings.SplitN(client, "]", 2)[0], "[")
+	if addr, _, ok := strings.Cut(client, "]"); ok && strings.HasPrefix(addr, "[") {
+		return strings.TrimPrefix(addr, "[")
 	}
 	return client
 }
@@ -92,7 +92,7 @@ func (e *kernelExporter) ListExports(ctx context.Context) ([]ExportInfo, error) 
 func parseExports(output string) []ExportInfo {
 	var exports []ExportInfo
 	var currentPath string
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
 			continue
@@ -101,7 +101,8 @@ func parseExports(output string) []ExportInfo {
 		switch {
 		case !indented && len(fields) >= 2:
 			// path and client on same line
-			client := unwrapBrackets(strings.SplitN(fields[1], "(", 2)[0])
+			raw, _, _ := strings.Cut(fields[1], "(")
+			client := unwrapBrackets(raw)
 			exports = append(exports, ExportInfo{Path: fields[0], Client: client})
 			currentPath = ""
 		case !indented:
@@ -109,7 +110,8 @@ func parseExports(output string) []ExportInfo {
 			currentPath = fields[0]
 		case currentPath != "":
 			// indented client line
-			client := unwrapBrackets(strings.SplitN(fields[0], "(", 2)[0])
+			raw, _, _ := strings.Cut(fields[0], "(")
+			client := unwrapBrackets(raw)
 			exports = append(exports, ExportInfo{Path: currentPath, Client: client})
 			currentPath = ""
 		}

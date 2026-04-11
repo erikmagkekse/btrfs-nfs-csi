@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -32,7 +33,18 @@ func (s *Storage) startUsageUpdater(ctx context.Context, mgr *btrfs.Manager, int
 }
 
 func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant string) {
+	start := time.Now()
 	log.Debug().Str("tenant", tenant).Msg("usage updater: starting scan")
+
+	// bulk-fetch qgroup usage: 2 btrfs commands total instead of 2*N
+	var usageMap map[string]btrfs.QgroupInfo
+	if s.quotaEnabled {
+		var err error
+		usageMap, err = mgr.QgroupUsageBulk(ctx, s.mountPoint)
+		if err != nil {
+			log.Warn().Err(err).Str("tenant", tenant).Msg("usage updater: bulk qgroup query failed, skipping usage updates")
+		}
+	}
 
 	var updated, failed, count int
 	s.volumes.Range(func(t, name string, cached *VolumeMetadata) bool {
@@ -67,14 +79,15 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 
 		// detect usage drift
 		var used uint64
-		if meta.QuotaBytes > 0 {
-			u, err := mgr.QgroupUsage(ctx, dataDir)
-			if err != nil {
-				log.Warn().Err(err).Str("volume", name).Msg("usage updater: qgroup query failed, skipping volume - if issue persists check your quotas")
+		if meta.QuotaBytes > 0 && usageMap != nil {
+			relPath, _ := filepath.Rel(s.mountPoint, dataDir)
+			if qi, ok := usageMap[relPath]; ok {
+				used = qi.Referenced
+			} else {
+				log.Warn().Str("volume", name).Str("path", relPath).Msg("usage updater: volume not found in bulk qgroup data")
 				failed++
 				return true
 			}
-			used = u
 			if used != meta.UsedBytes {
 				changed = true
 			}
@@ -115,7 +128,7 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 	})
 
 	VolumesGauge.WithLabelValues(tenant).Set(float64(count))
-	log.Info().Str("tenant", tenant).Int("volumes", count).Int("updated", updated).Int("failed", failed).Msg("usage updater: volume scan complete")
+	log.Info().Str("tenant", tenant).Int("volumes", count).Int("updated", updated).Int("failed", failed).Str("took", time.Since(start).String()).Msg("usage updater: scan complete")
 
 	// update snapshot usage
 	var snapUpdated, snapFailed, snapCount int
@@ -126,20 +139,25 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 		snapCount++
 
 		dataDir := s.snapshots.DataPath(tenant, name)
-		info, err := mgr.QgroupUsageEx(ctx, dataDir)
-		if err != nil {
-			log.Warn().Err(err).Str("snapshot", name).Msg("usage updater: snapshot qgroup query failed")
+
+		if usageMap == nil {
+			return true
+		}
+		relPath, _ := filepath.Rel(s.mountPoint, dataDir)
+		qi, ok := usageMap[relPath]
+		if !ok {
+			log.Warn().Str("snapshot", name).Str("path", relPath).Msg("usage updater: snapshot not found in bulk qgroup data")
 			snapFailed++
 			return true
 		}
 
-		if info.Referenced == cached.UsedBytes && info.Exclusive == cached.ExclusiveBytes {
+		if qi.Referenced == cached.UsedBytes && qi.Exclusive == cached.ExclusiveBytes {
 			return true
 		}
 
 		if _, err := s.snapshots.Update(tenant, name, func(m *SnapshotMetadata) {
-			m.UsedBytes = info.Referenced
-			m.ExclusiveBytes = info.Exclusive
+			m.UsedBytes = qi.Referenced
+			m.ExclusiveBytes = qi.Exclusive
 			m.UpdatedAt = time.Now().UTC()
 		}); err != nil {
 			log.Error().Err(err).Str("snapshot", name).Msg("usage updater: failed to write snapshot metadata")

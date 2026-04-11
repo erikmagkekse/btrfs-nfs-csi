@@ -13,7 +13,7 @@ import (
 // Missing (empty path): devid    2 size 0 used 0 path  MISSING
 func parseDevices(out string) ([]BTRFSDevice, error) {
 	var devices []BTRFSDevice
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "devid") {
 			continue
@@ -63,22 +63,21 @@ func parseDevices(out string) ([]BTRFSDevice, error) {
 func parseDeviceErrors(out string) ([]DeviceErrors, error) {
 	var all []DeviceErrors
 	var cur *DeviceErrors
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
 		// format: [/dev/sda].write_io_errs    0
-		bracket := strings.Index(line, "].")
-		if bracket < 0 {
+		devicePart, rest, ok := strings.Cut(line, "].")
+		if !ok {
 			continue
 		}
-		device := line[1:bracket]
+		device := strings.TrimPrefix(devicePart, "[")
 		if cur == nil || cur.Device != device {
 			all = append(all, DeviceErrors{Device: device})
 			cur = &all[len(all)-1]
 		}
-		rest := line[bracket+2:]
 		parts := strings.Fields(rest)
 		if len(parts) != 2 {
 			continue
@@ -110,7 +109,7 @@ func parseFilesystemUsage(out string) (FilesystemUsage, error) {
 	var fu FilesystemUsage
 	var inOverall bool
 
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if strings.HasPrefix(trimmed, "Overall:") {
@@ -125,8 +124,8 @@ func parseFilesystemUsage(out string) (FilesystemUsage, error) {
 			}
 			// "Data ratio:" is a float, not a uint - handle separately
 			if strings.HasPrefix(trimmed, "Data ratio:") {
-				if parts := strings.SplitN(trimmed, ":", 2); len(parts) == 2 {
-					if v, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64); err == nil {
+				if _, val, ok := strings.Cut(trimmed, ":"); ok {
+					if v, err := strconv.ParseFloat(strings.TrimSpace(val), 64); err == nil {
 						fu.DataRatio = v
 					}
 				}
@@ -162,12 +161,12 @@ func parseFilesystemUsage(out string) (FilesystemUsage, error) {
 // Uses the first ":" as the separator to handle keys like "Free (estimated)"
 // and values like "(min: 12345)".
 func parseKVBytes(line string) (key string, val uint64, ok bool) {
-	parts := strings.SplitN(line, ":", 2)
-	if len(parts) != 2 {
+	k, rawVal, found := strings.Cut(line, ":")
+	if !found {
 		return "", 0, false
 	}
-	key = strings.TrimSpace(parts[0])
-	raw := strings.TrimSpace(parts[1])
+	key = strings.TrimSpace(k)
+	raw := strings.TrimSpace(rawVal)
 	// strip parenthetical like "(min: 12345)"
 	if p := strings.Index(raw, "("); p > 0 {
 		raw = strings.TrimSpace(raw[:p])
@@ -184,17 +183,17 @@ func parseKVBytes(line string) (key string, val uint64, ok bool) {
 // and "key: value" pairs for counters.
 func parseScrubStatus(out string) (*ScrubStatus, error) {
 	s := &ScrubStatus{}
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
-		parts := strings.SplitN(trimmed, ":", 2)
-		if len(parts) != 2 {
+		k, v, ok := strings.Cut(trimmed, ":")
+		if !ok {
 			continue
 		}
-		key := strings.TrimSpace(parts[0])
-		val := strings.TrimSpace(parts[1])
+		key := strings.TrimSpace(k)
+		val := strings.TrimSpace(v)
 
 		switch key {
 		case "Status":
@@ -220,10 +219,66 @@ func parseScrubStatus(out string) (*ScrubStatus, error) {
 	return s, nil
 }
 
+// subvolEntry holds a parsed line from `btrfs subvolume list -o`.
+type subvolEntry struct {
+	ID   string
+	Path string
+}
+
+// parseSubvolumeListFull parses `btrfs subvolume list -o` output into ID + path pairs.
+// Format: ID 259 gen 12 top level 5 path tenant/vol1/data
+func parseSubvolumeListFull(out string) []subvolEntry {
+	var entries []subvolEntry
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 9 || fields[0] != "ID" {
+			continue
+		}
+		_, path, ok := strings.Cut(line, " path ")
+		if !ok {
+			continue
+		}
+		entries = append(entries, subvolEntry{
+			ID:   fields[1],
+			Path: path,
+		})
+	}
+	return entries
+}
+
+// parseQgroupMap parses `btrfs qgroup show -re --raw` output into a map keyed by qgroup ID.
+// Format:
+//
+//	qgroupid         rfer         excl
+//	--------         ----         ----
+//	0/259        16384         8192
+func parseQgroupMap(out string) (map[string]QgroupInfo, error) {
+	result := make(map[string]QgroupInfo)
+	for line := range strings.SplitSeq(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 || !strings.Contains(fields[0], "/") {
+			continue
+		}
+		var info QgroupInfo
+		var err error
+		if info.Referenced, err = strconv.ParseUint(fields[1], 10, 64); err != nil {
+			return nil, fmt.Errorf("parse referenced bytes %q: %w", fields[1], err)
+		}
+		if info.Exclusive, err = strconv.ParseUint(fields[2], 10, 64); err != nil {
+			return nil, fmt.Errorf("parse exclusive bytes %q: %w", fields[2], err)
+		}
+		result[fields[0]] = info
+	}
+	return result, nil
+}
+
 // parseProfileSizeUsed parses "Metadata,DUP: Size:1073741824, Used:536870912".
 func parseProfileSizeUsed(line string) (size, used uint64) {
-	if idx := strings.Index(line, "Size:"); idx >= 0 {
-		raw := line[idx+len("Size:"):]
+	if _, after, ok := strings.Cut(line, "Size:"); ok {
+		raw := after
 		if end := strings.IndexAny(raw, ", \t"); end > 0 {
 			raw = raw[:end]
 		}
@@ -232,8 +287,8 @@ func parseProfileSizeUsed(line string) (size, used uint64) {
 			size = v
 		}
 	}
-	if idx := strings.Index(line, "Used:"); idx >= 0 {
-		raw := line[idx+len("Used:"):]
+	if _, after, ok := strings.Cut(line, "Used:"); ok {
+		raw := after
 		if end := strings.IndexAny(raw, ", \t"); end > 0 {
 			raw = raw[:end]
 		}
