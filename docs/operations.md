@@ -201,6 +201,7 @@ btrfs-nfs-csi snapshot ls -l env=prod
 btrfs-nfs-csi snapshot create my-vol snap-1 --label env=prod
 btrfs-nfs-csi snapshot clone snap-1 new-vol --label env=dev
 btrfs-nfs-csi snapshot delete snap-1
+btrfs-nfs-csi snapshot label list snap-1     # show labels
 
 btrfs-nfs-csi export list
 btrfs-nfs-csi export add my-vol 10.1.0.50

@@ -230,6 +230,20 @@ func snapshotCmd() *cli.Command {
 				Flags:     []cli.Flag{labelFlag()},
 				Action:    snapshotClone,
 			},
+			{
+				Name:    "label",
+				Aliases: []string{"labels", "lb"},
+				Usage:   "manage snapshot labels",
+				Commands: []*cli.Command{
+					{
+						Name:      "list",
+						Aliases:   []string{"ls", "l"},
+						Usage:     "list labels on a snapshot",
+						ArgsUsage: "<name>",
+						Action:    snapshotLabelList,
+					},
+				},
+			},
 		},
 	}
 }
