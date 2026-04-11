@@ -1,12 +1,12 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
-	"cmp"
 	"slices"
 	"strings"
 	"text/tabwriter"
