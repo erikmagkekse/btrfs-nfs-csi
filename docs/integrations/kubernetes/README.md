@@ -72,6 +72,22 @@ spec:
 
 ReadWriteMany is the default. Every volume is an NFS export.
 
+## NixOS
+
+NixOS kubelet uses `/var/lib/kubernetes` as its root directory instead of `/var/lib/kubelet`. Set `kubeletDir` in your Helm values:
+
+```yaml
+kubeletDir: /var/lib/kubernetes
+```
+
+Or via `--set`:
+
+```bash
+helm install btrfs-nfs-csi --set kubeletDir=/var/lib/kubernetes ...
+```
+
+For static manifests, replace `/var/lib/kubelet` with `/var/lib/kubernetes` in all hostPath volumes.
+
 ## Dedicated Storage Network
 
 If your nodes have a separate storage NIC, add to `values.yaml`:
