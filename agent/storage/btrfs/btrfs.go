@@ -10,7 +10,6 @@ import (
 )
 
 // TODO: Maybe better scraping? JSON support got added in 6.1 btrfs-progs!
-// TODO: Add functionality for squota
 
 type Manager struct {
 	bin string

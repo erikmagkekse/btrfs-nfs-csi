@@ -25,7 +25,7 @@ Most storage solutions are built for the data center. Ceph, Longhorn, and OpenEB
 
 btrfs-nfs-csi is not a distributed storage system. If you need data replication across many nodes, look at Longhorn or Ceph. If you have one server with good disks and want storage that stays out of your way, this is it.
 
-**Know your filesystem.** btrfs is powerful but has trade-offs. RAID 5/6 is not production-ready. Quotas (qgroups) add overhead on write-heavy workloads. CoW causes fragmentation over time (use NoCOW for databases). Regular scrubs are recommended to catch silent corruption early. None of these are deal-breakers, but you should be aware of them.
+**Know your filesystem.** btrfs is powerful but has trade-offs. RAID 5/6 is not production-ready. Quotas (qgroups) add overhead on write-heavy workloads, use simple quotas (`btrfs quota enable -s`, kernel 6.7+) to reduce it. CoW causes fragmentation over time (use NoCOW for databases). Regular scrubs are recommended to catch silent corruption early. None of these are deal-breakers, but you should be aware of them.
 
 ### Your Classic Kubernetes Storage Options
 
@@ -233,7 +233,6 @@ Full CLI reference: [docs/operations.md](docs/operations.md#cli)
 
 ### Under Consideration
 
-- [ ] **squota.** btrfs simple quotas (faster, less overhead than qgroups).
 - [ ] **VolumeGroupSnapshot.** Consistent multi-volume snapshots with fsfreeze via API and CLI, including Kubernetes CRD support.
 - [ ] **FUSE mount backend.** Mount volumes via WebSocket or REST-FUSE through agent API and CLI, no kernel NFS required.
 - [ ] **mTLS.** Mutual TLS authentication between agent, CLI, and integrations.
