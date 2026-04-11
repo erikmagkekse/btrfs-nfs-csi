@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.10.0
+
+Major feature release. The agent is now a multi-purpose storage backend with a standalone CLI, REST API, task system, and label-based multi-tenancy. 
+
+### Features
+- CLI tool with subcommands for volumes, snapshots, exports, and tasks (#94)
+- CLI watch mode, column filtering, label filtering, delete protection (#104, #112, #113)
+- CLI volume label commands, show path in get output (#128)
+- User-defined labels on volumes, snapshots, clones, exports, and tasks (#100)
+- Snapshot labels, clone tracking, controller identity (#108)
+- Export reference counting with labels and immutable label protection (#107)
+- Task system with btrfs scrub, worker pool, timeouts, and cleanup (#93, #96, #99)
+- PVC-to-PVC volume cloning with clone expansion (#91)
+- Cursor-based pagination for all list endpoints (#103)
+- Client identity injection, TLS/timeout env config (#109)
+- OpenAPI/Swagger documentation (#114)
+- Squota (simple quotas) support detection at startup (#127)
+- Backfill volume labels on ControllerPublishVolume (#129)
+- Allow setting created-by on migrated volumes (#117)
+- Snapshot volume properties for clone resilience (#115)
+- Edge release channel with OCI metadata (#106)
+
+### Improvements
+- Bulk qgroup query in usage updater to eliminate N+1 btrfs commands (#126)
+- Drop NFS auto-heal, handle stale mounts inline in stage/publish (#124)
+- Agent API restructure, storage hardening, clone metadata, validation (#114)
+- Improve error handling and logging across all components (#95)
+- Improve logging: split volume IDs, gRPC trace level (#102)
+- Path-aware metadata cache (#105)
+- Migrate custom k8s client to client-go (#101)
+- Move snapshot clone under snapshot subcommand (#98)
+- Restructure docs, new README, re-record GIFs (#118)
+- Update release workflow to trigger on version tags (#120)
+
+### Bug Fixes
+- Harden driver defaults (#116)
+- Fixed CI workflows (#110)
+
+### Breaking Changes
+- Volume list responses return `Exports` (count) instead of `Clients` (array of IPs)
+- Export model changed from simple client IP list to reference-counted exports with labels (pre-0.10.0 exports are auto-migrated)
+- Export endpoints now require request body with labels
+- `/v1/exports` returns paginated response with summary/detail variants
+- `ExportVolume` renamed to `CreateVolumeExport`, `UnexportVolume` renamed to `DeleteVolumeExport`
+- `controller` and `driver` top-level commands deprecated in favor of `integration kubernetes controller` and `integration kubernetes driver`
+- Web dashboard removed
+
+### Dependencies
+- Bump `google.golang.org/grpc` from 1.79.3 to 1.80.0 (#92)
+- Bump `github.com/labstack/echo/v5` from 5.0.4 to 5.1.0 (#90)
+- Bump `golang.org/x/sys` from 0.42.0 to 0.43.0 (#123)
+- Bump `golang.org/x/term` from 0.41.0 to 0.42.0 (#125)
+- Bump `actions/download-artifact` from 4 to 8 (#121)
+- Bump `actions/upload-artifact` from 4 to 7 (#122)
+- Added: `swaggo/swag` v1.16.6, `urfave/cli/v3` v3.8.0, CSI snapshotter client v8.4.0
+
 ## v0.9.11
 
 This release focuses on reliability and broader hardware support: multi-device btrfs, stale NFS mount recovery via `k8s.io/mount-utils`, and safe volume deletion when NFS exports are active.

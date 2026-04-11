@@ -23,7 +23,7 @@ ansible-playbook simple.yaml
 ```
 
 After the playbook finishes, a summary is printed with all connection details,
-including the kubeconfig path, dashboard URL and tenant credentials.
+including the kubeconfig path and tenant credentials.
 
 ```bash
 export KUBECONFIG=/tmp/btrfs-nfs-csi-tmp/rke2-kubeconfig

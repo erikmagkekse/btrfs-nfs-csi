@@ -33,49 +33,57 @@ btrfs-nfs-csi is not a distributed storage system. If you need data replication 
 |---|---|---|---|---|---|
 | **Min. nodes** | 1 (2+ with DRBD) | 1 (3 for HA) | 1 | 1 (2+ with DRBD) | 1 |
 | **ReadWriteOnce** | Yes | Yes | Yes | Yes | Yes |
-| **ReadWriteMany** | Native (NFS) | NFSv4 (userspace) | NFS | Native (NFS) | -- |
-| **Snapshots** | btrfs CoW (instant) | Incremental CoW | ZFS | Copy-based | -- |
-| **Clones** | Zero-copy | Full copy | ZFS clone | Copy-based | -- |
-| **Compression** | zstd/lzo/zlib per-volume | -- | ZFS (dataset) | -- | -- |
-| **Checksums** | btrfs built-in | Optional (snapshots) | ZFS built-in | -- | -- |
-| **NoCOW (DB mode)** | Per-volume | -- | -- | -- | -- |
-| **Online expand** | Yes (+5Gi relative) | Yes | Yes | -- | -- |
-| **Quotas** | btrfs qgroups | Scheduling | ZFS | -- | -- |
+| **ReadWriteMany** | NFSv4 (native) | NFSv4 (share-manager) | NFS (some backends) | Native (NFS) | -- |
+| **Snapshots** | Instant | Incremental CoW | Instant | Copy-based | -- |
+| **Clones** | Zero-copy | V2: linked | Clone | Copy-based | -- |
+| **Compression** | Per-volume | LZ4/Gzip (backup-only) | Per-StorageClass | Gzip (snapshots) | -- |
+| **Checksums** | Built-in | CRC64 (snapshots, off) | Built-in | -- | -- |
+| **NoCOW** | Per-volume | *Not required* | Tuning (recordsize) | *Not required* | Depends on FS |
+| **Online expand** | Yes | Yes | Yes | -- | -- |
+| **Size limits** | Qgroups | Block device | Refquota | -- | -- |
 | **Multi-tenant** | Built-in | -- | -- | -- | -- |
-| **Overhead** | <128 MB (1k volumes) | 500+ MB | ~50 MB | ~50 MB | ~10 MB |
-| **Setup** | Single container + Helm chart | Helm | Helm | Helm | Helm |
-| **Integrations** | REST API, CLI, Kubernetes, more planned | Kubernetes | Kubernetes | Kubernetes | Kubernetes |
-| **Best for** | Homelab, single-server, small teams | Multi-node HA | ZFS users | Existing NFS server | Local disk |
+| **Overhead** | <128 MB + ~256 MB/TB (btrfs) | 500 MB+ per node | 1 GB+ per TB (ARC) | ~30 MB | ~30 MB |
+| **Deployment** | External server* | Kubernetes nodes | External server | External server | Kubernetes nodes |
+| **Setup** | Single binary + Helm | Helm (multi-component) | Helm | Helm | Helm / kubectl |
+| **Integrations** | REST API, CLI, K8s, ... | REST API, CLI, K8s | Kubernetes | Kubernetes | Kubernetes |
+| **Best for** | Homelab, single-server | Multi-node clusters | ZFS/TrueNAS shops | Existing NFS server | Local disk |
+
+\* If you don't care about redundancy and security, you can install the agent directly on your single master node and your workers can use it. This also gives you a migration path if you later want to move the agent to a dedicated Linux box.
 
 > This comparison represents my personal point of view. No offense intended to any of these great projects. Improvements are welcome.
 
 ---
 
-## See It in Action
+## Features
 
-### Volumes
+### Storage
+- **Instant snapshots & writable clones.** btrfs copy-on-write, zero-copy.
+- **Online volume expansion.** Absolute or relative (`+5Gi`).
+- **Per-volume quotas.** Enforced at the filesystem level via btrfs qgroups.
+- **Compression.** `zstd`, `lzo`, `zlib` with levels, configurable per volume.
+- **NoCOW mode.** `chattr +C` for databases (PostgreSQL, MySQL, etcd).
+- **Multi-device.** RAID 0/1/10 with per-device I/O stats and error tracking.
 
-Create, expand, compress, and label volumes with per-volume quotas and NoCOW for databases.
+### Networking
+- **Automatic NFS exports.** Managed per volume, per client.
+- **ReadWriteMany.** The default access mode, not a special case.
+- **Dedicated storage network.** Select NIC by name or subnet CIDR.
 
-![Volumes](docs/assets/vhs/volumes.gif)
+### Operations
+- **Labels.** On volumes, snapshots, clones, exports, and tasks.
+- **Multi-tenant.** Token-isolated tenants, one agent serves many consumers.
+- **Background tasks.** Scrub, progress tracking, configurable timeouts.
+- **Prometheus metrics.** On all components.
+- **TLS & Swagger.** API with OpenAPI spec.
+- **HA.** DRBD + Pacemaker active/passive failover.
 
-### Snapshots & Clones
-
-Instant btrfs snapshots. Writable clones from snapshots or volumes, zero-copy and zero-wait.
-
-![Snapshots & Clones](docs/assets/vhs/snapshots.gif)
-
-### NFS Exports
-
-Add and remove NFS exports per volume, per client, directly from the CLI.
-
-![NFS Exports](docs/assets/vhs/exports.gif)
-
-### Stats & Health
-
-Per-device I/O stats, error tracking, and filesystem scrubs, all from the CLI.
-
-![Stats & Health](docs/assets/vhs/stats.gif)
+### CLI
+- **Watch mode** (`-w`). Auto-refreshing output for any list/get command.
+- **Column filter** (`-c name,size,used`). Show only what you need.
+- **Label filter** (`-l env=prod`). Filter resources by label.
+- **Output formats.** Table, wide, JSON.
+- **Relative resize.** `expand my-vol +5Gi`.
+- **Identity switching.** Switch between identities via `AGENT_CSI_IDENTITY` to view or manage resources created by other integrations. Names stay unique across identities.
 
 ---
 
@@ -134,7 +142,35 @@ That's it. The agent manages btrfs subvolumes, NFS exports, and quotas. The CLI 
 
 ---
 
-## Integrations
+## See It in Action
+
+### Volumes
+
+Create, expand, compress, and label volumes with per-volume quotas and NoCOW for databases.
+
+![Volumes](docs/assets/vhs/volumes.gif)
+
+### Snapshots & Clones
+
+Instant btrfs snapshots. Writable clones from snapshots or volumes, zero-copy and zero-wait.
+
+![Snapshots & Clones](docs/assets/vhs/snapshots.gif)
+
+### NFS Exports
+
+Add and remove NFS exports per volume, per client, directly from the CLI.
+
+![NFS Exports](docs/assets/vhs/exports.gif)
+
+### Stats & Health
+
+Per-device I/O stats, error tracking, and filesystem scrubs, all from the CLI.
+
+![Stats & Health](docs/assets/vhs/stats.gif)
+
+---
+
+## Or choose an Integration
 
 The agent exposes a REST API. Any system that can make HTTP calls can manage volumes, snapshots, and exports. The CLI and all integrations use the same API.
 
@@ -170,55 +206,6 @@ c.CreateVolumeExport(ctx, vol.Name, models.ExportCreateRequest{
 ```
 
 Enable `AGENT_API_SWAGGER_ENABLED=true` and the agent serves the full spec at `/swagger.json`. Want to build an integration? We'd love a PR.
-
----
-
-## Features
-
-### Storage
-- **Instant snapshots & writable clones.** btrfs copy-on-write, zero-copy.
-- **Online volume expansion.** Absolute or relative (`+5Gi`).
-- **Per-volume quotas.** Enforced at the filesystem level via btrfs qgroups.
-- **Compression.** `zstd`, `lzo`, `zlib` with levels, configurable per volume.
-- **NoCOW mode.** `chattr +C` for databases (PostgreSQL, MySQL, etcd).
-- **Multi-device.** RAID 0/1/10 with per-device I/O stats and error tracking.
-
-### Networking
-- **Automatic NFS exports.** Managed per volume, per client.
-- **ReadWriteMany.** The default access mode, not a special case.
-- **Dedicated storage network.** Select NIC by name or subnet CIDR.
-
-### Operations
-- **Labels.** On volumes, snapshots, clones, exports, and tasks.
-- **Multi-tenant.** Token-isolated tenants, one agent serves many consumers.
-- **Background tasks.** Scrub, progress tracking, configurable timeouts.
-- **Prometheus metrics.** On all components.
-- **TLS & Swagger.** API with OpenAPI spec.
-- **HA.** DRBD + Pacemaker active/passive failover.
-
-### CLI
-- **Watch mode** (`-w`). Auto-refreshing output for any list/get command.
-- **Column filter** (`-c name,size,used`). Show only what you need.
-- **Label filter** (`-l env=prod`). Filter resources by label.
-- **Output formats.** Table, wide, JSON.
-- **Relative resize.** `expand my-vol +5Gi`.
-- **Identity switching.** Switch between identities via `AGENT_CSI_IDENTITY` to view or manage resources created by other integrations. Names stay unique across identities.
-
----
-
-```bash
-btrfs-nfs-csi v l                           # list volumes
-btrfs-nfs-csi v l -o wide -w               # all columns, live refresh
-btrfs-nfs-csi v c my-app 10Gi -l env=prod  # create with quota + label
-btrfs-nfs-csi v l -l env=prod              # filter by label
-btrfs-nfs-csi v clone my-app staging       # instant CoW clone
-btrfs-nfs-csi s c my-app pre-deploy        # snapshot
-btrfs-nfs-csi s clone pre-deploy rollback
-btrfs-nfs-csi e a my-app 10.0.1.1          # NFS export
-btrfs-nfs-csi stats -w                     # filesystem stats, live
-```
-
-Full CLI reference: [docs/operations.md](docs/operations.md#cli)
 
 ---
 
