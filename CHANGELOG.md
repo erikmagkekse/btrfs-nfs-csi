@@ -35,7 +35,8 @@ Major feature release. The agent is now a multi-purpose storage backend with a s
 - Update release workflow to trigger on version tags (#120)
 
 ### Bug Fixes
-- Serialize concurrent same-name creates to prevent 500s and metadata loss
+- Add missing flock package to container (#134)
+- Serialize concurrent same-name creates to prevent 500s and metadata loss (#133)
 - Harden driver defaults (#116)
 - Fixed CI workflows (#110)
 

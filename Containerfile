@@ -21,7 +21,7 @@ LABEL org.opencontainers.image.title="btrfs-nfs-csi" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.vendor="Erik Groh <me@eriks.life>"
 
-RUN apk add --no-cache btrfs-progs e2fsprogs nfs-utils
+RUN apk add --no-cache btrfs-progs e2fsprogs nfs-utils flock
 
 COPY --from=build /build/btrfs-nfs-csi /usr/local/bin/btrfs-nfs-csi
 
