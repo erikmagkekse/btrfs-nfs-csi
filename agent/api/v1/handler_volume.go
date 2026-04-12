@@ -62,6 +62,7 @@ func volumeDetailResponseFrom(meta *storage.VolumeMetadata) models.VolumeDetailR
 // @Success      201 {object} models.VolumeDetailResponse
 // @Failure      400 {object} models.ErrorResponse
 // @Failure      409 {object} models.VolumeDetailResponse "Volume already exists"
+// @Failure      423 {object} models.ErrorResponse "Lock contention, retry"
 // @Router       /v1/volumes [post]
 // @Security     BearerAuth
 func (h *Handler) CreateVolume(c *echo.Context) error {
@@ -196,6 +197,7 @@ func (h *Handler) DeleteVolume(c *echo.Context) error {
 // @Success      201 {object} models.VolumeDetailResponse
 // @Failure      400 {object} models.ErrorResponse
 // @Failure      409 {object} models.VolumeDetailResponse "Volume already exists"
+// @Failure      423 {object} models.ErrorResponse "Lock contention, retry"
 // @Router       /v1/volumes/clone [post]
 // @Security     BearerAuth
 func (h *Handler) CloneVolume(c *echo.Context) error {
@@ -227,6 +229,7 @@ func (h *Handler) CloneVolume(c *echo.Context) error {
 // @Success      201 {object} models.VolumeDetailResponse
 // @Failure      400 {object} models.ErrorResponse
 // @Failure      409 {object} models.VolumeDetailResponse "Volume already exists"
+// @Failure      423 {object} models.ErrorResponse "Lock contention, retry"
 // @Router       /v1/clones [post]
 // @Security     BearerAuth
 func (h *Handler) CreateClone(c *echo.Context) error {

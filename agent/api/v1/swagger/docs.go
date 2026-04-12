@@ -82,6 +82,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
+                    },
+                    "423": {
+                        "description": "Lock contention, retry",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -246,6 +252,12 @@ const docTemplate = `{
                         "description": "Snapshot already exists",
                         "schema": {
                             "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.SnapshotDetailResponse"
+                        }
+                    },
+                    "423": {
+                        "description": "Lock contention, retry",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
@@ -652,6 +664,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
                         }
+                    },
+                    "423": {
+                        "description": "Lock contention, retry",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -702,6 +720,12 @@ const docTemplate = `{
                         "description": "Volume already exists",
                         "schema": {
                             "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.VolumeDetailResponse"
+                        }
+                    },
+                    "423": {
+                        "description": "Lock contention, retry",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
                     }
                 }
