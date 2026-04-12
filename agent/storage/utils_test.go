@@ -21,9 +21,10 @@ import (
 
 // --- test utils for storage operations ---
 
-// testStorageWithRunner creates a Storage with a configurable MockRunner and MockExporter.
+// testStorageWithRunner creates a Storage with a configurable Runner and MockExporter.
 // Sets defaultDataMode to "2770" (matching the default agent config).
-func testStorageWithRunner(t *testing.T, runner *utils.MockRunner, exporter *nfs.MockExporter) (*Storage, string) {
+// Accepts any utils.Runner so concurrent tests can supply a thread-safe runner.
+func testStorageWithRunner(t *testing.T, runner utils.Runner, exporter *nfs.MockExporter) (*Storage, string) {
 	t.Helper()
 	base := t.TempDir()
 	t.Cleanup(func() {

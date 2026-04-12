@@ -34,6 +34,13 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	}
 	srcData := s.volumes.DataPath(tenant, req.Volume)
 
+	// Serialize concurrent creators of the same snapshot name (see CreateVolume).
+	unlock, err := s.snapshots.Lock(ctx, tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for snapshot %q: %v", req.Name, err)}
+	}
+	defer unlock()
+
 	if existing, err := s.snapshots.Get(tenant, req.Name); err == nil {
 		return existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("snapshot %q already exists", req.Name)}
 	}
@@ -42,14 +49,18 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	// operations
 	if err := os.MkdirAll(snapDir, s.defaultDirMode); err != nil {
 		log.Error().Err(err).Msg("failed to create snapshot directory")
-		return nil, fmt.Errorf("failed to create snapshot directory: %w", err)
+		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("failed to create snapshot directory: %v", err)}
 	}
 
 	dstData := s.snapshots.DataPath(tenant, req.Name)
 	if err := s.btrfs.SubvolumeSnapshot(ctx, srcData, dstData, true); err != nil {
+		if isSubvolumeAlreadyExistsError(err) {
+			log.Warn().Err(err).Str("path", dstData).Msg("snapshot target already exists on disk")
+			return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("snapshot %q already exists on disk", req.Name)}
+		}
 		_ = os.RemoveAll(snapDir)
 		log.Error().Err(err).Msg("failed to create snapshot")
-		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
+		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
 	}
 
 	now := time.Now().UTC()

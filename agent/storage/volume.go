@@ -57,13 +57,23 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	volDir := s.volumes.Dir(tenant, req.Name)
 	dataDir := s.volumes.DataPath(tenant, req.Name)
 
+	// Serialize concurrent creators of the same name. Losers block here and
+	// then observe the winner's cache entry on the Get below, returning a
+	// clean ALREADY_EXISTS instead of racing into btrfs.SubvolumeCreate.
+	// Lock honours ctx so a stuck predecessor cannot pin a caller forever.
+	unlock, err := s.volumes.Lock(ctx, tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for volume %q: %v", req.Name, err)}
+	}
+	defer unlock()
+
 	if existing, err := s.volumes.Get(tenant, req.Name); err == nil {
 		return existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("volume %q already exists", req.Name)}
 	}
 
 	if err := os.MkdirAll(volDir, s.defaultDirMode); err != nil {
 		log.Error().Err(err).Str("path", volDir).Msg("failed to create volume directory")
-		return nil, fmt.Errorf("create volume directory: %w", err)
+		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("create volume directory: %v", err)}
 	}
 
 	cleanup := func() {
@@ -76,9 +86,17 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	if err := s.btrfs.SubvolumeCreate(ctx, dataDir); err != nil {
+		if isSubvolumeAlreadyExistsError(err) {
+			// Stale on-disk state from a prior crash that never made it into
+			// the cache. Do NOT touch volDir - it may belong to a concurrent
+			// creator that we do not know about (should not happen under the
+			// per-name lock, but be defensive).
+			log.Warn().Err(err).Str("path", dataDir).Msg("subvolume already exists on disk")
+			return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("volume %q already exists on disk", req.Name)}
+		}
 		_ = os.RemoveAll(volDir)
 		log.Error().Err(err).Str("path", dataDir).Msg("failed to create subvolume")
-		return nil, fmt.Errorf("btrfs subvolume create failed: %w", err)
+		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs subvolume create failed: %v", err)}
 	}
 
 	if req.NoCOW {
@@ -337,12 +355,20 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	}
 
 	cloneDir := s.volumes.Dir(tenant, req.Name)
+
+	// Serialize concurrent creators of the same name (see CreateVolume).
+	unlock, err := s.volumes.Lock(ctx, tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for volume %q: %v", req.Name, err)}
+	}
+	defer unlock()
+
 	if existing, err := s.volumes.Get(tenant, req.Name); err == nil {
 		return existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("volume %q already exists", req.Name)}
 	}
 
 	if err := os.MkdirAll(cloneDir, s.defaultDirMode); err != nil {
-		return nil, fmt.Errorf("create clone directory: %w", err)
+		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("create clone directory: %v", err)}
 	}
 
 	srcData := s.volumes.DataPath(tenant, req.Source)
@@ -358,8 +384,12 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	}
 
 	if err := s.btrfs.SubvolumeSnapshot(ctx, srcData, cloneData, false); err != nil {
+		if isSubvolumeAlreadyExistsError(err) {
+			log.Warn().Err(err).Str("path", cloneData).Msg("clone target already exists on disk")
+			return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("volume %q already exists on disk", req.Name)}
+		}
 		cleanup()
-		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
+		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
 	}
 
 	if s.quotaEnabled {

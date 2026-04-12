@@ -53,6 +53,14 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		}
 	}
 	cloneDir := s.volumes.Dir(tenant, req.Name)
+
+	// Serialize concurrent creators of the same name (see CreateVolume).
+	unlock, err := s.volumes.Lock(ctx, tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for clone %q: %v", req.Name, err)}
+	}
+	defer unlock()
+
 	if existing, err := s.volumes.Get(tenant, req.Name); err == nil {
 		return existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("clone %q already exists", req.Name)}
 	}
@@ -60,14 +68,18 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	// operations
 	if err := os.MkdirAll(cloneDir, s.defaultDirMode); err != nil {
 		log.Error().Err(err).Msg("failed to create clone directory")
-		return nil, fmt.Errorf("failed to create clone directory: %w", err)
+		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("failed to create clone directory: %v", err)}
 	}
 
 	dstData := s.volumes.DataPath(tenant, req.Name)
 	if err := s.btrfs.SubvolumeSnapshot(ctx, srcData, dstData, false); err != nil {
+		if isSubvolumeAlreadyExistsError(err) {
+			log.Warn().Err(err).Str("path", dstData).Msg("clone target already exists on disk")
+			return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("clone %q already exists on disk", req.Name)}
+		}
 		_ = os.RemoveAll(cloneDir)
 		log.Error().Err(err).Msg("failed to create clone")
-		return nil, fmt.Errorf("btrfs snapshot failed: %w", err)
+		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
 	}
 
 	if s.quotaEnabled && srcVol.QuotaBytes > 0 {

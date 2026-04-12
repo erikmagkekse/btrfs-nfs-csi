@@ -29,6 +29,17 @@ type StorageError struct {
 
 func (e *StorageError) Error() string { return e.Message }
 
+// isSubvolumeAlreadyExistsError reports whether a btrfs subvolume create or
+// snapshot error indicates that the target path already exists. The btrfs CLI
+// does not expose a stable error code, so we match on its stderr string.
+// Used by Create paths as defense-in-depth: the per-name lock should prevent
+// concurrent creators from racing here, but stale on-disk state left over
+// from a crashed previous run can still cause EEXIST, and we want to return
+// 409 ALREADY_EXISTS in that case, not 500 INTERNAL_ERROR.
+func isSubvolumeAlreadyExistsError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "target path already exists")
+}
+
 func requireImmutableLabels(keys []string, labels map[string]string) error {
 	for _, k := range keys {
 		if labels[k] == "" {

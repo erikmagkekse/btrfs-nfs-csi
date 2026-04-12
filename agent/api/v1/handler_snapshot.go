@@ -53,6 +53,7 @@ func snapshotDetailResponseFrom(meta *storage.SnapshotMetadata) models.SnapshotD
 // @Success      201 {object} models.SnapshotDetailResponse
 // @Failure      400 {object} models.ErrorResponse
 // @Failure      409 {object} models.SnapshotDetailResponse "Snapshot already exists"
+// @Failure      423 {object} models.ErrorResponse "Lock contention, retry"
 // @Router       /v1/snapshots [post]
 // @Security     BearerAuth
 func (h *Handler) CreateSnapshot(c *echo.Context) error {
