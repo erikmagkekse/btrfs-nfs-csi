@@ -60,7 +60,11 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	// Serialize concurrent creators of the same name. Losers block here and
 	// then observe the winner's cache entry on the Get below, returning a
 	// clean ALREADY_EXISTS instead of racing into btrfs.SubvolumeCreate.
-	unlock := s.volumes.Lock(tenant, req.Name)
+	// Lock honours ctx so a stuck predecessor cannot pin a caller forever.
+	unlock, err := s.volumes.Lock(ctx, tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for volume %q: %v", req.Name, err)}
+	}
 	defer unlock()
 
 	if existing, err := s.volumes.Get(tenant, req.Name); err == nil {
@@ -353,7 +357,10 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	cloneDir := s.volumes.Dir(tenant, req.Name)
 
 	// Serialize concurrent creators of the same name (see CreateVolume).
-	unlock := s.volumes.Lock(tenant, req.Name)
+	unlock, err := s.volumes.Lock(ctx, tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for volume %q: %v", req.Name, err)}
+	}
 	defer unlock()
 
 	if existing, err := s.volumes.Get(tenant, req.Name); err == nil {

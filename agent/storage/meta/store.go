@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -124,18 +125,21 @@ func (s *Store[T]) Store(tenant, name string, val *T) error {
 // name are serialized and the losers observe the winner's cache entry
 // on their second Get. Uses the same refcounted path mutex pool as
 // Update, so Create and Update on the same entry are mutually exclusive.
-func (s *Store[T]) Lock(tenant, name string) func() {
-	diskPath := s.MetaPath(tenant, name)
-	rm := pathLock(diskPath)
-	return func() { pathUnlock(diskPath, rm) }
+//
+// Lock respects ctx: if the caller's context is canceled or times out
+// while waiting for a stuck predecessor, Lock returns ctx.Err() instead
+// of blocking indefinitely. Callers should translate this to a
+// user-visible BUSY error.
+func (s *Store[T]) Lock(ctx context.Context, tenant, name string) (func(), error) {
+	return pathLockCtx(ctx, s.MetaPath(tenant, name))
 }
 
 // Update performs a read-modify-write with per-path locking.
 // Reads from cache (disk fallback), applies fn, writes to disk, updates cache.
 func (s *Store[T]) Update(tenant, name string, fn func(*T)) (*T, error) {
 	diskPath := s.MetaPath(tenant, name)
-	rm := pathLock(diskPath)
-	defer pathUnlock(diskPath, rm)
+	release := pathLock(diskPath)
+	defer release()
 
 	val, err := s.Get(tenant, name)
 	if err != nil {
@@ -182,32 +186,71 @@ func (s *Store[T]) Exists(tenant, name string) bool {
 	return ok
 }
 
-// per-path mutex pool for serializing read-modify-write operations
+// per-path mutex pool for serializing read-modify-write operations.
+//
+// refMutex uses a buffered channel of size 1 as a semaphore instead of
+// sync.Mutex, so waiters can select on context cancellation. A non-nil
+// token in the channel means "unlocked"; Lock drains, Unlock refills.
 var (
 	locksMu  sync.Mutex
 	locksMap = map[string]*refMutex{}
 )
 
 type refMutex struct {
-	mu   sync.Mutex
+	ch   chan struct{}
 	refs int
 }
 
-func pathLock(path string) *refMutex {
+// pathLockShared bumps refcount and returns (or creates) the refMutex for path.
+func pathLockShared(path string) *refMutex {
 	locksMu.Lock()
 	rm, ok := locksMap[path]
 	if !ok {
-		rm = &refMutex{}
+		rm = &refMutex{ch: make(chan struct{}, 1)}
+		rm.ch <- struct{}{} // start in the unlocked state
 		locksMap[path] = rm
 	}
 	rm.refs++
 	locksMu.Unlock()
-	rm.mu.Lock()
 	return rm
 }
 
-func pathUnlock(path string, rm *refMutex) {
-	rm.mu.Unlock()
+// makeRelease returns the unlock closure that refills the semaphore and
+// drops the refcount. Order matters: the chan refill must happen before
+// releaseRef so any waiter observes the free state before the entry can
+// be garbage-collected from locksMap.
+func makeRelease(path string, rm *refMutex) func() {
+	return func() {
+		rm.ch <- struct{}{}
+		releaseRef(path, rm)
+	}
+}
+
+// pathLock blocks until the per-path semaphore is acquired. Used by Update
+// and other callers that do not have a cancellable context.
+func pathLock(path string) func() {
+	rm := pathLockShared(path)
+	<-rm.ch
+	return makeRelease(path, rm)
+}
+
+// pathLockCtx blocks until the per-path semaphore is acquired or ctx is
+// done, whichever happens first. On ctx cancellation the refcount is
+// decremented so the map does not leak, and the caller receives ctx.Err().
+func pathLockCtx(ctx context.Context, path string) (func(), error) {
+	rm := pathLockShared(path)
+	select {
+	case <-rm.ch:
+		return makeRelease(path, rm), nil
+	case <-ctx.Done():
+		releaseRef(path, rm)
+		return nil, ctx.Err()
+	}
+}
+
+// releaseRef drops one reference to rm and removes it from locksMap when
+// the last waiter is gone. Caller must NOT hold locksMu.
+func releaseRef(path string, rm *refMutex) {
 	locksMu.Lock()
 	rm.refs--
 	if rm.refs == 0 {

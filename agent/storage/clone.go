@@ -55,7 +55,10 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	cloneDir := s.volumes.Dir(tenant, req.Name)
 
 	// Serialize concurrent creators of the same name (see CreateVolume).
-	unlock := s.volumes.Lock(tenant, req.Name)
+	unlock, err := s.volumes.Lock(ctx, tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for clone %q: %v", req.Name, err)}
+	}
 	defer unlock()
 
 	if existing, err := s.volumes.Get(tenant, req.Name); err == nil {

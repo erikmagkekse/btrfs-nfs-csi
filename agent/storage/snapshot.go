@@ -35,7 +35,10 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	srcData := s.volumes.DataPath(tenant, req.Volume)
 
 	// Serialize concurrent creators of the same snapshot name (see CreateVolume).
-	unlock := s.snapshots.Lock(tenant, req.Name)
+	unlock, err := s.snapshots.Lock(ctx, tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for snapshot %q: %v", req.Name, err)}
+	}
 	defer unlock()
 
 	if existing, err := s.snapshots.Get(tenant, req.Name); err == nil {

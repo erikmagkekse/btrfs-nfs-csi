@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -267,6 +268,34 @@ func TestCreateVolume(t *testing.T) {
 		// On-disk metadata must not have been destroyed by a loser's RemoveAll.
 		ondisk := readVolumeMeta(t, filepath.Join(bp, "racevol"))
 		assert.Equal(t, "racevol", ondisk.Name)
+	})
+
+	t.Run("ctx_cancel_while_locked", func(t *testing.T) {
+		// A stuck predecessor must not pin the caller forever: ctx fires,
+		// CreateVolume returns ErrBusy (HTTP 423), no hung goroutine.
+		runner := &btrfsSimRunner{}
+		exporter := &nfs.MockExporter{}
+		s, _ := testStorageWithRunner(t, runner, exporter)
+
+		unlock, err := s.volumes.Lock(context.Background(), "test", "stuckvol")
+		require.NoError(t, err)
+		defer unlock()
+
+		callCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		_, err = s.CreateVolume(callCtx, "test", VolumeCreateRequest{
+			Name:      "stuckvol",
+			SizeBytes: 1 << 20,
+		})
+		elapsed := time.Since(start)
+
+		require.Error(t, err, "must not block forever")
+		assert.True(t, isStorageCode(err, ErrBusy),
+			"expected ErrBusy, got: %v", err)
+		assert.Less(t, elapsed, 500*time.Millisecond,
+			"caller must return promptly after ctx deadline, took %s", elapsed)
 	})
 
 	t.Run("cleanup_on_nocow_failure", func(t *testing.T) {
