@@ -2,10 +2,13 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
@@ -210,6 +213,60 @@ func TestCreateVolume(t *testing.T) {
 
 		_, statErr := os.Stat(filepath.Join(bp, "failvol"))
 		assert.True(t, os.IsNotExist(statErr), "volDir should be cleaned up after failure")
+	})
+
+	t.Run("concurrent_same_name", func(t *testing.T) {
+		// Reproduces the TOCTOU race in CreateVolume: the cache check at
+		// the top cannot prevent concurrent goroutines from racing into
+		// btrfs.SubvolumeCreate. On broken code the losers come back with
+		// INTERNAL_ERROR (wrapped fmt.Errorf) instead of ALREADY_EXISTS,
+		// and the loser's destructive os.RemoveAll(volDir) may clobber the
+		// winner's metadata. After the fix, exactly one creator wins and
+		// all others return ALREADY_EXISTS with the winner state intact.
+		runner := &btrfsSimRunner{}
+		exporter := &nfs.MockExporter{}
+		s, bp := testStorageWithRunner(t, runner, exporter)
+
+		const N = 50
+		req := VolumeCreateRequest{
+			Name:      "racevol",
+			SizeBytes: 1 << 20,
+		}
+
+		var (
+			wg                             sync.WaitGroup
+			successes, conflicts, internal atomic.Int64
+		)
+		for range N {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := s.CreateVolume(ctx, "test", req)
+				switch {
+				case err == nil:
+					successes.Add(1)
+				case isStorageCode(err, ErrAlreadyExists):
+					conflicts.Add(1)
+				default:
+					internal.Add(1)
+				}
+			}()
+		}
+		wg.Wait()
+
+		assert.Equal(t, int64(1), successes.Load(), "exactly one creator must win")
+		assert.Equal(t, int64(N-1), conflicts.Load(), "all losers must return ALREADY_EXISTS")
+		assert.Equal(t, int64(0), internal.Load(), "no INTERNAL_ERROR allowed")
+
+		// Winner's state must be intact and readable via the cache.
+		meta, err := s.GetVolume("test", "racevol")
+		require.NoError(t, err, "winner's volume must be readable")
+		assert.Equal(t, "racevol", meta.Name)
+		assert.EqualValues(t, 1<<20, meta.SizeBytes)
+
+		// On-disk metadata must not have been destroyed by a loser's RemoveAll.
+		ondisk := readVolumeMeta(t, filepath.Join(bp, "racevol"))
+		assert.Equal(t, "racevol", ondisk.Name)
 	})
 
 	t.Run("cleanup_on_nocow_failure", func(t *testing.T) {
@@ -658,4 +715,39 @@ func TestDeleteVolume(t *testing.T) {
 		require.Error(t, err, "delete should fail for corrupt metadata")
 		assert.Contains(t, err.Error(), "failed to read volume metadata")
 	})
+}
+
+// --- concurrent test helpers ---
+
+// isStorageCode reports whether err unwraps to a *StorageError with the given code.
+func isStorageCode(err error, code string) bool {
+	var se *StorageError
+	if !errors.As(err, &se) {
+		return false
+	}
+	return se.Code == code
+}
+
+// btrfsSimRunner is a thread-safe fake btrfs runner for concurrent tests.
+// It uses os.Mkdir for "subvolume create", which is atomic at the filesystem
+// level and faithfully reproduces real btrfs EEXIST semantics on race.
+// Unlike MockRunner it records no call history, so it is safe under -race.
+type btrfsSimRunner struct{}
+
+func (r *btrfsSimRunner) Run(_ context.Context, _ string, args ...string) (string, error) {
+	if len(args) >= 3 && args[0] == "subvolume" && args[1] == "create" {
+		path := args[2]
+		if err := os.Mkdir(path, 0o755); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				return "", fmt.Errorf("exit status 1: ERROR: target path already exists: %s", path)
+			}
+			return "", err
+		}
+		return "", nil
+	}
+	if len(args) >= 3 && args[0] == "subvolume" && args[1] == "delete" {
+		_ = os.RemoveAll(args[2])
+		return "", nil
+	}
+	return "", nil
 }

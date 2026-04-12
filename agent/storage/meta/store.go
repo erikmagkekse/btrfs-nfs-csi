@@ -116,6 +116,20 @@ func (s *Store[T]) Store(tenant, name string, val *T) error {
 	return nil
 }
 
+// Lock acquires the exclusive per-entry lock used by Update, and returns
+// an unlock function the caller must invoke (typically via defer).
+//
+// Create-style callers should hold this lock across their cache check,
+// filesystem operations, and Store, so concurrent creators of the same
+// name are serialized and the losers observe the winner's cache entry
+// on their second Get. Uses the same refcounted path mutex pool as
+// Update, so Create and Update on the same entry are mutually exclusive.
+func (s *Store[T]) Lock(tenant, name string) func() {
+	diskPath := s.MetaPath(tenant, name)
+	rm := pathLock(diskPath)
+	return func() { pathUnlock(diskPath, rm) }
+}
+
 // Update performs a read-modify-write with per-path locking.
 // Reads from cache (disk fallback), applies fn, writes to disk, updates cache.
 func (s *Store[T]) Update(tenant, name string, fn func(*T)) (*T, error) {
