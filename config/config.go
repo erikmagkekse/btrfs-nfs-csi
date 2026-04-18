@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -26,6 +28,24 @@ const (
 	LabelCloneSourceName = "clone.source.name"
 )
 
+const (
+	DataDir      = "data"
+	MetadataFile = "metadata.json"
+	SnapshotsDir = "snapshots"
+	TasksDir     = "tasks"
+)
+
+// ReservedTenantNames collide with directory names the agent creates or may
+// create directly under AGENT_BASE_PATH. Tenant names are compared
+// case-insensitively because btrfs on Linux is case-sensitive but users
+// would otherwise be surprised by a mixed-case bypass.
+var ReservedTenantNames = []string{TasksDir, SnapshotsDir, DataDir, "metadata"}
+
+// SoftReservedLabelKeys are managed automatically (identity, clone source tracking).
+// Cannot be set via K8s annotations or CLI flags. Agent API consumers should use v1.Client
+// which handles these automatically.
+var SoftReservedLabelKeys = []string{LabelCreatedBy, LabelCloneSourceType, LabelCloneSourceName}
+
 // ValidationError is returned by ValidateName and ValidateLabels.
 // Consumers can type-assert to distinguish validation errors from other errors.
 type ValidationError struct {
@@ -37,6 +57,16 @@ func (e *ValidationError) Error() string { return e.Message }
 func ValidateName(name string) error {
 	if !ValidName.MatchString(name) {
 		return &ValidationError{Message: fmt.Sprintf("invalid name: %q (must be 1-128 chars, only a-z A-Z 0-9 _ -)", name)}
+	}
+	return nil
+}
+
+func ValidateTenantName(name string) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
+	if slices.Contains(ReservedTenantNames, strings.ToLower(name)) {
+		return &ValidationError{Message: fmt.Sprintf("tenant name %q is reserved", name)}
 	}
 	return nil
 }
@@ -55,18 +85,6 @@ func ValidateLabels(labels map[string]string) error {
 	}
 	return nil
 }
-
-// SoftReservedLabelKeys are managed automatically (identity, clone source tracking).
-// Cannot be set via K8s annotations or CLI flags. Agent API consumers should use v1.Client
-// which handles these automatically.
-var SoftReservedLabelKeys = []string{LabelCreatedBy, LabelCloneSourceType, LabelCloneSourceName}
-
-const (
-	DataDir      = "data"
-	MetadataFile = "metadata.json"
-	SnapshotsDir = "snapshots"
-	TasksDir     = "tasks"
-)
 
 type AgentConfig struct {
 	BasePath               string        `env:"AGENT_BASE_PATH" envDefault:"./storage"`

@@ -37,7 +37,10 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	}
 
 	// parse tenants
-	tenants := parseTenants(cfg.Tenants)
+	tenants, err := parseTenants(cfg.Tenants)
+	if err != nil {
+		return nil, err
+	}
 	if tenants == nil {
 		return nil, fmt.Errorf("AGENT_TENANTS must contain at least one valid name:token pair")
 	}
@@ -165,22 +168,28 @@ func (a *Agent) Start(ctx context.Context) {
 }
 
 // parseTenants parses "name:token,name:token" into map[token]name.
-// Returns nil if input is empty.
-func parseTenants(s string) map[string]string {
+// Returns nil map if input is empty. Returns an error if any tenant name
+// is invalid or reserved, so misconfiguration fails before any filesystem
+// operations are attempted.
+func parseTenants(s string) (map[string]string, error) {
 	if s == "" {
-		return nil
+		return nil, nil
 	}
 	m := make(map[string]string)
 	for entry := range strings.SplitSeq(s, ",") {
 		name, tok, ok := strings.Cut(strings.TrimSpace(entry), ":")
-		if ok {
-			name = strings.TrimSpace(name)
-			tok = strings.TrimSpace(tok)
-			m[tok] = name
+		if !ok {
+			continue
 		}
+		name = strings.TrimSpace(name)
+		tok = strings.TrimSpace(tok)
+		if err := config.ValidateTenantName(name); err != nil {
+			return nil, fmt.Errorf("AGENT_TENANTS: %w", err)
+		}
+		m[tok] = name
 	}
 	if len(m) == 0 {
-		return nil
+		return nil, nil
 	}
-	return m
+	return m, nil
 }

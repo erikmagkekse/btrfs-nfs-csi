@@ -186,6 +186,39 @@ func TestValidateName(t *testing.T) {
 	}
 }
 
+func TestValidateTenantName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"simple", "mytenant", false},
+		{"with_hyphen", "tenant-a", false},
+		{"default", "default", false},
+		{"reserved_tasks", "tasks", true},
+		{"reserved_snapshots", "snapshots", true},
+		{"reserved_data", "data", true},
+		{"reserved_metadata", "metadata", true},
+		{"reserved_uppercase", "TASKS", true},
+		{"reserved_mixedcase", "Snapshots", true},
+		{"invalid_regex_dot", "has.dot", true},
+		{"empty", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := config.ValidateTenantName(tt.input)
+			if !tt.wantErr {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			var ve *config.ValidationError
+			require.ErrorAs(t, err, &ve)
+		})
+	}
+}
+
 func TestValidateClientIP(t *testing.T) {
 	tests := []struct {
 		name    string
