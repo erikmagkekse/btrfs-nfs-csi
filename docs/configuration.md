@@ -5,7 +5,7 @@
 | Variable | Default | Description |
 |---|---|---|
 | `AGENT_BASE_PATH` | `./storage` | btrfs mount point (quickstart sets `/export/data`) |
-| `AGENT_TENANTS` | **required** | `name:token,name:token` |
+| `AGENT_TENANTS` | **required** | `name:token,name:token`. Reserved names: `tasks`, `snapshots`, `data`, `metadata`. |
 | `AGENT_LISTEN_ADDR` | `:8080` | HTTP listen address |
 | `AGENT_METRICS_ADDR` | `127.0.0.1:9090` | Metrics server address |
 | `AGENT_TLS_CERT` | - | TLS certificate path |

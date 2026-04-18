@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.10.1 (unreleased)
+
+### Security
+- Constant-time token comparison in the agent auth middleware, replacing the map lookup
+- Reserve internal directory names (`tasks`, `snapshots`, `data`, `metadata`, case-insensitive) as invalid tenant names; `AGENT_TENANTS` is now validated at boot before any filesystem operations
+
 ## v0.10.0
 
 Major feature release. The agent is now a multi-purpose storage backend with a standalone CLI, REST API, task system, and label-based multi-tenancy. 

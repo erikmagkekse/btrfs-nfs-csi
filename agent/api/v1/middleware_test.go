@@ -102,3 +102,75 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "mytenant", gotTenant)
 }
+
+func TestAuthMiddleware_ValidToken_MultipleTenants(t *testing.T) {
+	tenants := map[string]string{
+		"token-a": "alpha",
+		"token-b": "bravo",
+		"token-c": "charlie",
+	}
+	mw := AuthMiddleware(tenants)
+
+	cases := []struct {
+		token      string
+		wantTenant string
+	}{
+		{"token-a", "alpha"},
+		{"token-b", "bravo"},
+		{"token-c", "charlie"},
+	}
+
+	for _, tc := range cases {
+		e := echo.New()
+		var gotTenant string
+		handler := mw(func(c *echo.Context) error {
+			gotTenant = c.Get("tenant").(string)
+			return c.NoContent(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/volumes", nil)
+		req.Header.Set("Authorization", "Bearer "+tc.token)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		require.NoError(t, handler(c))
+		assert.Equal(t, http.StatusOK, rec.Code, "token %q", tc.token)
+		assert.Equal(t, tc.wantTenant, gotTenant, "token %q", tc.token)
+	}
+}
+
+func TestAuthMiddleware_EmptyTenants(t *testing.T) {
+	mw := AuthMiddleware(nil)
+
+	e := echo.New()
+	handler := mw(func(c *echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/volumes", nil)
+	req.Header.Set("Authorization", "Bearer any-token")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler(c))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestLookupTenant_NoMatchWithSimilarLengthToken(t *testing.T) {
+	tenants := map[string]string{
+		"token-a": "alpha",
+		"token-b": "bravo",
+	}
+
+	matched, ok := lookupTenant(tenants, "token-x")
+	assert.False(t, ok)
+	assert.Empty(t, matched)
+
+	matched, ok = lookupTenant(tenants, "")
+	assert.False(t, ok)
+	assert.Empty(t, matched)
+
+	matched, ok = lookupTenant(tenants, "token-a")
+	assert.True(t, ok)
+	assert.Equal(t, "alpha", matched)
+}

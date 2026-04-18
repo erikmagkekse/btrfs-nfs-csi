@@ -90,8 +90,8 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	}
 
 	for _, name := range tenants {
-		if err := config.ValidateName(name); err != nil {
-			log.Fatal().Str("tenant", name).Msg("invalid tenant name")
+		if err := config.ValidateTenantName(name); err != nil {
+			log.Fatal().Err(err).Str("tenant", name).Msg("invalid tenant name")
 		}
 		td := filepath.Join(basePath, name)
 		if err := os.MkdirAll(td, os.FileMode(parsedDirMode)); err != nil {

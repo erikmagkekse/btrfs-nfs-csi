@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
 	"net/http"
 	"strings"
@@ -43,7 +44,7 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 				return authFailed(c, "unsupported auth scheme: "+scheme)
 			}
 
-			tenant, ok := tenants[providedToken]
+			tenant, ok := lookupTenant(tenants, providedToken)
 			if !ok {
 				return authFailed(c, "invalid token")
 			}
@@ -52,6 +53,23 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+// lookupTenant resolves a provided token to a tenant name using a constant-time
+// comparison. It always iterates over every configured tenant so that neither
+// the match position nor the presence of a match is observable via timing.
+func lookupTenant(tenants map[string]string, provided string) (string, bool) {
+	providedBytes := []byte(provided)
+	var matched string
+	var found int
+	for token, name := range tenants {
+		eq := subtle.ConstantTimeCompare([]byte(token), providedBytes)
+		if eq == 1 {
+			matched = name
+		}
+		found |= eq
+	}
+	return matched, found == 1
 }
 
 func authFailed(c *echo.Context, reason string) error {
