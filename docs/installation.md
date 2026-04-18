@@ -171,7 +171,7 @@ For multiple tenants on one agent:
 AGENT_TENANTS=cluster-a:token-aaa,cluster-b:token-bbb
 ```
 
-Each tenant is isolated (separate directory, separate token). See [multi-tenancy](architecture.md#multi-tenancy) for details.
+Each tenant is isolated (separate directory, separate token). Reserved names that cannot be used as tenants: `tasks`, `snapshots`, `data`, `metadata`. See [multi-tenancy](architecture.md#multi-tenancy) for details.
 
 </details>
 
