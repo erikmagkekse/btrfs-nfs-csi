@@ -55,11 +55,11 @@ func taskDetailResponseFrom(t *task.Task) models.TaskDetailResponse {
 
 // CreateTask godoc
 // @Summary      Create a background task
-// @Description  Creates a background task (scrub, balance, test). Returns 202 Accepted with task ID.
+// @Description  Creates a background task (scrub, balance, defragment, test). Returns 202 Accepted with task ID.
 // @Tags         tasks
 // @Accept       json
 // @Produce      json
-// @Param        type    path string true "Task type" Enums(scrub, balance, test)
+// @Param        type    path string true "Task type" Enums(scrub, balance, defragment, test)
 // @Param        request body models.TaskCreateRequest false "Task options"
 // @Success      202 {object} models.TaskCreateResponse
 // @Failure      400 {object} models.ErrorResponse
@@ -88,15 +88,20 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "label \"" + config.LabelCreatedBy + "\" is required", Code: storage.ErrInvalid})
 	}
 
+	ctx := c.Request().Context()
+	tenant := c.Get("tenant").(string)
+
 	var taskID string
 	var err error
 	switch taskType {
 	case models.TaskTypeScrub:
-		taskID, err = h.Store.StartScrub(c.Request().Context(), req.Opts, req.Labels, timeout)
+		taskID, err = h.Store.StartScrub(ctx, req.Opts, req.Labels, timeout)
 	case models.TaskTypeBalance:
-		taskID, err = h.Store.StartBalance(c.Request().Context(), req.Opts, req.Labels, timeout)
+		taskID, err = h.Store.StartBalance(ctx, req.Opts, req.Labels, timeout)
+	case models.TaskTypeDefragment:
+		taskID, err = h.Store.StartDefragment(ctx, tenant, req.Volume, req.Path, req.Opts, req.Labels, timeout)
 	case models.TaskTypeTest:
-		taskID, err = h.Store.StartTestTask(c.Request().Context(), req.Opts, req.Labels, timeout)
+		taskID, err = h.Store.StartTestTask(ctx, req.Opts, req.Labels, timeout)
 	default:
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "unknown task type: " + taskType, Code: storage.ErrInvalid})
 	}
@@ -111,7 +116,7 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 // @Description  Returns background tasks. Filter by type. Supports detail, pagination, and label filtering.
 // @Tags         tasks
 // @Produce      json
-// @Param        type   query string false "Filter by task type" Enums(scrub, balance, test)
+// @Param        type   query string false "Filter by task type" Enums(scrub, balance, defragment, test)
 // @Param        detail query string false "Return full detail" Enums(true)
 // @Param        limit  query int    false "Items per page (0 = pagination disabled)"
 // @Param        after  query string false "Pagination cursor"

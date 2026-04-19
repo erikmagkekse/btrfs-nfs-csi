@@ -24,9 +24,10 @@ const (
 type TaskType string
 
 const (
-	TypeScrub   TaskType = "scrub"
-	TypeBalance TaskType = "balance"
-	TypeTest    TaskType = "test"
+	TypeScrub      TaskType = "scrub"
+	TypeBalance    TaskType = "balance"
+	TypeDefragment TaskType = "defragment"
+	TypeTest       TaskType = "test"
 )
 
 // ErrNotFound is returned when a task ID doesn't exist.

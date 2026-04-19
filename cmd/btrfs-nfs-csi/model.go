@@ -375,6 +375,21 @@ func taskCmd() *cli.Command {
 						Action: taskCreateBalance,
 					},
 					{
+						Name:  models.TaskTypeDefragment,
+						Usage: "defragment a volume or a sub-path within a volume",
+						Flags: []cli.Flag{
+							&cli.StringFlag{Name: "volume", Usage: "volume to defragment (required)"},
+							&cli.StringFlag{Name: "path", Usage: "sub-path relative to the volume data dir"},
+							&cli.StringFlag{Name: "compress", Usage: "recompress during defrag: zstd, lzo, zlib, or none (default none)"},
+							&cli.BoolFlag{Name: "no-recursive", Usage: "do not recurse into subdirectories"},
+							&cli.IntFlag{Name: "threshold", Usage: "target extent size in bytes; files whose extents already exceed this are skipped"},
+							&cli.DurationFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "timeout (e.g. 1h, 30m)"},
+							&cli.BoolFlag{Name: "wait", Aliases: []string{"W"}, Usage: "wait for completion"},
+							labelFlag(),
+						},
+						Action: taskCreateDefragment,
+					},
+					{
 						Name:  models.TaskTypeTest,
 						Usage: "start a test task",
 						Flags: []cli.Flag{

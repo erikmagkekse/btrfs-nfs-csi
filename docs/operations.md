@@ -172,6 +172,34 @@ chmod 600 /etc/default/btrfs-nfs-csi
 systemctl enable --now btrfs-scrub.timer
 ```
 
+## Defragment
+
+btrfs filesystem defragment rewrites files to reduce extent fragmentation. Unlike scrub and balance (which operate filesystem-wide), defragment targets a specific **volume** or **sub-path within a volume** — so it fits naturally into the multi-tenant model.
+
+Snapshots are read-only in this agent and cannot be defragmented. Use a clone (which is a writable snapshot) if you need to defragment a point-in-time copy.
+
+```bash
+btrfs-nfs-csi task create defragment --volume my-vol -W                   # whole volume
+btrfs-nfs-csi task create defragment --volume my-vol --path logs          # sub-path
+btrfs-nfs-csi task create defragment --volume pg-main --compress=zstd -W  # recompress while defragging
+```
+
+**Flags:**
+
+- `--volume` (required): volume to defragment.
+- `--path`: sub-path relative to the volume data dir. Absolute paths and `..` traversal are rejected; symlinks must resolve to stay under the target dir.
+- `--compress zstd|lzo|zlib|none` (default `none`): recompress during defrag.
+- `--no-recursive`: do not recurse into subdirectories (by default, directories are recursed).
+- `--threshold <bytes>`: target extent size — btrfs skips files whose extents already exceed this size.
+
+**Free-space requirement:** Defragment writes new extents before freeing the old ones, so the target volume needs headroom. A volume at 100% of its qgroup quota will fail with `Disk quota exceeded` during defrag. Either expand the quota temporarily or free some data first.
+
+**Concurrency:** Defragment does not take the scrub/balance mutex — it can run in parallel with either. Expect heavy IO if combined.
+
+**Progress reporting:** btrfs does not expose a native progress indicator for defragment (unlike scrub and balance). The task reports a coarse state instead: `0%` while pending, `50%` once running, `100%` on successful completion. A failed or cancelled defragment that had already started shows `50%` at the final state, distinguishing it from one that never got going.
+
+**Reflink caveat:** Defragment can break the block-sharing between snapshots and clones. If you have many snapshots of the volume, disk usage may grow noticeably after a defrag.
+
 ## Balance
 
 btrfs balance rewrites chunks to reclaim wasted space, consolidate half-empty chunks, or change the RAID profile. Runs as a background task via the task system. Balance and scrub are mutually exclusive: only one heavy maintenance task per filesystem at a time.
