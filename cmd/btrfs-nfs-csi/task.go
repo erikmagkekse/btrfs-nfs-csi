@@ -21,9 +21,37 @@ func taskResultSummary(resp *models.TaskDetailResponse) string {
 	switch resp.Type {
 	case models.TaskTypeScrub:
 		return scrubResultSummary(resp)
+	case models.TaskTypeBalance:
+		return balanceResultSummary(resp)
 	default:
 		return genericResultSummary(resp.Result)
 	}
+}
+
+func balanceResultSummary(resp *models.TaskDetailResponse) string {
+	var s btrfs.BalanceStatus
+	if json.Unmarshal(resp.Result, &s) != nil {
+		return genericResultSummary(resp.Result)
+	}
+	switch resp.Status {
+	case models.TaskStatusCompleted:
+		if s.ChunksDone > 0 {
+			return fmt.Sprintf("%d chunks balanced", s.ChunksDone)
+		}
+	case models.TaskStatusRunning:
+		if s.ChunksTotal > 0 {
+			return fmt.Sprintf("%d/%d chunks", s.ChunksDone, s.ChunksTotal)
+		}
+	case models.TaskStatusCancelled:
+		if s.ChunksTotal > 0 {
+			return fmt.Sprintf("cancelled at %d/%d chunks", s.ChunksDone, s.ChunksTotal)
+		}
+	case models.TaskStatusFailed:
+		if s.LastError != "" {
+			return s.LastError
+		}
+	}
+	return ""
 }
 
 func scrubResultSummary(resp *models.TaskDetailResponse) string {
@@ -45,9 +73,6 @@ func scrubResultSummary(resp *models.TaskDetailResponse) string {
 		if errs > 0 {
 			parts = append(parts, fmt.Sprintf("%d errors", errs))
 		}
-		if len(parts) == 0 {
-			return ""
-		}
 		return strings.Join(parts, ", ")
 	case models.TaskStatusCompleted:
 		speed := ""
@@ -62,10 +87,8 @@ func scrubResultSummary(resp *models.TaskDetailResponse) string {
 		if errs > 0 {
 			return fmt.Sprintf("%d errors", errs)
 		}
-		return ""
-	default:
-		return ""
 	}
+	return ""
 }
 
 func genericResultSummary(result json.RawMessage) string {
@@ -223,6 +246,46 @@ func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
 	}
 	if !isJSON(cmd) {
 		fmt.Printf("scrub started (task %s)\n", resp.TaskID)
+	}
+	return waitForTask(ctx, resp.TaskID)
+}
+
+func taskCreateBalance(ctx context.Context, cmd *cli.Command) error {
+	opts := map[string]string{}
+	for _, k := range []string{"dusage", "musage", "susage"} {
+		if cmd.IsSet(k) {
+			opts[k] = fmt.Sprintf("%d", cmd.Int(k))
+		}
+	}
+	for _, k := range []string{"dprofiles", "mprofiles", "dconvert", "mconvert", "sconvert"} {
+		if v := cmd.String(k); v != "" {
+			opts[k] = v
+		}
+	}
+	for _, k := range []string{"ddevid", "mdevid"} {
+		if cmd.IsSet(k) {
+			opts[k] = fmt.Sprintf("%d", cmd.Int(k))
+		}
+	}
+	if cmd.Bool("force") {
+		opts["force"] = "true"
+	}
+
+	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd), Opts: opts}
+	if t := cmd.Duration("timeout"); t > 0 {
+		req.Timeout = t.String()
+	}
+	resp, err := apiClient.CreateTask(ctx, models.TaskTypeBalance, req)
+	if err != nil {
+		return err
+	}
+	if !cmd.Bool("wait") {
+		return output(cmd, resp, func() {
+			fmt.Printf("balance started (task %s)\n", resp.TaskID)
+		})
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("balance started (task %s)\n", resp.TaskID)
 	}
 	return waitForTask(ctx, resp.TaskID)
 }

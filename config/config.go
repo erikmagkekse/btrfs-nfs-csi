@@ -109,6 +109,7 @@ type AgentConfig struct {
 	TaskMaxConcurrent      int           `env:"AGENT_TASK_MAX_CONCURRENT" envDefault:"2"`
 	TaskDefaultTimeout     time.Duration `env:"AGENT_TASK_DEFAULT_TIMEOUT" envDefault:"6h"`
 	TaskScrubTimeout       time.Duration `env:"AGENT_TASK_SCRUB_TIMEOUT" envDefault:"24h"`
+	TaskBalanceTimeout     time.Duration `env:"AGENT_TASK_BALANCE_TIMEOUT" envDefault:"24h"`
 	TaskPollInterval       time.Duration `env:"AGENT_TASK_POLL_INTERVAL" envDefault:"5s"`
 	DefaultPageLimit       int           `env:"AGENT_DEFAULT_PAGE_LIMIT" envDefault:"0"`
 	PaginationSnapshotTTL  time.Duration `env:"AGENT_API_PAGINATION_SNAPSHOT_TTL" envDefault:"30s"`

@@ -447,6 +447,80 @@ func (s *StorageIntegrationSuite) TestStartScrubDuplicate() {
 	s.Assert().Equal(ErrBusy, se.Code)
 }
 
+func (s *StorageIntegrationSuite) TestStartBalance_UsageFilter() {
+	// dusage=100 matches every data chunk, so the balance runs even on an almost-empty fs.
+	taskID, err := s.storage.StartBalance(s.ctx, map[string]string{"dusage": "100"}, nil, 0)
+	s.Require().NoError(err)
+	s.Assert().NotEmpty(taskID)
+
+	var tsk *task.Task
+	for i := 0; i < 60; i++ {
+		tsk, err = s.storage.Tasks().Get(taskID)
+		s.Require().NoError(err)
+		if tsk.Status == task.TaskCompleted || tsk.Status == task.TaskFailed {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	s.Assert().Equal(task.TaskCompleted, tsk.Status)
+}
+
+func (s *StorageIntegrationSuite) TestStartBalance_BusyWithScrub() {
+	started := make(chan struct{})
+	s.storage.Tasks().Create(string(task.TypeScrub), task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	<-started
+
+	_, err := s.storage.StartBalance(s.ctx, map[string]string{"dusage": "100"}, nil, 0)
+	s.Require().Error(err)
+	var se *StorageError
+	s.Require().ErrorAs(err, &se)
+	s.Assert().Equal(ErrBusy, se.Code)
+}
+
+func (s *StorageIntegrationSuite) TestStartBalance_BusyWithBalance() {
+	started := make(chan struct{})
+	s.storage.Tasks().Create(string(task.TypeBalance), task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	<-started
+
+	_, err := s.storage.StartBalance(s.ctx, map[string]string{"dusage": "100"}, nil, 0)
+	s.Require().Error(err)
+	var se *StorageError
+	s.Require().ErrorAs(err, &se)
+	s.Assert().Equal(ErrBusy, se.Code)
+}
+
+func (s *StorageIntegrationSuite) TestStartBalance_Cancel() {
+	taskID, err := s.storage.StartBalance(s.ctx, map[string]string{"dusage": "100"}, nil, 0)
+	s.Require().NoError(err)
+
+	time.Sleep(100 * time.Millisecond)
+	s.Require().NoError(s.storage.Tasks().Cancel(taskID))
+
+	var tsk *task.Task
+	for i := 0; i < 60; i++ {
+		tsk, err = s.storage.Tasks().Get(taskID)
+		s.Require().NoError(err)
+		if tsk.Status != task.TaskRunning && tsk.Status != task.TaskPending {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	s.Assert().Contains([]task.TaskStatus{task.TaskCancelled, task.TaskCompleted}, tsk.Status,
+		"balance should end in cancelled or completed (if finished before cancel landed)")
+
+	bst, err := s.storage.btrfs.BalanceStatus(s.ctx, s.mnt)
+	s.Require().NoError(err)
+	s.Assert().False(bst.Running, "kernel-side balance must be stopped after cancel")
+}
+
 func (s *StorageIntegrationSuite) TestTaskPersistence() {
 	taskDir := filepath.Join(s.mnt, config.TasksDir)
 

@@ -52,3 +52,11 @@ type ScrubStatus struct {
 	CorrectedErrs     uint64 `json:"corrected_errors"`
 	Running           bool   `json:"running"`
 }
+
+type BalanceStatus struct {
+	Running     bool   `json:"running"`
+	Paused      bool   `json:"paused"`
+	ChunksDone  uint64 `json:"chunks_done"`
+	ChunksTotal uint64 `json:"chunks_total"`
+	LastError   string `json:"last_error,omitempty"`
+}

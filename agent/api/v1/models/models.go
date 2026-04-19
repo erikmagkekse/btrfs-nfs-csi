@@ -394,8 +394,9 @@ const (
 
 // Task type identifiers for POST /v1/tasks/:type.
 const (
-	TaskTypeScrub = "scrub"
-	TaskTypeTest  = "test"
+	TaskTypeScrub   = "scrub"
+	TaskTypeBalance = "balance"
+	TaskTypeTest    = "test"
 )
 
 // --- Pagination helpers ---

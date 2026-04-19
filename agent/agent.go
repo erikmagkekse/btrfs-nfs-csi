@@ -60,7 +60,7 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	store := storage.New(
 		cfg.BasePath, cfg.QuotaEnabled, exp, tenantNames,
 		cfg.DefaultDirMode, cfg.DefaultDataMode, cfg.BtrfsBin, cfg.ImmutableLabels,
-		cfg.TaskMaxConcurrent, cfg.TaskDefaultTimeout, cfg.TaskScrubTimeout, cfg.TaskPollInterval,
+		cfg.TaskMaxConcurrent, cfg.TaskDefaultTimeout, cfg.TaskScrubTimeout, cfg.TaskBalanceTimeout, cfg.TaskPollInterval,
 	)
 
 	// echo + routes

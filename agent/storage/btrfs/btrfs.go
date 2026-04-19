@@ -179,6 +179,27 @@ func (m *Manager) ScrubStatus(ctx context.Context, path string) (*ScrubStatus, e
 	return parseScrubStatus(out)
 }
 
+// BalanceStart runs a btrfs balance in the foreground. Blocks until the
+// balance completes or the context is cancelled. Note: unlike scrub, killing
+// the process does NOT stop the kernel-side balance; the caller must invoke
+// BalanceCancel on context cancellation.
+func (m *Manager) BalanceStart(ctx context.Context, path string, args []string) error {
+	cmdArgs := append([]string{"balance", "start"}, args...)
+	cmdArgs = append(cmdArgs, path)
+	return m.run(ctx, cmdArgs...)
+}
+
+func (m *Manager) BalanceStatus(ctx context.Context, path string) (*BalanceStatus, error) {
+	// `btrfs balance status` exits non-zero when no balance is running;
+	// parse anyway, parseBalanceStatus handles the "No balance" message.
+	out, _ := m.cmd.Run(ctx, m.bin, "balance", "status", "-v", path)
+	return parseBalanceStatus(out)
+}
+
+func (m *Manager) BalanceCancel(ctx context.Context, path string) error {
+	return m.run(ctx, "balance", "cancel", path)
+}
+
 // QgroupUsageBulk returns qgroup usage for all subvolumes under path.
 // Runs `btrfs subvolume list -o` and `btrfs qgroup show -re --raw` once each,
 // joins by subvolume ID. Returns map keyed by relative subvolume path.

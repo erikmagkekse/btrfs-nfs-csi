@@ -158,6 +158,39 @@ chmod 600 /etc/default/btrfs-nfs-csi
 systemctl enable --now btrfs-scrub.timer
 ```
 
+## Balance
+
+btrfs balance rewrites chunks to reclaim wasted space, consolidate half-empty chunks, or change the RAID profile. Runs as a background task via the task system. Balance and scrub are mutually exclusive: only one heavy maintenance task per filesystem at a time.
+
+**Routine maintenance** (most common use case):
+
+```bash
+btrfs-nfs-csi task create balance --dusage=50 -W   # consolidate data chunks <50% full
+btrfs-nfs-csi task create balance --musage=50 -W   # same for metadata
+```
+
+This is what you want to run on a schedule. Fixes "No space left on device" errors on btrfs when `df` still shows free space, and keeps fragmentation low over time.
+
+**RAID profile migration** (one-time operations):
+
+```bash
+btrfs-nfs-csi task create balance --dconvert=raid1 --mconvert=raid1 -W
+btrfs-nfs-csi task create balance --dconvert=single,soft -W    # only convert chunks not already single
+btrfs-nfs-csi task create balance --dconvert=single --force -W # reduce redundancy, requires -f
+```
+
+**Drain a device** before removal:
+
+```bash
+btrfs-nfs-csi task create balance --ddevid=2 --mdevid=2 -W
+```
+
+**Unfiltered balance** rewrites every chunk. This is almost never what you want on a running filesystem: huge IO load and hours-to-days runtime. The agent logs a warning when no filter is set.
+
+**Cancel behaviour:** `task cancel <id>` triggers `btrfs balance cancel` on the kernel side, not just a process kill. Balance state is not persisted across reboots, so interrupted balances do not resume automatically.
+
+**Scheduled monthly balance** (systemd timer, analogous to the scrub example above, with `ExecStart=btrfs-nfs-csi task create balance --dusage=75 -W`).
+
 ## CLI
 
 The `btrfs-nfs-csi` binary doubles as a CLI tool. Server commands (`agent`, `integration kubernetes controller|driver`) start long-running processes; everything else is a CLI command.
