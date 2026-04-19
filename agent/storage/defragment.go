@@ -22,8 +22,8 @@ const (
 )
 
 var (
-	defragmentOptsKeys     = []string{defragmentOptCompress, defragmentOptRecursive, defragmentOptThreshold}
-	validCompressionAlgos  = []string{"zstd", "lzo", "zlib", "none"}
+	defragmentOptsKeys    = []string{defragmentOptCompress, defragmentOptRecursive, defragmentOptThreshold}
+	validCompressionAlgos = []string{"zstd", "lzo", "zlib", "none"}
 )
 
 // StartDefragment starts a btrfs defragment as a background task against a
