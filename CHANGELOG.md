@@ -5,6 +5,7 @@
 ### Features
 - New `balance` task type (`task create balance`) with full flag set (usage/profile/device filters, RAID conversion via `dconvert`/`mconvert`/`sconvert`, `force`). Mutex serializes Scrub and Balance so they cannot run concurrently. Cancel propagates to kernel via `btrfs balance cancel`.
 - Scrub task accepts `--readonly`, `--force`, `--ioprio-class`, and `--ioprio-classdata` (CLI) / `opts` (API). Invalid values rejected with `INVALID`; `-B` remains hardcoded for progress tracking.
+- New `defragment` task type (`task create defragment`) targeting a specific `--volume`, optionally scoped to a `--path` sub-directory. Supports `--compress`, `--no-recursive`, and `--threshold`. Path traversal and symlink escapes are rejected at the validation layer. Snapshots are not supported because the agent creates them read-only; clones (writable) can be defragmented like any volume.
 
 ### Security
 - Constant-time token comparison in the agent auth middleware, replacing the map lookup

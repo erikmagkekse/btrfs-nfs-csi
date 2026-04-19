@@ -108,12 +108,20 @@ type VolumeExportDeleteRequest struct {
 
 // --- Task requests ---
 
-// TaskCreateRequest creates a background task (scrub, test).
+// TaskCreateRequest creates a background task (scrub, balance, defragment, test).
 // POST /v1/tasks/:type
+//
+// Volume and Path are consumed by type="defragment" to target a specific
+// volume and optionally a sub-path within it; other task types ignore these
+// fields. Defragment does not support snapshots because snapshots are
+// read-only in this agent; clones (which are writable) can be defragmented
+// like any other volume.
 type TaskCreateRequest struct {
 	Timeout string            `json:"timeout,omitempty"` // Go duration string, e.g. "6h", "30m"
 	Opts    map[string]string `json:"opts,omitempty"`    // task-specific options
 	Labels  map[string]string `json:"labels,omitempty"`
+	Volume  string            `json:"volume,omitempty"` // defragment target
+	Path    string            `json:"path,omitempty"`   // defragment sub-path (relative, requires Volume)
 }
 
 // --- Volume responses ---
@@ -394,9 +402,10 @@ const (
 
 // Task type identifiers for POST /v1/tasks/:type.
 const (
-	TaskTypeScrub   = "scrub"
-	TaskTypeBalance = "balance"
-	TaskTypeTest    = "test"
+	TaskTypeScrub      = "scrub"
+	TaskTypeBalance    = "balance"
+	TaskTypeDefragment = "defragment"
+	TaskTypeTest       = "test"
 )
 
 // --- Pagination helpers ---

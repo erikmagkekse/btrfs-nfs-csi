@@ -203,6 +203,15 @@ func (m *Manager) BalanceCancel(ctx context.Context, path string) error {
 	return m.run(ctx, "balance", "cancel", path)
 }
 
+// Defragment runs a btrfs filesystem defragment against the given path.
+// Blocks until complete or the context is cancelled. Extra args (compression,
+// recursion, threshold) are inserted between the subcommand and the path.
+func (m *Manager) Defragment(ctx context.Context, path string, args []string) error {
+	cmdArgs := append([]string{"filesystem", "defragment"}, args...)
+	cmdArgs = append(cmdArgs, path)
+	return m.run(ctx, cmdArgs...)
+}
+
 // QgroupUsageBulk returns qgroup usage for all subvolumes under path.
 // Runs `btrfs subvolume list -o` and `btrfs qgroup show -re --raw` once each,
 // joins by subvolume ID. Returns map keyed by relative subvolume path.

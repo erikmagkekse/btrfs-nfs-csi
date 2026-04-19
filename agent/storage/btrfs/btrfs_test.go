@@ -612,6 +612,26 @@ func TestScrubStatus(t *testing.T) {
 		require.Len(t, m.Calls, 1)
 		assert.Equal(t, []string{"scrub", "start", "-B", "-r", "-c", "3", "/mnt/data"}, m.Calls[0])
 	})
+
+	t.Run("defragment builds command with extra args", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.Defragment(context.Background(), "/mnt/data/vol/data", []string{"-r", "-czstd"})
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"filesystem", "defragment", "-r", "-czstd", "/mnt/data/vol/data"}, m.Calls[0])
+	})
+
+	t.Run("defragment without args", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.Defragment(context.Background(), "/mnt/data/vol/data", nil)
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"filesystem", "defragment", "/mnt/data/vol/data"}, m.Calls[0])
+	})
 }
 
 func TestParseSubvolumeListFull(t *testing.T) {
