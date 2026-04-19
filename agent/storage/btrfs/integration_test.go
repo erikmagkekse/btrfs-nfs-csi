@@ -266,7 +266,7 @@ func (s *BtrfsIntegrationSuite) TestScrubStartAndStatus() {
 	s.Require().NoError(err, "sync")
 
 	// run scrub in foreground (-B)
-	err = s.mgr.ScrubStart(s.ctx, s.mnt)
+	err = s.mgr.ScrubStart(s.ctx, s.mnt, nil)
 	s.Require().NoError(err, "ScrubStart")
 
 	// check result
@@ -284,7 +284,7 @@ func (s *BtrfsIntegrationSuite) TestScrubCancelViaContext() {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- s.mgr.ScrubStart(ctx, s.mnt)
+		done <- s.mgr.ScrubStart(ctx, s.mnt, nil)
 	}()
 
 	// cancel immediately

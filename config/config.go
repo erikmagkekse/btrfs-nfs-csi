@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -69,6 +70,16 @@ func ValidateTenantName(name string) error {
 		return &ValidationError{Message: fmt.Sprintf("tenant name %q is reserved", name)}
 	}
 	return nil
+}
+
+// ValidateIntInRange parses val as an integer and checks it is between min and
+// max (inclusive). Returns a ValidationError with the fieldName for reporting.
+func ValidateIntInRange(val string, min, max int, fieldName string) (int, error) {
+	n, err := strconv.Atoi(val)
+	if err != nil || n < min || n > max {
+		return 0, &ValidationError{Message: fmt.Sprintf("invalid %s value %q (expected integer %d-%d)", fieldName, val, min, max)}
+	}
+	return n, nil
 }
 
 func ValidateLabels(labels map[string]string) error {

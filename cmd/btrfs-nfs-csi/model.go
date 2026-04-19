@@ -343,6 +343,10 @@ func taskCmd() *cli.Command {
 						Name:  models.TaskTypeScrub,
 						Usage: "start a btrfs scrub",
 						Flags: []cli.Flag{
+							&cli.BoolFlag{Name: "readonly", Aliases: []string{"r"}, Usage: "scan only, do not attempt repair"},
+							&cli.BoolFlag{Name: "force", Aliases: []string{"f"}, Usage: "force start even if a finished scrub is recorded"},
+							&cli.IntFlag{Name: "ioprio-class", Usage: "IO priority class (0=none, 1=realtime, 2=best-effort, 3=idle)"},
+							&cli.IntFlag{Name: "ioprio-classdata", Usage: "IO priority within class (0-7, 0=highest)"},
 							&cli.DurationFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "timeout (e.g. 1h, 30m)"},
 							&cli.BoolFlag{Name: "wait", Aliases: []string{"W"}, Usage: "wait for completion"},
 							labelFlag(),
