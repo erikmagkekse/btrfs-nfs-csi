@@ -597,10 +597,20 @@ func TestScrubStatus(t *testing.T) {
 		m := &utils.MockRunner{}
 		mgr := newTestManager(m)
 
-		err := mgr.ScrubStart(context.Background(), "/mnt/data")
+		err := mgr.ScrubStart(context.Background(), "/mnt/data", nil)
 		require.NoError(t, err)
 		require.Len(t, m.Calls, 1)
 		assert.Equal(t, []string{"scrub", "start", "-B", "/mnt/data"}, m.Calls[0])
+	})
+
+	t.Run("scrub start inserts extra args between -B and path", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.ScrubStart(context.Background(), "/mnt/data", []string{"-r", "-c", "3"})
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"scrub", "start", "-B", "-r", "-c", "3", "/mnt/data"}, m.Calls[0])
 	})
 }
 

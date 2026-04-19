@@ -2,6 +2,10 @@
 
 ## v0.10.1 (unreleased)
 
+### Features
+- New `balance` task type (`task create balance`) with full flag set (usage/profile/device filters, RAID conversion via `dconvert`/`mconvert`/`sconvert`, `force`). Mutex serializes Scrub and Balance so they cannot run concurrently. Cancel propagates to kernel via `btrfs balance cancel`.
+- Scrub task accepts `--readonly`, `--force`, `--ioprio-class`, and `--ioprio-classdata` (CLI) / `opts` (API). Invalid values rejected with `INVALID`; `-B` remains hardcoded for progress tracking.
+
 ### Security
 - Constant-time token comparison in the agent auth middleware, replacing the map lookup
 

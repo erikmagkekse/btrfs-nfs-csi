@@ -166,8 +166,11 @@ func (m *Manager) FilesystemUsage(ctx context.Context, path string) (FilesystemU
 
 // ScrubStart runs a btrfs scrub in foreground mode (-B).
 // Blocks until the scrub completes or the context is cancelled.
-func (m *Manager) ScrubStart(ctx context.Context, path string) error {
-	return m.run(ctx, "scrub", "start", "-B", path)
+// Extra args are inserted between -B and path (e.g. -r, -f, -c N, -n N).
+func (m *Manager) ScrubStart(ctx context.Context, path string, args []string) error {
+	cmdArgs := append([]string{"scrub", "start", "-B"}, args...)
+	cmdArgs = append(cmdArgs, path)
+	return m.run(ctx, cmdArgs...)
 }
 
 // ScrubStatus returns the status of the last/current scrub on the filesystem at path.

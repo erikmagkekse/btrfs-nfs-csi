@@ -117,6 +117,20 @@ btrfs-nfs-csi task list                # check progress
 btrfs-nfs-csi task cancel <id>         # cancel
 ```
 
+**Optional flags** (mirror `btrfs scrub start`):
+
+```bash
+btrfs-nfs-csi task create scrub --readonly -W       # audit only, no repair attempt
+btrfs-nfs-csi task create scrub --ioprio-class=3 -W # idle IO priority (good for scheduled scrubs)
+```
+
+- `--readonly` (`-r`): Read-only scan, report errors without attempting repair.
+- `--force` (`-f`): Start even if a previously-finished scrub record exists on the FS.
+- `--ioprio-class`: IO priority class (`0`=none, `1`=realtime, `2`=best-effort, `3`=idle).
+- `--ioprio-classdata`: Priority within the class (`0`-`7`, `0`=highest).
+
+`-B` (foreground) is always set so the agent can track progress and enforce timeouts.
+
 Only one scrub can run at a time per filesystem. The agent detects externally started scrubs (e.g. via `btrfs scrub start` on the host) and rejects duplicates.
 
 Completed tasks include a result with bytes scrubbed and error counts. Tasks are persisted to disk and cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h).

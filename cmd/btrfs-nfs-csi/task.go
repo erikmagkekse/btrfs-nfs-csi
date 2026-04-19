@@ -231,7 +231,21 @@ func taskCancel(ctx context.Context, cmd *cli.Command) error {
 }
 
 func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
-	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd)}
+	opts := map[string]string{}
+	if cmd.Bool("readonly") {
+		opts["readonly"] = "true"
+	}
+	if cmd.Bool("force") {
+		opts["force"] = "true"
+	}
+	if cmd.IsSet("ioprio-class") {
+		opts["ioprio_class"] = fmt.Sprintf("%d", cmd.Int("ioprio-class"))
+	}
+	if cmd.IsSet("ioprio-classdata") {
+		opts["ioprio_classdata"] = fmt.Sprintf("%d", cmd.Int("ioprio-classdata"))
+	}
+
+	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd), Opts: opts}
 	if t := cmd.Duration("timeout"); t > 0 {
 		req.Timeout = t.String()
 	}

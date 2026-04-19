@@ -148,9 +148,9 @@ func balanceArgsFromOpts(opts map[string]string) ([]string, error) {
 
 	for _, k := range []string{"dusage", "musage", "susage"} {
 		if v, ok := opts[k]; ok {
-			pct, err := strconv.Atoi(v)
-			if err != nil || pct < 0 || pct > 100 {
-				return nil, &config.ValidationError{Message: fmt.Sprintf("invalid %s value %q (expected integer 0-100)", k, v)}
+			pct, err := config.ValidateIntInRange(v, 0, 100, k)
+			if err != nil {
+				return nil, err
 			}
 			args = append(args, fmt.Sprintf("-%s=%d", k, pct))
 		}
