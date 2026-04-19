@@ -66,3 +66,7 @@ type BalanceStatus struct {
 	ChunksTotal uint64 `json:"chunks_total"`
 	LastError   string `json:"last_error,omitempty"`
 }
+
+type QuotaRescanStatus struct {
+	Running bool `json:"running"`
+}

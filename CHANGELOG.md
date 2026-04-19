@@ -6,6 +6,7 @@
 - New `balance` task type (`task create balance`) with full flag set (usage/profile/device filters, RAID conversion via `dconvert`/`mconvert`/`sconvert`, `force`). Mutex serializes Scrub and Balance so they cannot run concurrently. Cancel propagates to kernel via `btrfs balance cancel`.
 - Scrub task accepts `--readonly`, `--force`, `--ioprio-class`, and `--ioprio-classdata` (CLI) / `opts` (API). Invalid values rejected with `INVALID`; `-B` remains hardcoded for progress tracking.
 - New `defragment` task type (`task create defragment`) targeting a specific `--volume`, optionally scoped to a `--path` sub-directory. Supports `--compress`, `--no-recursive`, and `--threshold`. Path traversal and symlink escapes are rejected at the validation layer. Snapshots are not supported because the agent creates them read-only; clones (writable) can be defragmented like any volume.
+- New `quota-rescan` task type (`task create quota-rescan`) rebuilds btrfs qgroup accounting filesystem-wide. Mutually exclusive with scrub and balance. Note: only supported on classic qgroups; simple quotas (squota) fail fast with a clear error, as btrfs does not support rescan on that mode.
 
 ### Security
 - Constant-time token comparison in the agent auth middleware, replacing the map lookup
@@ -117,7 +118,7 @@ This release adds the Helm chart as the primary deployment method for the CSI dr
 - Rename `helm.yml` to `ci-helm.yml`, add `helm-release.yml` as reusable workflow (#71)
 
 ### Breaking Changes
-- `btrfs_nfs_csi_controller_agent_health_total` metric removed — use `agent_ops_total{operation="health_check"}` instead (#69)
+- `btrfs_nfs_csi_controller_agent_health_total` metric removed, use `agent_ops_total{operation="health_check"}` instead (#69)
 - Health checks now tracked in `agent_ops_total` and `agent_duration_seconds` with `operation=health_check` (#69)
 
 ## v0.9.9
@@ -139,7 +140,7 @@ This release adds the Helm chart as the primary deployment method for the CSI dr
 - Unit tests for driver utils (ResolveNodeIP) (#59)
 
 ### Security
-- Bump `google.golang.org/grpc` to v1.79.3 — fixes CVE-2026-33186 (authorization bypass via missing leading slash in `:path`, CVSS 9.1 Critical)
+- Bump `google.golang.org/grpc` to v1.79.3, fixes CVE-2026-33186 (authorization bypass via missing leading slash in `:path`, CVSS 9.1 Critical)
 
 ### Other
 - Improved controller agent version check message on non-matching commit builds, issue #54 (#56)

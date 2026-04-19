@@ -632,6 +632,34 @@ func TestScrubStatus(t *testing.T) {
 		require.Len(t, m.Calls, 1)
 		assert.Equal(t, []string{"filesystem", "defragment", "/mnt/data/vol/data"}, m.Calls[0])
 	})
+
+	t.Run("quota rescan uses -w wait flag", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.QuotaRescan(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"quota", "rescan", "-w", "/mnt/data"}, m.Calls[0])
+	})
+
+	t.Run("quota rescan status parses idle", func(t *testing.T) {
+		m := &utils.MockRunner{Out: "no rescan operation in progress\n"}
+		mgr := newTestManager(m)
+
+		st, err := mgr.QuotaRescanStatus(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.False(t, st.Running)
+	})
+
+	t.Run("quota rescan status parses running", func(t *testing.T) {
+		m := &utils.MockRunner{Out: "quota rescan status:\nrunning, current key (256 96 0)\n"}
+		mgr := newTestManager(m)
+
+		st, err := mgr.QuotaRescanStatus(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.True(t, st.Running)
+	})
 }
 
 func TestParseSubvolumeListFull(t *testing.T) {

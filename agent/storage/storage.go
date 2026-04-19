@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -200,6 +201,71 @@ func (s *Storage) BasePath() string       { return s.basePath }
 func (s *Storage) QuotaEnabled() bool     { return s.quotaEnabled }
 func (s *Storage) Exporter() nfs.Exporter { return s.exporter }
 func (s *Storage) Tasks() *task.Manager   { return s.tasks }
+
+// StartQuotaRescan triggers a filesystem-wide btrfs quota rescan. Mutually
+// exclusive with scrub and balance. btrfs has no configurable flags for
+// rescan, so opts must be empty.
+func (s *Storage) StartQuotaRescan(ctx context.Context, opts map[string]string, labels map[string]string, timeout time.Duration) (string, error) {
+	s.maintenanceMu.Lock()
+	defer s.maintenanceMu.Unlock()
+
+	if len(opts) > 0 {
+		return "", &config.ValidationError{Message: "quota rescan accepts no options"}
+	}
+	if err := s.ensureMaintenanceFree(ctx); err != nil {
+		return "", err
+	}
+	if err := config.ValidateLabels(labels); err != nil {
+		return "", err
+	}
+
+	t := s.taskDefaultTimeout
+	if timeout > 0 {
+		t = timeout
+	}
+	id := s.tasks.Create(string(task.TypeQuotaRescan), task.TaskOpts{Labels: labels, Timeout: t}, func(ctx context.Context, update *task.Update) error {
+		return s.runQuotaRescan(ctx, update)
+	})
+	log.Info().Str("task", id).Str("path", s.mountPoint).Msg("quota rescan started")
+	return id, nil
+}
+
+func (s *Storage) runQuotaRescan(ctx context.Context, update *task.Update) error {
+	update.SetProgress(50)
+	if err := s.btrfs.QuotaRescan(ctx, s.mountPoint); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		// Simple qgroups (squota, kernel 6.7+) do not support rescan; btrfs
+		// emits "Invalid argument" for this case. Translate for clarity.
+		if strings.Contains(err.Error(), "Invalid argument") {
+			return fmt.Errorf("quota rescan not supported on this filesystem (simple quotas / squota mode cannot be rescanned)")
+		}
+		return fmt.Errorf("btrfs quota rescan: %w", err)
+	}
+	return nil
+}
+
+// ensureMaintenanceFree checks that no scrub, balance, or quota-rescan is
+// currently Running/Pending on the agent and that the kernel reports no such
+// operation in progress. Callers must hold s.maintenanceMu.
+func (s *Storage) ensureMaintenanceFree(ctx context.Context) error {
+	for _, t := range s.tasks.List(string(task.TypeScrub), string(task.TypeBalance), string(task.TypeQuotaRescan)) {
+		if t.Status == task.TaskRunning || t.Status == task.TaskPending {
+			return &StorageError{Code: ErrBusy, Message: "another maintenance task is already running"}
+		}
+	}
+	if sst, err := s.btrfs.ScrubStatus(ctx, s.mountPoint); err == nil && sst.Running {
+		return &StorageError{Code: ErrBusy, Message: "scrub already running on filesystem"}
+	}
+	if bst, _ := s.btrfs.BalanceStatus(ctx, s.mountPoint); bst != nil && bst.Running {
+		return &StorageError{Code: ErrBusy, Message: "balance already running on filesystem"}
+	}
+	if qst, _ := s.btrfs.QuotaRescanStatus(ctx, s.mountPoint); qst != nil && qst.Running {
+		return &StorageError{Code: ErrBusy, Message: "quota rescan already running on filesystem"}
+	}
+	return nil
+}
 
 func (s *Storage) tenantPath(tenant string) (string, error) {
 	if err := config.ValidateName(tenant); err != nil {

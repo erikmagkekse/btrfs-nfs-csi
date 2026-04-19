@@ -345,6 +345,26 @@ func taskCreateDefragment(ctx context.Context, cmd *cli.Command) error {
 	return waitForTask(ctx, resp.TaskID)
 }
 
+func taskCreateQuotaRescan(ctx context.Context, cmd *cli.Command) error {
+	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd)}
+	if t := cmd.Duration("timeout"); t > 0 {
+		req.Timeout = t.String()
+	}
+	resp, err := apiClient.CreateTask(ctx, models.TaskTypeQuotaRescan, req)
+	if err != nil {
+		return err
+	}
+	if !cmd.Bool("wait") {
+		return output(cmd, resp, func() {
+			fmt.Printf("quota rescan started (task %s)\n", resp.TaskID)
+		})
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("quota rescan started (task %s)\n", resp.TaskID)
+	}
+	return waitForTask(ctx, resp.TaskID)
+}
+
 func taskCreateTest(ctx context.Context, cmd *cli.Command) error {
 	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd)}
 	if s := cmd.Duration("sleep"); s > 0 {
