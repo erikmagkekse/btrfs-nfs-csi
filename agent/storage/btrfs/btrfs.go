@@ -212,6 +212,20 @@ func (m *Manager) Defragment(ctx context.Context, path string, args []string) er
 	return m.run(ctx, cmdArgs...)
 }
 
+// QuotaRescan triggers a btrfs quota rescan and waits for it to finish via -w.
+func (m *Manager) QuotaRescan(ctx context.Context, path string) error {
+	return m.run(ctx, "quota", "rescan", "-w", path)
+}
+
+// QuotaRescanStatus returns whether a rescan is currently in progress.
+func (m *Manager) QuotaRescanStatus(ctx context.Context, path string) (*QuotaRescanStatus, error) {
+	out, err := m.cmd.Run(ctx, m.bin, "quota", "rescan", "-s", path)
+	if err != nil {
+		return nil, err
+	}
+	return parseQuotaRescanStatus(out), nil
+}
+
 // QgroupUsageBulk returns qgroup usage for all subvolumes under path.
 // Runs `btrfs subvolume list -o` and `btrfs qgroup show -re --raw` once each,
 // joins by subvolume ID. Returns map keyed by relative subvolume path.

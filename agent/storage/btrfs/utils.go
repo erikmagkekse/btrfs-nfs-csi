@@ -257,6 +257,24 @@ func parseBalanceStatus(out string) (*BalanceStatus, error) {
 	return s, nil
 }
 
+// parseQuotaRescanStatus parses `btrfs quota rescan -s` output.
+// btrfs-progs emits:
+//   - "no rescan operation in progress"                  -> idle
+//   - "quota rescan status:\nrunning, current key ..."   -> running
+func parseQuotaRescanStatus(out string) *QuotaRescanStatus {
+	s := &QuotaRescanStatus{}
+	for line := range strings.SplitSeq(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "no rescan") {
+			return s
+		}
+		if strings.HasPrefix(trimmed, "running") {
+			s.Running = true
+		}
+	}
+	return s
+}
+
 // subvolEntry holds a parsed line from `btrfs subvolume list -o`.
 type subvolEntry struct {
 	ID   string

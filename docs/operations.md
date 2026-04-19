@@ -172,9 +172,21 @@ chmod 600 /etc/default/btrfs-nfs-csi
 systemctl enable --now btrfs-scrub.timer
 ```
 
+## Quota Rescan
+
+`btrfs quota rescan` rebuilds qgroup accounting from scratch. Useful after qgroup inconsistencies (can happen if quotas were enabled on an existing filesystem, or after unusual delete/snapshot patterns). Filesystem-wide; no volume or tenant scoping possible.
+
+```bash
+btrfs-nfs-csi task create quota-rescan -W
+```
+
+**Only works on classic btrfs quotas (`btrfs quota enable`).** Simple quotas (`btrfs quota enable -s`, squota, kernel 6.7+) do not support rescan, accounting is per-extent-lifetime and has no historical state to rescan. Trying anyway on squota filesystems fails fast with a clear error.
+
+No flags beyond `--timeout`, `--wait`, and labels. Mutually exclusive with scrub and balance. Progress reports 0/50/100 (btrfs has no structured progress for rescan).
+
 ## Defragment
 
-btrfs filesystem defragment rewrites files to reduce extent fragmentation. Unlike scrub and balance (which operate filesystem-wide), defragment targets a specific **volume** or **sub-path within a volume** — so it fits naturally into the multi-tenant model.
+btrfs filesystem defragment rewrites files to reduce extent fragmentation. Unlike scrub and balance (which operate filesystem-wide), defragment targets a specific **volume** or **sub-path within a volume**, so it fits naturally into the multi-tenant model.
 
 Snapshots are read-only in this agent and cannot be defragmented. Use a clone (which is a writable snapshot) if you need to defragment a point-in-time copy.
 
@@ -190,11 +202,11 @@ btrfs-nfs-csi task create defragment --volume pg-main --compress=zstd -W  # reco
 - `--path`: sub-path relative to the volume data dir. Absolute paths and `..` traversal are rejected; symlinks must resolve to stay under the target dir.
 - `--compress zstd|lzo|zlib|none` (default `none`): recompress during defrag.
 - `--no-recursive`: do not recurse into subdirectories (by default, directories are recursed).
-- `--threshold <bytes>`: target extent size — btrfs skips files whose extents already exceed this size.
+- `--threshold <bytes>`: target extent size, btrfs skips files whose extents already exceed this size.
 
 **Free-space requirement:** Defragment writes new extents before freeing the old ones, so the target volume needs headroom. A volume at 100% of its qgroup quota will fail with `Disk quota exceeded` during defrag. Either expand the quota temporarily or free some data first.
 
-**Concurrency:** Defragment does not take the scrub/balance mutex — it can run in parallel with either. Expect heavy IO if combined.
+**Concurrency:** Defragment does not take the scrub/balance mutex, it can run in parallel with either. Expect heavy IO if combined.
 
 **Progress reporting:** btrfs does not expose a native progress indicator for defragment (unlike scrub and balance). The task reports a coarse state instead: `0%` while pending, `50%` once running, `100%` on successful completion. A failed or cancelled defragment that had already started shows `50%` at the final state, distinguishing it from one that never got going.
 

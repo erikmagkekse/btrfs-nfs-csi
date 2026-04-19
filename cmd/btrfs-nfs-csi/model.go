@@ -390,6 +390,16 @@ func taskCmd() *cli.Command {
 						Action: taskCreateDefragment,
 					},
 					{
+						Name:  models.TaskTypeQuotaRescan,
+						Usage: "rebuild btrfs qgroup accounting (filesystem-wide)",
+						Flags: []cli.Flag{
+							&cli.DurationFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "timeout (e.g. 1h, 30m)"},
+							&cli.BoolFlag{Name: "wait", Aliases: []string{"W"}, Usage: "wait for completion"},
+							labelFlag(),
+						},
+						Action: taskCreateQuotaRescan,
+					},
+					{
 						Name:  models.TaskTypeTest,
 						Usage: "start a test task",
 						Flags: []cli.Flag{

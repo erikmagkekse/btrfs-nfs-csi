@@ -25,17 +25,8 @@ var scrubOptsKeys = []string{scrubOptReadonly, scrubOptForce, scrubOptIoPrioClas
 func (s *Storage) StartScrub(ctx context.Context, opts map[string]string, labels map[string]string, timeout time.Duration) (string, error) {
 	s.maintenanceMu.Lock()
 	defer s.maintenanceMu.Unlock()
-	for _, t := range s.tasks.List(string(task.TypeScrub), string(task.TypeBalance)) {
-		if t.Status == task.TaskRunning || t.Status == task.TaskPending {
-			return "", &StorageError{Code: ErrBusy, Message: "another maintenance task is already running"}
-		}
-	}
-	status, err := s.btrfs.ScrubStatus(ctx, s.mountPoint)
-	if err == nil && status.Running {
-		return "", &StorageError{Code: ErrBusy, Message: "scrub already running on filesystem"}
-	}
-	if bst, _ := s.btrfs.BalanceStatus(ctx, s.mountPoint); bst != nil && bst.Running {
-		return "", &StorageError{Code: ErrBusy, Message: "balance already running on filesystem"}
+	if err := s.ensureMaintenanceFree(ctx); err != nil {
+		return "", err
 	}
 
 	if err := config.ValidateLabels(labels); err != nil {

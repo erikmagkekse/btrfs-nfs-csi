@@ -402,10 +402,11 @@ const (
 
 // Task type identifiers for POST /v1/tasks/:type.
 const (
-	TaskTypeScrub      = "scrub"
-	TaskTypeBalance    = "balance"
-	TaskTypeDefragment = "defragment"
-	TaskTypeTest       = "test"
+	TaskTypeScrub       = "scrub"
+	TaskTypeBalance     = "balance"
+	TaskTypeDefragment  = "defragment"
+	TaskTypeQuotaRescan = "quota-rescan"
+	TaskTypeTest        = "test"
 )
 
 // --- Pagination helpers ---
