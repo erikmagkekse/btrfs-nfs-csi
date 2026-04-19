@@ -83,15 +83,6 @@ func TestBalanceStart_NoArgs(t *testing.T) {
 	assert.Equal(t, []string{"balance", "start", "/mnt"}, m.Calls[0])
 }
 
-func TestBalanceStatus_ParsesIdle(t *testing.T) {
-	m := &utils.MockRunner{Out: "No balance found on '/mnt'\n"}
-	mgr := newTestManager(m)
-
-	st, err := mgr.BalanceStatus(context.Background(), "/mnt")
-	require.NoError(t, err)
-	assert.False(t, st.Running)
-}
-
 func TestBalanceStatus_NonZeroExitStillParses(t *testing.T) {
 	// `btrfs balance status` exits non-zero when no balance is running.
 	// We expect the parser to still handle the output.

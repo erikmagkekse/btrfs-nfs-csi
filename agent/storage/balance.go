@@ -15,11 +15,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// validBalanceProfiles is the set of btrfs profiles accepted by -dconvert/-mconvert/-sconvert
-// and -dprofiles/-mprofiles filters. Semantic constraints (e.g. raid5 needs >= 2 devices) are
-// NOT validated here; btrfs will reject invalid combinations at runtime.
-var validBalanceProfiles = []string{"single", "dup", "raid0", "raid1", "raid1c3", "raid1c4", "raid10", "raid5", "raid6"}
-
 var balanceOptsKeys = []string{
 	"dusage", "musage", "susage",
 	"dprofiles", "mprofiles",
@@ -163,7 +158,7 @@ func balanceArgsFromOpts(opts map[string]string) ([]string, error) {
 
 	for _, k := range []string{"dprofiles", "mprofiles"} {
 		if v, ok := opts[k]; ok {
-			if !slices.Contains(validBalanceProfiles, v) {
+			if !slices.Contains(btrfs.ValidProfiles, v) {
 				return nil, &config.ValidationError{Message: fmt.Sprintf("invalid %s value %q", k, v)}
 			}
 			args = append(args, fmt.Sprintf("-%s=%s", k, v))
@@ -183,7 +178,7 @@ func balanceArgsFromOpts(opts map[string]string) ([]string, error) {
 	for _, k := range []string{"dconvert", "mconvert", "sconvert"} {
 		if v, ok := opts[k]; ok {
 			profile, _ := strings.CutSuffix(v, ",soft")
-			if !slices.Contains(validBalanceProfiles, profile) {
+			if !slices.Contains(btrfs.ValidProfiles, profile) {
 				return nil, &config.ValidationError{Message: fmt.Sprintf("invalid %s profile %q", k, v)}
 			}
 			args = append(args, fmt.Sprintf("-%s=%s", k, v))

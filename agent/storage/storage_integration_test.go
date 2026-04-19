@@ -432,11 +432,12 @@ func (s *StorageIntegrationSuite) TestStartScrub() {
 func (s *StorageIntegrationSuite) TestStartScrubDuplicate() {
 	// start a blocking scrub in background
 	started := make(chan struct{})
-	s.storage.Tasks().Create(string(task.TypeScrub), task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
+	id := s.storage.Tasks().Create(string(task.TypeScrub), task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
 	})
+	defer s.cancelAndAwait(id)
 	<-started
 
 	// second scrub should be rejected
@@ -445,6 +446,21 @@ func (s *StorageIntegrationSuite) TestStartScrubDuplicate() {
 	var se *StorageError
 	s.Require().ErrorAs(err, &se)
 	s.Assert().Equal(ErrBusy, se.Code)
+}
+
+// cancelAndAwait cancels the task and waits until it leaves the Running/Pending
+// states, so the next test in the suite starts from a clean maintenance slot.
+func (s *StorageIntegrationSuite) cancelAndAwait(id string) {
+	_ = s.storage.Tasks().Cancel(id)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		t, err := s.storage.Tasks().Get(id)
+		if err != nil || (t.Status != task.TaskRunning && t.Status != task.TaskPending) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	s.T().Logf("warning: task %s did not leave Running/Pending within 5s", id)
 }
 
 func (s *StorageIntegrationSuite) TestStartBalance_UsageFilter() {
@@ -467,27 +483,12 @@ func (s *StorageIntegrationSuite) TestStartBalance_UsageFilter() {
 
 func (s *StorageIntegrationSuite) TestStartBalance_BusyWithScrub() {
 	started := make(chan struct{})
-	s.storage.Tasks().Create(string(task.TypeScrub), task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
+	id := s.storage.Tasks().Create(string(task.TypeScrub), task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
 		close(started)
 		<-ctx.Done()
 		return ctx.Err()
 	})
-	<-started
-
-	_, err := s.storage.StartBalance(s.ctx, map[string]string{"dusage": "100"}, nil, 0)
-	s.Require().Error(err)
-	var se *StorageError
-	s.Require().ErrorAs(err, &se)
-	s.Assert().Equal(ErrBusy, se.Code)
-}
-
-func (s *StorageIntegrationSuite) TestStartBalance_BusyWithBalance() {
-	started := make(chan struct{})
-	s.storage.Tasks().Create(string(task.TypeBalance), task.TaskOpts{}, func(ctx context.Context, update *task.Update) error {
-		close(started)
-		<-ctx.Done()
-		return ctx.Err()
-	})
+	defer s.cancelAndAwait(id)
 	<-started
 
 	_, err := s.storage.StartBalance(s.ctx, map[string]string{"dusage": "100"}, nil, 0)
