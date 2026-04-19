@@ -25,6 +25,7 @@
 | `AGENT_TASK_MAX_CONCURRENT` | `2` | Max concurrent tasks (`0` = unlimited) |
 | `AGENT_TASK_DEFAULT_TIMEOUT` | `6h` | Default timeout for tasks (e.g. test). `0` = no timeout |
 | `AGENT_TASK_SCRUB_TIMEOUT` | `24h` | Timeout for btrfs scrub tasks. `0` = no timeout |
+| `AGENT_TASK_BALANCE_TIMEOUT` | `24h` | Timeout for btrfs balance tasks. `0` = no timeout |
 | `AGENT_TASK_POLL_INTERVAL` | `5s` | Progress update interval for background tasks |
 | `AGENT_IMMUTABLE_LABELS` | - | Comma-separated label keys that cannot be changed after creation |
 | `AGENT_DEFAULT_PAGE_LIMIT` | `0` | Default page size for list API responses (0 = pagination disabled) |

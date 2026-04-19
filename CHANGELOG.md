@@ -4,6 +4,8 @@
 
 ### Security
 - Constant-time token comparison in the agent auth middleware, replacing the map lookup
+
+### Bug Fixes
 - Reserve internal directory names (`tasks`, `snapshots`, `data`, `metadata`, case-insensitive) as invalid tenant names; `AGENT_TENANTS` is now validated at boot before any filesystem operations
 
 ## v0.10.0

@@ -350,6 +350,27 @@ func taskCmd() *cli.Command {
 						Action: taskCreateScrub,
 					},
 					{
+						Name:  models.TaskTypeBalance,
+						Usage: "start a btrfs balance",
+						Flags: []cli.Flag{
+							&cli.IntFlag{Name: "dusage", Usage: "only balance data chunks with usage < N% (0-100)"},
+							&cli.IntFlag{Name: "musage", Usage: "only balance metadata chunks with usage < N% (0-100)"},
+							&cli.IntFlag{Name: "susage", Usage: "only balance system chunks with usage < N% (0-100)"},
+							&cli.StringFlag{Name: "dprofiles", Usage: "only balance data chunks on given profile (e.g. raid1)"},
+							&cli.StringFlag{Name: "mprofiles", Usage: "only balance metadata chunks on given profile"},
+							&cli.IntFlag{Name: "ddevid", Usage: "only balance data chunks on given device ID"},
+							&cli.IntFlag{Name: "mdevid", Usage: "only balance metadata chunks on given device ID"},
+							&cli.StringFlag{Name: "dconvert", Usage: "convert data profile (e.g. raid1, raid1,soft)"},
+							&cli.StringFlag{Name: "mconvert", Usage: "convert metadata profile"},
+							&cli.StringFlag{Name: "sconvert", Usage: "convert system profile"},
+							&cli.BoolFlag{Name: "force", Aliases: []string{"f"}, Usage: "allow reducing metadata integrity (required for some convert operations)"},
+							&cli.DurationFlag{Name: "timeout", Aliases: []string{"t"}, Usage: "timeout (e.g. 1h, 30m)"},
+							&cli.BoolFlag{Name: "wait", Aliases: []string{"W"}, Usage: "wait for completion"},
+							labelFlag(),
+						},
+						Action: taskCreateBalance,
+					},
+					{
 						Name:  models.TaskTypeTest,
 						Usage: "start a test task",
 						Flags: []cli.Flag{

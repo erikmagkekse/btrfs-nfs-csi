@@ -130,3 +130,82 @@ func TestGenericResultSummary_Invalid(t *testing.T) {
 	assert.Empty(t, genericResultSummary(json.RawMessage(`{corrupt`)))
 	assert.Empty(t, genericResultSummary(nil))
 }
+
+func balanceResult(done, total uint64, running, paused bool) json.RawMessage {
+	s := btrfs.BalanceStatus{
+		ChunksDone:  done,
+		ChunksTotal: total,
+		Running:     running,
+		Paused:      paused,
+	}
+	raw, _ := json.Marshal(s)
+	return raw
+}
+
+func TestBalanceResultSummary_Completed(t *testing.T) {
+	// Typical case: last poll saw mid-flight state (running=true), task finished before next poll.
+	// We must NOT expose the stale running flag; only surface the chunk count.
+	resp := &models.TaskDetailResponse{
+		Type:   models.TaskTypeBalance,
+		Status: models.TaskStatusCompleted,
+		Result: balanceResult(3, 3, true, false),
+	}
+	assert.Equal(t, "3 chunks balanced", balanceResultSummary(resp))
+}
+
+func TestBalanceResultSummary_CompletedNoChunks(t *testing.T) {
+	// Balance finished faster than pollInterval, result has zero chunks.
+	resp := &models.TaskDetailResponse{
+		Type:   models.TaskTypeBalance,
+		Status: models.TaskStatusCompleted,
+		Result: balanceResult(0, 0, false, false),
+	}
+	assert.Empty(t, balanceResultSummary(resp))
+}
+
+func TestBalanceResultSummary_Running(t *testing.T) {
+	resp := &models.TaskDetailResponse{
+		Type:   models.TaskTypeBalance,
+		Status: models.TaskStatusRunning,
+		Result: balanceResult(1, 3, true, false),
+	}
+	assert.Equal(t, "1/3 chunks", balanceResultSummary(resp))
+}
+
+func TestBalanceResultSummary_Cancelled(t *testing.T) {
+	resp := &models.TaskDetailResponse{
+		Type:   models.TaskTypeBalance,
+		Status: models.TaskStatusCancelled,
+		Result: balanceResult(2, 10, false, false),
+	}
+	assert.Equal(t, "cancelled at 2/10 chunks", balanceResultSummary(resp))
+}
+
+func TestBalanceResultSummary_CancelledNoData(t *testing.T) {
+	resp := &models.TaskDetailResponse{
+		Type:   models.TaskTypeBalance,
+		Status: models.TaskStatusCancelled,
+		Result: balanceResult(0, 0, false, false),
+	}
+	assert.Empty(t, balanceResultSummary(resp))
+}
+
+func TestBalanceResultSummary_Failed(t *testing.T) {
+	s := btrfs.BalanceStatus{LastError: "enospc"}
+	raw, _ := json.Marshal(s)
+	resp := &models.TaskDetailResponse{
+		Type:   models.TaskTypeBalance,
+		Status: models.TaskStatusFailed,
+		Result: raw,
+	}
+	assert.Equal(t, "enospc", balanceResultSummary(resp))
+}
+
+func TestTaskResultSummary_BalanceDispatch(t *testing.T) {
+	resp := &models.TaskDetailResponse{
+		Type:   models.TaskTypeBalance,
+		Status: models.TaskStatusCompleted,
+		Result: balanceResult(5, 5, false, false),
+	}
+	assert.Equal(t, "5 chunks balanced", taskResultSummary(resp))
+}
