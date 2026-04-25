@@ -582,6 +582,15 @@ func TestPolicyApply(t *testing.T) {
 			wantErr:  true,
 		},
 		{
+			name:     "UpdateVolume with client-supplied clone.source.name: 400 even with same value",
+			policy:   policyUpdateVolume,
+			role:     models.RoleUser,
+			identity: "ci-bot",
+			owner:    map[string]string{config.LabelCreatedBy: "ci-bot", config.LabelCloneSourceName: "snap-1"},
+			stamp:    map[string]string{config.LabelCloneSourceName: "snap-1"},
+			wantErr:  true,
+		},
+		{
 			name:    "UpdateVolume as admin rewrites created-by: still 403",
 			policy:  policyUpdateVolume,
 			role:    models.RoleAdmin,
@@ -609,5 +618,54 @@ func TestPolicyApply(t *testing.T) {
 				assert.Equal(t, tc.wantStamped, stamp[config.LabelCreatedBy])
 			}
 		})
+	}
+}
+
+// TestPolicyApply_RejectsHardReservedLabels exercises every policy that
+// stamps or preserves labels against every server-managed key. Any
+// combination must fail at the API boundary rather than silently overwrite
+// or pass through.
+func TestPolicyApply_RejectsHardReservedLabels(t *testing.T) {
+	type policyCase struct {
+		name      string
+		policy    Policy
+		needOwner bool // true for policies with EnforceOwnership (need a non-empty owner map)
+	}
+	policies := []policyCase{
+		{"CreateVolume", policyCreateVolume, false},
+		{"CloneVolume", policyCloneVolume, true},
+		{"CreateClone", policyCreateClone, true},
+		{"CreateSnapshot", policyCreateSnapshot, true},
+		{"CreateExport", policyCreateExport, true},
+		{"CreateTask", policyCreateTask, false},
+		{"CreateTaskOnVolume", policyCreateTaskOnVolume, true},
+		{"UpdateVolume", policyUpdateVolume, true},
+	}
+	forgeKeys := []string{
+		config.LabelTenant,
+		config.LabelCloneSourceType,
+		config.LabelCloneSourceName,
+	}
+
+	for _, p := range policies {
+		for _, key := range forgeKeys {
+			t.Run(p.name+"_forges_"+key, func(t *testing.T) {
+				e := echo.New()
+				req := httptest.NewRequest(http.MethodPost, "/v1/x", nil)
+				rec := httptest.NewRecorder()
+				c := e.NewContext(req, rec)
+				c.Set("role", models.RoleUser)
+				c.Set("identity", "ci-bot")
+				c.Set("tenant", "ci")
+
+				stamp := map[string]string{key: "haxx"}
+				var owner map[string]string
+				if p.needOwner {
+					owner = map[string]string{config.LabelCreatedBy: "ci-bot"}
+				}
+				err := p.policy.Apply(c, owner, &stamp)
+				require.Error(t, err, "policy %s must reject client-supplied %s", p.name, key)
+			})
+		}
 	}
 }

@@ -52,7 +52,7 @@ var SoftReservedLabelKeys = []string{LabelCreatedBy, LabelCloneSourceType, Label
 // HardReservedLabelKeys are rejected by the HTTP API itself if a client
 // tries to set them. `created-by` is not listed here because the API
 // handles it via identity matching (stamp/preserve), not blanket rejection.
-var HardReservedLabelKeys = []string{LabelTenant}
+var HardReservedLabelKeys = []string{LabelTenant, LabelCloneSourceType, LabelCloneSourceName}
 
 // ValidationError is returned by ValidateName and ValidateLabels.
 // Consumers can type-assert to distinguish validation errors from other errors.
