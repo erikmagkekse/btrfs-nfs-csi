@@ -39,6 +39,15 @@ func makeItems(names ...string) []testItem {
 
 func callPaginatedList(t *testing.T, h *Handler, items []testItem, after string, limit string) testListResp {
 	t.Helper()
+	resp, status := callPaginatedListRaw(t, h, items, after, limit)
+	require.Equal(t, http.StatusOK, status, "unexpected status: body=%s", resp)
+	var out testListResp
+	require.NoError(t, json.Unmarshal(resp, &out))
+	return out
+}
+
+func callPaginatedListRaw(t *testing.T, h *Handler, items []testItem, after string, limit string) ([]byte, int) {
+	t.Helper()
 	e := echo.New()
 	target := "/test"
 	sep := "?"
@@ -60,10 +69,7 @@ func callPaginatedList(t *testing.T, h *Handler, items []testItem, after string,
 
 	err := paginatedList(h, c, items, mapFn, wrapFn)
 	require.NoError(t, err)
-
-	var resp testListResp
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	return resp
+	return rec.Body.Bytes(), rec.Code
 }
 
 func TestPagination_NoLimit(t *testing.T) {
@@ -120,17 +126,16 @@ func TestPagination_SnapshotIsolation(t *testing.T) {
 	assert.Equal(t, 5, resp2.Total, "total from snapshot, not live data")
 }
 
-func TestPagination_InvalidToken_FallsBack(t *testing.T) {
+func TestPagination_InvalidCursor_Returns400(t *testing.T) {
 	h := &Handler{}
 	items := makeItems("a", "b", "c")
 
-	resp := callPaginatedList(t, h, items, "garbage!!!", "2")
-	assert.Len(t, resp.Items, 2)
-	assert.Equal(t, "a", resp.Items[0].Name, "falls back to page 1")
-	assert.Equal(t, 3, resp.Total)
+	body, status := callPaginatedListRaw(t, h, items, "garbage!!!", "2")
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Contains(t, string(body), "invalid pagination cursor")
 }
 
-func TestPagination_ExpiredSnapshot_FallsBack(t *testing.T) {
+func TestPagination_ExpiredSnapshot_Returns400(t *testing.T) {
 	h := &Handler{}
 	items := makeItems("a", "b", "c", "d")
 
@@ -147,11 +152,12 @@ func TestPagination_ExpiredSnapshot_FallsBack(t *testing.T) {
 		h.pageSnapshots.Delete(cur.SnapID)
 	}
 
-	// Using expired token falls back to page 1 of current data
+	// Using expired cursor against any data must surface a 400 instead of
+	// silently restarting from page 1.
 	newItems := makeItems("x", "y", "z")
-	resp2 := callPaginatedList(t, h, newItems, resp.Next, "2")
-	assert.Equal(t, "x", resp2.Items[0].Name, "falls back to page 1 of new data")
-	assert.Equal(t, 3, resp2.Total)
+	body, status := callPaginatedListRaw(t, h, newItems, resp.Next, "2")
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Contains(t, string(body), "expired")
 }
 
 func TestPagination_AutoCleanup(t *testing.T) {
