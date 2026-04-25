@@ -118,7 +118,7 @@ The agent runs heavy maintenance and per-volume work as background tasks. Tasks 
 | **Purpose** | Verify data integrity by reading all blocks and checking checksums. |
 | **Role** | `admin` |
 | **Scope** | filesystem-wide |
-| **Required args** | — |
+| **Required args** | none |
 | **Optional flags** | `--readonly` / `-r`: audit-only, no repair attempt.<br>`--force` / `-f`: start even if a previous scrub record exists on the FS.<br>`--ioprio-class`: IO priority class (`0` none, `1` realtime, `2` best-effort, `3` idle).<br>`--ioprio-classdata`: priority within the class (`0`-`7`, `0` highest). |
 | **Mutex** | scrub / balance / quota-rescan |
 | **Progress** | live, kernel reports byte counter |
@@ -139,7 +139,7 @@ btrfs-nfs-csi task create scrub --ioprio-class=3 -W # idle IO priority (good for
 | **Purpose** | Rebuild qgroup accounting from scratch. Useful after qgroup inconsistencies (quotas enabled on an existing filesystem, unusual delete/snapshot patterns). |
 | **Role** | `admin` |
 | **Scope** | filesystem-wide, classic qgroups only (`btrfs quota enable`) |
-| **Required args** | — |
+| **Required args** | none |
 | **Optional flags** | none beyond common |
 | **Mutex** | scrub / balance / quota-rescan |
 | **Progress** | coarse (`0%` pending, `50%` running, `100%` done). btrfs has no structured progress for rescan. |
@@ -177,7 +177,7 @@ btrfs-nfs-csi task create defragment --volume pg-main --compress=zstd -W  # reco
 | **Purpose** | Rewrite chunks to reclaim wasted space, consolidate half-empty chunks, or change the RAID profile. Routine `--dusage`/`--musage` runs are what fix "No space left on device" errors on btrfs while `df` still shows free space. |
 | **Role** | `admin` |
 | **Scope** | filesystem-wide |
-| **Required args** | — (unfiltered balance rewrites every chunk and logs a warning, almost never what you want on a running FS) |
+| **Required args** | none (unfiltered balance rewrites every chunk and logs a warning, almost never what you want on a running FS) |
 | **Optional flags** | `--dusage <pct>`, `--musage <pct>`: consolidate data/metadata chunks below `pct` full.<br>`--dconvert <profile>`, `--mconvert <profile>`: change RAID profile (`raid1`, `single`, ...).<br>`--ddevid <id>`, `--mdevid <id>`: drain a specific device by ID.<br>`--force` / `-f`: required when reducing redundancy.<br>`--soft`: only convert chunks not already in the target profile. |
 | **Mutex** | scrub / balance / quota-rescan |
 | **Progress** | live, kernel reports chunks remaining |

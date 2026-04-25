@@ -42,16 +42,16 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	}
 
 	// parse tenants
-	tenants, err := parseTenants(cfg.Tenants)
+	creds, err := parseTenants(cfg.Tenants)
 	if err != nil {
 		return nil, err
 	}
-	if tenants == nil {
+	if len(creds) == 0 {
 		return nil, fmt.Errorf("AGENT_TENANTS must contain at least one valid name:token pair")
 	}
-	nameSet := make(map[string]struct{}, len(tenants))
-	for _, info := range tenants {
-		nameSet[info.Name] = struct{}{}
+	nameSet := make(map[string]struct{}, len(creds))
+	for _, c := range creds {
+		nameSet[c.Info.Name] = struct{}{}
 	}
 	tenantNames := slices.Sorted(maps.Keys(nameSet))
 
@@ -87,11 +87,11 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init agent secrets: %w", err)
 	}
-	fingerprints := make(map[string]string, len(tenants))
-	for tok := range tenants {
-		fingerprints[tok] = secrets.Fingerprint(tok)
+	tokens, err := v1.NewTokenSet(creds, secrets.Fingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("init token set: %w", err)
 	}
-	h := &v1.Handler{Store: store, Tenants: tenants, Fingerprints: fingerprints, DefaultPageLimit: cfg.DefaultPageLimit, PaginationSnapshotTTL: cfg.PaginationSnapshotTTL, PaginationMaxSnapshots: cfg.PaginationMaxSnapshots}
+	h := &v1.Handler{Store: store, Tokens: tokens, DefaultPageLimit: cfg.DefaultPageLimit, PaginationSnapshotTTL: cfg.PaginationSnapshotTTL, PaginationMaxSnapshots: cfg.PaginationMaxSnapshots}
 
 	// unauthenticated
 	e.GET("/healthz", v1.Healthz(version, commit, store))
@@ -101,7 +101,7 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	}
 
 	// v1 API with auth
-	api := e.Group("/v1", v1.AuthMiddleware(tenants, fingerprints))
+	api := e.Group("/v1", v1.AuthMiddleware(tokens))
 
 	api.POST("/volumes", h.CreateVolume)
 	api.GET("/volumes", h.ListVolumes)
@@ -206,20 +206,23 @@ func (a *Agent) Start(ctx context.Context) {
 }
 
 // parseTenants parses comma-separated `name:token[:role[:identity]]`
-// entries into a map keyed by token. Semantics are documented in docs/rbac.md.
-func parseTenants(s string) (map[string]models.TenantInfo, error) {
+// entries. The token field may be a plaintext value or a bcrypt hash
+// (`$2a$/$2b$/$2y$`); both are validated downstream by the auth package.
+// Semantics are documented in docs/rbac.md.
+func parseTenants(s string) ([]v1.TokenCredential, error) {
 	if s == "" {
 		return nil, nil
 	}
-	m := make(map[string]models.TenantInfo)
-	for entry := range strings.SplitSeq(s, ",") {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
+	out := make([]v1.TokenCredential, 0)
+	seen := make(map[string]string) // stored credential -> tenant name (for early dup error)
+	for raw := range strings.SplitSeq(s, ",") {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
 			continue
 		}
-		parts := strings.Split(entry, ":")
+		parts := strings.Split(raw, ":")
 		if len(parts) < 2 || len(parts) > 4 {
-			return nil, fmt.Errorf("AGENT_TENANTS: invalid entry %q (expected name:token[:role[:identity]])", entry)
+			return nil, fmt.Errorf("AGENT_TENANTS: invalid entry %q (expected name:token[:role[:identity]])", raw)
 		}
 		name := strings.TrimSpace(parts[0])
 		tok := strings.TrimSpace(parts[1])
@@ -248,13 +251,17 @@ func parseTenants(s string) (map[string]models.TenantInfo, error) {
 				return nil, fmt.Errorf("AGENT_TENANTS: %w for tenant %q", err, name)
 			}
 		}
-		if existing, dup := m[tok]; dup {
-			return nil, fmt.Errorf("AGENT_TENANTS: duplicate token shared by tenants %q and %q", existing.Name, name)
+		if existing, dup := seen[tok]; dup {
+			return nil, fmt.Errorf("AGENT_TENANTS: duplicate token shared by tenants %q and %q", existing, name)
 		}
-		m[tok] = models.TenantInfo{Name: name, Role: role, Identity: identity}
+		seen[tok] = name
+		out = append(out, v1.TokenCredential{
+			Stored: tok,
+			Info:   models.TenantInfo{Name: name, Role: role, Identity: identity},
+		})
 	}
-	if len(m) == 0 {
+	if len(out) == 0 {
 		return nil, nil
 	}
-	return m, nil
+	return out, nil
 }

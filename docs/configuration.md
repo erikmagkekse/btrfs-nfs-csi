@@ -5,7 +5,7 @@
 | Variable | Default | Description |
 |---|---|---|
 | `AGENT_BASE_PATH` | `./storage` | btrfs mount point (quickstart sets `/export/data`) |
-| `AGENT_TENANTS` | **required** | `name:token[:role[:identity]],...`. See [rbac.md](rbac.md) for roles, identity, and ownership. Reserved names: `tasks`, `snapshots`, `data`, `metadata`. |
+| `AGENT_TENANTS` | **required** | `name:token[:role[:identity]],...`. Token may be plaintext or a bcrypt hash (`$2a$/$2b$/$2y$`); see [rbac.md](rbac.md) for roles, identity, ownership, and hashed-token usage. Reserved names: `tasks`, `snapshots`, `data`, `metadata`. |
 | `AGENT_LISTEN_ADDR` | `:8080` | HTTP listen address |
 | `AGENT_METRICS_ADDR` | `127.0.0.1:9090` | Metrics server address |
 | `AGENT_TLS_CERT` | - | TLS certificate path |
