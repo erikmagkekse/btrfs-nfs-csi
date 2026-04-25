@@ -84,7 +84,7 @@ func (h *Handler) deleteSnapshot(id string) {
 func paginatedList[T labeled, R any](h *Handler, c *echo.Context, items []T, mapFn func(*T) R, wrapFn func([]R, int, string) any) error {
 	after := c.QueryParam("after")
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
-	if limit < 0 {
+	if limit <= 0 {
 		limit = h.DefaultPageLimit
 	}
 
@@ -104,17 +104,35 @@ func paginatedList[T labeled, R any](h *Handler, c *echo.Context, items []T, map
 	var snap []T
 	var offset int
 	var snapID string
-	cur, ok := decodeCursor(after)
-	if ok {
-		if v, loaded := h.pageSnapshots.Load(cur.SnapID); loaded {
-			ps := v.(*pageSnapshot)
-			if typed, ok := ps.items.([]T); ok {
-				snap = typed
-				offset = cur.Offset
-				snapID = cur.SnapID
-				ps.timer.Reset(h.paginationSnapshotTTL())
-			}
+	if after != "" {
+		cur, ok := decodeCursor(after)
+		if !ok {
+			return StorageError(c, &storage.StorageError{
+				Code:    storage.ErrInvalid,
+				Message: "invalid pagination cursor",
+			})
 		}
+		v, loaded := h.pageSnapshots.Load(cur.SnapID)
+		if !loaded {
+			return StorageError(c, &storage.StorageError{
+				Code:    storage.ErrInvalid,
+				Message: "pagination cursor expired; restart listing without 'after'",
+			})
+		}
+		ps := v.(*pageSnapshot)
+		typed, typeOK := ps.items.([]T)
+		if !typeOK {
+			// Cursor refers to a snapshot of a different list type (e.g. a
+			// /v1/volumes cursor sent against /v1/snapshots). Treat as invalid.
+			return StorageError(c, &storage.StorageError{
+				Code:    storage.ErrInvalid,
+				Message: "pagination cursor does not match this list",
+			})
+		}
+		snap = typed
+		offset = cur.Offset
+		snapID = cur.SnapID
+		ps.timer.Reset(h.paginationSnapshotTTL())
 	}
 
 	// No valid snapshot -- use items directly or create a snapshot if multi-page.
