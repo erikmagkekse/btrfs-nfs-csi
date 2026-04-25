@@ -165,6 +165,8 @@ The agent never logs or returns plaintext; the fingerprint shown in `/v1/whoami`
 
 Hot-path performance: the agent caches a successful verify under `HMAC(fpKey, providedToken)`, so repeat requests with the same token cost one HMAC and a map lookup. The slow bcrypt verify only runs on the first request per distinct token (and on every wrong-token attempt, by design).
 
+Bcrypt hashes contain `$`, so single-quote the value to keep the shell from eating the markers: `AGENT_TENANTS='ops:$2y$12$...:admin'`.
+
 ## Validation reference
 
 | Field            | Allowed characters        | Length | Notes                                          |
