@@ -34,6 +34,64 @@ import (
 	"time"
 )
 
+// --- Tenant auth ---
+
+// TenantRole controls which operations a token is allowed to perform.
+//   - readonly: only GET/HEAD.
+//   - mounter: GET/HEAD on anything, plus POST/DELETE on the export endpoint
+//     of any volume. Nothing else. Intended for CSI nodes / NFS mounters that
+//     need to attach/detach exports but must not create, delete, or mutate
+//     volumes/snapshots/tasks.
+//   - user: tenant-scoped operations, but may not trigger FS-global tasks
+//     (scrub, balance, quota-rescan).
+//   - admin: everything, including FS-global tasks.
+//
+// Default is `admin` for backward compatibility with pre-role `AGENT_TENANTS`
+// entries.
+type TenantRole string
+
+const (
+	RoleReadonly TenantRole = "readonly"
+	RoleMounter  TenantRole = "mounter"
+	RoleUser     TenantRole = "user"
+	RoleAdmin    TenantRole = "admin"
+)
+
+// TenantInfo describes a single `AGENT_TENANTS` entry, keyed by token. The
+// same tenant name may appear under multiple tokens (for token rotation);
+// roles must be consistent across those entries, but Identity is per-token.
+// Identity is the value stamped into the `created-by` label on resources
+// the token creates, and what ownership enforcement compares against.
+type TenantInfo struct {
+	Name     string     // tenant name (shared across tokens of the same tenant)
+	Role     TenantRole // role assigned to this token
+	Identity string     // per-token identity; stamped into created-by and gates ownership (empty = unset)
+}
+
+// WhoamiResponse describes the authenticated caller's own tenant/role/identity.
+type WhoamiResponse struct {
+	Tenant      string     `json:"tenant"`             // tenant name
+	Role        TenantRole `json:"role"`               // role of the calling token
+	Identity    string     `json:"identity,omitempty"` // configured identity (empty if unset)
+	Fingerprint string     `json:"fingerprint"`        // HMAC-SHA256 fingerprint of the token (hex)
+}
+
+// TenantTokenResponse is one token entry inside a tenant. The token itself
+// is never returned; only a non-reversible HMAC-SHA256 fingerprint so
+// operators can distinguish multiple tokens for the same tenant.
+type TenantTokenResponse struct {
+	Fingerprint string     `json:"fingerprint"`        // HMAC-SHA256 fingerprint (hex)
+	Role        TenantRole `json:"role"`               // token role
+	Identity    string     `json:"identity,omitempty"` // configured identity (empty if unset)
+}
+
+// TenantResponse is returned by ListTokens: the caller's own tenant with
+// every token configured for it (fingerprints only, never raw tokens).
+type TenantResponse struct {
+	Name   string                `json:"name"`   // tenant name
+	Tokens []TenantTokenResponse `json:"tokens"` // every token configured for this tenant
+}
+
 // --- Volume requests ---
 
 // VolumeCreateRequest creates a new btrfs subvolume.

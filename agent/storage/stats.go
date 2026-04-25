@@ -60,7 +60,7 @@ func parseDeviceIOStats(data string) (*DeviceIOStats, error) {
 	}
 
 	vals := make([]uint64, 11)
-	for i := 0; i < 11; i++ {
+	for i := range 11 {
 		v, err := strconv.ParseUint(fields[i], 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("parse field %d (%q): %w", i, fields[i], err)

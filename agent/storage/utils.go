@@ -14,6 +14,7 @@ import (
 const (
 	ErrBadRequest    = "BAD_REQUEST"
 	ErrUnauthorized  = "UNAUTHORIZED"
+	ErrForbidden     = "FORBIDDEN"
 	ErrInvalid       = "INVALID"
 	ErrNotFound      = "NOT_FOUND"
 	ErrAlreadyExists = "ALREADY_EXISTS"

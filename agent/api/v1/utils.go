@@ -15,6 +15,7 @@ import (
 
 var codeStatus = map[string]int{
 	storage.ErrInvalid:       http.StatusBadRequest,
+	storage.ErrForbidden:     http.StatusForbidden,
 	storage.ErrNotFound:      http.StatusNotFound,
 	storage.ErrAlreadyExists: http.StatusConflict,
 	storage.ErrBusy:          http.StatusLocked,

@@ -12,8 +12,24 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// AuthMiddleware validates Bearer or Basic auth and resolves the token to a tenant name.
-func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
+// Context keys set by AuthMiddleware. Read via the *Of accessors below.
+const (
+	ctxKeyTenant      = "tenant"
+	ctxKeyRole        = "role"
+	ctxKeyIdentity    = "identity"
+	ctxKeyFingerprint = "token_fingerprint"
+	ctxKeyDenial      = "denial_reason"
+)
+
+func tenantOf(c *echo.Context) string { v, _ := c.Get(ctxKeyTenant).(string); return v }
+func roleOf(c *echo.Context) models.TenantRole {
+	v, _ := c.Get(ctxKeyRole).(models.TenantRole)
+	return v
+}
+func identityOf(c *echo.Context) string    { v, _ := c.Get(ctxKeyIdentity).(string); return v }
+func fingerprintOf(c *echo.Context) string { v, _ := c.Get(ctxKeyFingerprint).(string); return v }
+
+func AuthMiddleware(tenants map[string]models.TenantInfo, fingerprints map[string]string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")
@@ -44,28 +60,54 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 				return authFailed(c, "unsupported auth scheme: "+scheme)
 			}
 
-			tenant, ok := lookupTenant(tenants, providedToken)
+			info, ok := lookupTenant(tenants, providedToken)
 			if !ok {
+				c.Set(ctxKeyDenial, denialInvalidToken)
 				return authFailed(c, "invalid token")
 			}
-			c.Set("tenant", tenant)
+			c.Set(ctxKeyTenant, info.Name)
+			c.Set(ctxKeyRole, info.Role)
+			if info.Identity != "" {
+				c.Set(ctxKeyIdentity, info.Identity)
+			}
+			if fp, ok := fingerprints[providedToken]; ok {
+				c.Set(ctxKeyFingerprint, fp)
+			}
+
+			method := c.Request().Method
+			if info.Role == models.RoleReadonly {
+				if method != http.MethodGet && method != http.MethodHead {
+					c.Set(ctxKeyDenial, denialRoleDenied)
+					return StorageError(c, &storage.StorageError{Code: storage.ErrForbidden, Message: "readonly role cannot perform " + method})
+				}
+			}
+			if info.Role == models.RoleMounter {
+				switch {
+				case method == http.MethodGet, method == http.MethodHead:
+					// allow, no route lookup needed
+				case (method == http.MethodPost || method == http.MethodDelete) && c.RouteInfo().Path == "/v1/volumes/:name/export":
+					// allow
+				default:
+					c.Set(ctxKeyDenial, denialRoleDenied)
+					return StorageError(c, &storage.StorageError{Code: storage.ErrForbidden, Message: "mounter role: only GET/HEAD and POST/DELETE /volumes/:name/export"})
+				}
+			}
 
 			return next(c)
 		}
 	}
 }
 
-// lookupTenant resolves a provided token to a tenant name using a constant-time
-// comparison. It always iterates over every configured tenant so that neither
+// lookupTenant runs the compare against every configured token so neither
 // the match position nor the presence of a match is observable via timing.
-func lookupTenant(tenants map[string]string, provided string) (string, bool) {
+func lookupTenant(tenants map[string]models.TenantInfo, provided string) (models.TenantInfo, bool) {
 	providedBytes := []byte(provided)
-	var matched string
+	var matched models.TenantInfo
 	var found int
-	for token, name := range tenants {
+	for token, info := range tenants {
 		eq := subtle.ConstantTimeCompare([]byte(token), providedBytes)
 		if eq == 1 {
-			matched = name
+			matched = info
 		}
 		found |= eq
 	}

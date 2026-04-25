@@ -136,6 +136,13 @@ func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error
 		return err
 	}
 
+	// Lock spans existence check + disk delete to avoid a race between concurrent deletes.
+	release, err := s.snapshots.Lock(ctx, tenant, name)
+	if err != nil {
+		return &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for snapshot %q: %v", name, err)}
+	}
+	defer release()
+
 	if !s.snapshots.Exists(tenant, name) {
 		return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("snapshot %q not found", name)}
 	}

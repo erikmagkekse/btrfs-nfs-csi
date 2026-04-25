@@ -16,7 +16,7 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	}
 
 	// validation
-	if err := config.ValidateName(req.Name); err != nil {
+	if err := config.ValidateSubvolumeName(req.Name); err != nil {
 		return nil, err
 	}
 	if err := config.ValidateName(req.Snapshot); err != nil {

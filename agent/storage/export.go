@@ -27,11 +27,17 @@ func (s *Storage) CreateVolumeExport(ctx context.Context, tenant, name, client s
 		return err
 	}
 
+	// Lock spans metadata+kernel export so a concurrent unexport can't interleave.
+	release, err := s.volumes.Lock(ctx, tenant, name)
+	if err != nil {
+		return &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for volume %q: %v", name, err)}
+	}
+	defer release()
+
 	volDir := s.volumes.Dir(tenant, name)
 
-	// metadata first - if export fails, reconciler will re-export
 	var firstRef bool
-	if _, err := s.volumes.Update(tenant, name, func(meta *VolumeMetadata) {
+	if _, err := s.volumes.UpdateLocked(tenant, name, func(meta *VolumeMetadata) {
 		now := time.Now().UTC()
 		meta.LastAttachAt = &now
 		meta.UpdatedAt = now
@@ -73,11 +79,16 @@ func (s *Storage) DeleteVolumeExport(ctx context.Context, tenant, name, client s
 		return err
 	}
 
+	release, err := s.volumes.Lock(ctx, tenant, name)
+	if err != nil {
+		return &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for volume %q: %v", name, err)}
+	}
+	defer release()
+
 	volDir := s.volumes.Dir(tenant, name)
 
-	// metadata first - if unexport fails, reconciler will clean up
 	var lastRef bool
-	if _, err := s.volumes.Update(tenant, name, func(meta *VolumeMetadata) {
+	if _, err := s.volumes.UpdateLocked(tenant, name, func(meta *VolumeMetadata) {
 		var removed bool
 		filtered := meta.Exports[:0]
 		for _, c := range meta.Exports {

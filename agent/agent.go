@@ -4,14 +4,19 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	v1 "github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/swagger"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/secret"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -44,10 +49,11 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	if tenants == nil {
 		return nil, fmt.Errorf("AGENT_TENANTS must contain at least one valid name:token pair")
 	}
-	tenantNames := make([]string, 0, len(tenants))
-	for _, name := range tenants {
-		tenantNames = append(tenantNames, name)
+	nameSet := make(map[string]struct{}, len(tenants))
+	for _, info := range tenants {
+		nameSet[info.Name] = struct{}{}
 	}
+	tenantNames := slices.Sorted(maps.Keys(nameSet))
 
 	// NFS exporter
 	var exp nfs.Exporter
@@ -63,12 +69,29 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 		cfg.TaskMaxConcurrent, cfg.TaskDefaultTimeout, cfg.TaskScrubTimeout, cfg.TaskBalanceTimeout, cfg.TaskPollInterval,
 	)
 
-	// echo + routes
-	e := echo.New()
+	// echo + routes. Use a router that rejects auto-OPTIONS: Echo's default
+	// OptionsMethodHandler returns 204 + Allow without running middleware,
+	// letting unauthenticated callers enumerate the route table. We don't
+	// serve browser clients, so dropping CORS preflight is safe.
+	e := echo.NewWithConfig(echo.Config{
+		Router: echo.NewRouter(echo.RouterConfig{
+			OptionsMethodHandler: func(c *echo.Context) error {
+				return c.NoContent(http.StatusMethodNotAllowed)
+			},
+		}),
+	})
 	e.Use(middleware.BodyLimit(1024 * 1024)) // 1MB
 	e.Use(v1.MetricsMiddleware())
 
-	h := &v1.Handler{Store: store, DefaultPageLimit: cfg.DefaultPageLimit, PaginationSnapshotTTL: cfg.PaginationSnapshotTTL, PaginationMaxSnapshots: cfg.PaginationMaxSnapshots}
+	secrets, err := secret.NewManager(cfg.BasePath)
+	if err != nil {
+		return nil, fmt.Errorf("init agent secrets: %w", err)
+	}
+	fingerprints := make(map[string]string, len(tenants))
+	for tok := range tenants {
+		fingerprints[tok] = secrets.Fingerprint(tok)
+	}
+	h := &v1.Handler{Store: store, Tenants: tenants, Fingerprints: fingerprints, DefaultPageLimit: cfg.DefaultPageLimit, PaginationSnapshotTTL: cfg.PaginationSnapshotTTL, PaginationMaxSnapshots: cfg.PaginationMaxSnapshots}
 
 	// unauthenticated
 	e.GET("/healthz", v1.Healthz(version, commit, store))
@@ -78,7 +101,7 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	}
 
 	// v1 API with auth
-	api := e.Group("/v1", v1.AuthMiddleware(tenants))
+	api := e.Group("/v1", v1.AuthMiddleware(tenants, fingerprints))
 
 	api.POST("/volumes", h.CreateVolume)
 	api.GET("/volumes", h.ListVolumes)
@@ -104,6 +127,9 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	api.POST("/tasks/:type", h.CreateTask)
 	api.GET("/tasks/:id", h.GetTask)
 	api.DELETE("/tasks/:id", h.CancelTask)
+
+	api.GET("/whoami", h.Whoami)
+	api.GET("/tokens", h.ListTokens)
 
 	return &Agent{
 		cfg:     cfg,
@@ -147,18 +173,30 @@ func (a *Agent) Start(ctx context.Context) {
 
 	go func() {
 		var srvErr error
+		// MaxHeaderBytes shrinks per-connection header buffer from Go's 1 MiB
+		// default. ReadHeaderTimeout caps slowloris-style open connections
+		// that drip-feed headers; without it, each such connection pins a
+		// full MaxHeaderBytes buffer until the client decides to finish.
+		const maxHeaderBytes = 64 * 1024
+		const readHeaderTimeout = 10 * time.Second
 		if a.cfg.TLSCert != "" && a.cfg.TLSKey != "" {
 			s := &http.Server{
 				Handler: a.echo,
 				TLSConfig: &tls.Config{
 					MinVersion: tls.VersionTLS12,
 				},
+				MaxHeaderBytes:    maxHeaderBytes,
+				ReadHeaderTimeout: readHeaderTimeout,
 			}
 			log.Info().Str("addr", a.cfg.ListenAddr).Msg("starting agent with TLS")
 			srvErr = s.ServeTLS(ln, a.cfg.TLSCert, a.cfg.TLSKey)
 		} else {
 			log.Warn().Str("addr", a.cfg.ListenAddr).Msg("starting agent without TLS - set AGENT_TLS_CERT and AGENT_TLS_KEY for production")
-			s := &http.Server{Handler: a.echo}
+			s := &http.Server{
+				Handler:           a.echo,
+				MaxHeaderBytes:    maxHeaderBytes,
+				ReadHeaderTimeout: readHeaderTimeout,
+			}
 			srvErr = s.Serve(ln)
 		}
 		if srvErr != nil && srvErr != http.ErrServerClosed {
@@ -167,26 +205,53 @@ func (a *Agent) Start(ctx context.Context) {
 	}()
 }
 
-// parseTenants parses "name:token,name:token" into map[token]name.
-// Returns nil map if input is empty. Returns an error if any tenant name
-// is invalid or reserved, so misconfiguration fails before any filesystem
-// operations are attempted.
-func parseTenants(s string) (map[string]string, error) {
+// parseTenants parses comma-separated `name:token[:role[:identity]]`
+// entries into a map keyed by token. Semantics are documented in docs/rbac.md.
+func parseTenants(s string) (map[string]models.TenantInfo, error) {
 	if s == "" {
 		return nil, nil
 	}
-	m := make(map[string]string)
+	m := make(map[string]models.TenantInfo)
 	for entry := range strings.SplitSeq(s, ",") {
-		name, tok, ok := strings.Cut(strings.TrimSpace(entry), ":")
-		if !ok {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
 			continue
 		}
-		name = strings.TrimSpace(name)
-		tok = strings.TrimSpace(tok)
+		parts := strings.Split(entry, ":")
+		if len(parts) < 2 || len(parts) > 4 {
+			return nil, fmt.Errorf("AGENT_TENANTS: invalid entry %q (expected name:token[:role[:identity]])", entry)
+		}
+		name := strings.TrimSpace(parts[0])
+		tok := strings.TrimSpace(parts[1])
 		if err := config.ValidateTenantName(name); err != nil {
 			return nil, fmt.Errorf("AGENT_TENANTS: %w", err)
 		}
-		m[tok] = name
+		if tok == "" {
+			return nil, fmt.Errorf("AGENT_TENANTS: empty token for tenant %q", name)
+		}
+		role := models.RoleAdmin
+		if len(parts) >= 3 {
+			switch r := models.TenantRole(strings.TrimSpace(parts[2])); r {
+			case models.RoleReadonly, models.RoleMounter, models.RoleUser, models.RoleAdmin:
+				role = r
+			default:
+				return nil, fmt.Errorf("AGENT_TENANTS: unknown role %q for tenant %q (expected %q, %q, %q, or %q)", parts[2], name, models.RoleReadonly, models.RoleMounter, models.RoleUser, models.RoleAdmin)
+			}
+		}
+		var identity string
+		if len(parts) == 4 {
+			identity = strings.TrimSpace(parts[3])
+			if role == models.RoleReadonly {
+				return nil, fmt.Errorf("AGENT_TENANTS: identity does not apply to role %q (tenant %q)", models.RoleReadonly, name)
+			}
+			if err := config.ValidateIdentity(identity); err != nil {
+				return nil, fmt.Errorf("AGENT_TENANTS: %w for tenant %q", err, name)
+			}
+		}
+		if existing, dup := m[tok]; dup {
+			return nil, fmt.Errorf("AGENT_TENANTS: duplicate token shared by tenants %q and %q", existing.Name, name)
+		}
+		m[tok] = models.TenantInfo{Name: name, Role: role, Identity: identity}
 	}
 	if len(m) == 0 {
 		return nil, nil

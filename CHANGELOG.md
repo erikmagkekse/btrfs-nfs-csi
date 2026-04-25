@@ -9,10 +9,15 @@
 - New `quota-rescan` task type (`task create quota-rescan`) rebuilds btrfs qgroup accounting filesystem-wide. Mutually exclusive with scrub and balance. Note: only supported on classic qgroups; simple quotas (squota) fail fast with a clear error, as btrfs does not support rescan on that mode.
 
 ### Security
-- Constant-time token comparison in the agent auth middleware, replacing the map lookup
+- Constant-time token comparison in the agent auth middleware.
+- Three-level RBAC via `AGENT_TENANTS` entries `name:token[:role[:identity]]`. Roles (`readonly`, `mounter`, `user`, `admin`) gate endpoint access. Identity (`a-zA-Z0-9_-`, 1-32) stamps `created-by` on creates and scopes mutations to the creator. Levels can be mixed in one config. Full matrix in `docs/rbac.md`.
+- `created-by` enforcement on every mutating handler. Source-ownership on snapshot/clone/export/defragment so a token cannot derive resources from another identity's data. Update boundary on `PATCH`: `created-by` cannot be cleared or rewritten, including by admins.
+- Server-managed labels rejected when set by clients. `tenant` is hard-reserved at the API boundary; `clone.source.*` and `created-by` are server-injected and validated against identity.
+- Denial telemetry: every `403` carries a structured `reason` label (`invalid_token`, `role_denied`, `identity_mismatch`, `ownership`) on the `http_requests_total` Prometheus counter, plus a warn log with client IP, tenant, path, token fingerprint, role, and identity.
+- Token introspection. `GET /v1/whoami` returns the caller's tenant, role, identity, and HMAC-SHA256 fingerprint. `GET /v1/tokens` (admin-only) lists the caller's tenant with every configured token's fingerprint, role, and identity. Raw tokens are never returned. Fingerprints derive via HKDF from a per-installation secret in `AGENT_BASE_PATH/metadata/root_secret` with a `root_secret.bak` replica, primary/backup mismatch aborts startup.
 
 ### Bug Fixes
-- Reserve internal directory names (`tasks`, `snapshots`, `data`, `metadata`, case-insensitive) as invalid tenant names; `AGENT_TENANTS` is now validated at boot before any filesystem operations
+- Reserve internal directory names (`tasks`, `snapshots`, `data`, `metadata`, case-insensitive) as invalid tenant names and as invalid volume/clone names. `AGENT_TENANTS` is validated at boot; volume/clone names are validated at the API boundary.
 
 ## v0.10.0
 

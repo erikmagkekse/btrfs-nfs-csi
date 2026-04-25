@@ -18,7 +18,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	// validation
-	if err := config.ValidateName(req.Name); err != nil {
+	if err := config.ValidateSubvolumeName(req.Name); err != nil {
 		return nil, err
 	}
 	if req.SizeBytes == 0 {
@@ -197,6 +197,14 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		return nil, err
 	}
 
+	// Lock spans validation, btrfs ops, and metadata write so concurrent
+	// updates can't validate against stale state (e.g. NoCOW/Compression).
+	release, err := s.volumes.Lock(ctx, tenant, name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for volume %q: %v", name, err)}
+	}
+	defer release()
+
 	dataDir := s.volumes.DataPath(tenant, name)
 
 	cached, err := s.volumes.Get(tenant, name)
@@ -294,7 +302,7 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		}
 	}
 
-	updated, err := s.volumes.Update(tenant, name, func(meta *VolumeMetadata) {
+	updated, err := s.volumes.UpdateLocked(tenant, name, func(meta *VolumeMetadata) {
 		if req.SizeBytes != nil {
 			meta.SizeBytes = *req.SizeBytes
 			meta.QuotaBytes = *req.SizeBytes
@@ -332,7 +340,7 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	if _, err := s.tenantPath(tenant); err != nil {
 		return nil, err
 	}
-	if err := config.ValidateName(req.Name); err != nil {
+	if err := config.ValidateSubvolumeName(req.Name); err != nil {
 		return nil, err
 	}
 
@@ -432,6 +440,14 @@ func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 	if err := config.ValidateName(name); err != nil {
 		return err
 	}
+
+	// Lock spans read+export-check+disk-delete so a concurrent CreateVolumeExport
+	// can't slip in between the empty-check and the subvolume removal.
+	release, err := s.volumes.Lock(ctx, tenant, name)
+	if err != nil {
+		return &StorageError{Code: ErrBusy, Message: fmt.Sprintf("lock contention for volume %q: %v", name, err)}
+	}
+	defer release()
 
 	meta, err := s.volumes.Get(tenant, name)
 	if err != nil {
