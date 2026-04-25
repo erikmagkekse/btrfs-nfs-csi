@@ -143,13 +143,37 @@ Table view truncates each fingerprint to the first 12 hex chars (Git-style short
 
 Fingerprints are derived via HKDF from a per-installation secret at `AGENT_BASE_PATH/metadata/root_secret`, generated on first boot and kept with a `root_secret.bak` copy alongside. If the two differ, startup aborts.
 
+## Hashed tokens
+
+The token field in `AGENT_TENANTS` accepts either a plaintext value or a bcrypt password hash. The agent detects hashes by their `$2a$` / `$2b$` / `$2y$` prefix; anything else is treated as plaintext for back-compat.
+
+```
+AGENT_TENANTS=ops:$2y$12$KIXp.../iZ8eqwjN12iKy:admin,ci:plain-tok:user:ci-bot
+```
+
+Generate a hash via the bundled CLI:
+
+```
+btrfs-nfs-csi hash-token --cost 12
+# Token: ********           (no echo, or pipe via stdin)
+# $2a$12$KIXp.../iZ8eqwjN12iKy
+```
+
+Defaults to cost 12. The same binary that runs the agent generates the hash, so no extra tooling is required. `htpasswd -nbB` works too, but stock OpenSSL does not produce bcrypt.
+
+The agent never logs or returns plaintext; the fingerprint shown in `/v1/whoami` and `/v1/tokens` derives from the value stored in `AGENT_TENANTS`. For plaintext entries that's `HMAC(fpKey, plaintext)`, for hashed entries it's `HMAC(fpKey, hash)`. The fingerprint is stable across restarts as long as `root_secret` and `AGENT_TENANTS` don't change.
+
+Hot-path performance: the agent caches a successful verify under `HMAC(fpKey, providedToken)`, so repeat requests with the same token cost one HMAC and a map lookup. The slow bcrypt verify only runs on the first request per distinct token (and on every wrong-token attempt, by design).
+
+Bcrypt hashes contain `$`, so single-quote the value to keep the shell from eating the markers: `AGENT_TENANTS='ops:$2y$12$...:admin'`.
+
 ## Validation reference
 
 | Field            | Allowed characters        | Length | Notes                                          |
 |------------------|---------------------------|--------|------------------------------------------------|
-| tenant name      | `a-zA-Z0-9_-`             | 1–128  | `tasks`, `snapshots`, `data`, `metadata` reserved |
-| token            | any non-empty string      | 1+     | must not contain `,` or `:`                    |
+| tenant name      | `a-zA-Z0-9_-`             | 1-128  | `tasks`, `snapshots`, `data`, `metadata` reserved |
+| token            | plaintext or bcrypt hash  | 1+     | must not contain `,` or `:`; `$2a$/$2b$/$2y$` recognized as bcrypt (see [Hashed tokens](#hashed-tokens)) |
 | role             | enum                      | fixed  | `readonly`, `mounter`, `user`, `admin`         |
-| identity         | `a-zA-Z0-9_-`             | 1–32   | not accepted on `readonly`                     |
+| identity         | `a-zA-Z0-9_-`             | 1-32   | not accepted on `readonly`                     |
 
 All fields are validated at startup. A bad value aborts the agent with a clear error.

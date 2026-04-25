@@ -18,7 +18,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 
 	"github.com/labstack/echo/v5"
@@ -170,8 +169,7 @@ func paginatedList[T labeled, R any](h *Handler, c *echo.Context, items []T, map
 // Handler serves the agent REST API.
 type Handler struct {
 	Store                  *storage.Storage
-	Tenants                map[string]models.TenantInfo
-	Fingerprints           map[string]string
+	Tokens                 *TokenSet
 	DefaultPageLimit       int
 	PaginationSnapshotTTL  time.Duration
 	PaginationMaxSnapshots int

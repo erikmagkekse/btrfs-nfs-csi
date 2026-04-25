@@ -9,6 +9,7 @@
 - New `quota-rescan` task type (`task create quota-rescan`) rebuilds btrfs qgroup accounting filesystem-wide. Mutually exclusive with scrub and balance. Note: only supported on classic qgroups; simple quotas (squota) fail fast with a clear error, as btrfs does not support rescan on that mode.
 
 ### Security
+- `AGENT_TENANTS` token field accepts bcrypt hashes (`$2a$/$2b$/$2y$`) in addition to plaintext. New `btrfs-nfs-csi hash-token --cost N` subcommand generates them locally (no `htpasswd` or `openssl` needed). Successful verifies are cached under `HMAC(root_secret, providedToken)` so repeat requests skip the bcrypt round-trip.
 - Constant-time token comparison in the agent auth middleware.
 - Three-level RBAC via `AGENT_TENANTS` entries `name:token[:role[:identity]]`. Roles (`readonly`, `mounter`, `user`, `admin`) gate endpoint access. Identity (`a-zA-Z0-9_-`, 1-32) stamps `created-by` on creates and scopes mutations to the creator. Levels can be mixed in one config. Full matrix in `docs/rbac.md`.
 - `created-by` enforcement on every mutating handler. Source-ownership on snapshot/clone/export/defragment so a token cannot derive resources from another identity's data. Update boundary on `PATCH`: `created-by` cannot be cleared or rewritten, including by admins.

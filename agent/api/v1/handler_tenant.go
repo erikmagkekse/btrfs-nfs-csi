@@ -46,15 +46,13 @@ func (h *Handler) ListTokens(c *echo.Context) error {
 
 	tenant := tenantOf(c)
 
-	tokens := make([]models.TenantTokenResponse, 0)
-	for tok, info := range h.Tenants {
-		if info.Name != tenant {
-			continue
-		}
+	entries := h.Tokens.FilterTenant(tenant)
+	tokens := make([]models.TenantTokenResponse, 0, len(entries))
+	for _, e := range entries {
 		tokens = append(tokens, models.TenantTokenResponse{
-			Fingerprint: h.Fingerprints[tok],
-			Role:        info.Role,
-			Identity:    info.Identity,
+			Fingerprint: e.Fingerprint,
+			Role:        e.Info.Role,
+			Identity:    e.Info.Identity,
 		})
 	}
 	slices.SortFunc(tokens, func(a, b models.TenantTokenResponse) int {

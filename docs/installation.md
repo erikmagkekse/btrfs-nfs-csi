@@ -173,6 +173,8 @@ AGENT_TENANTS=cluster-a:token-aaa,cluster-b:token-bbb
 
 Each tenant is isolated (separate directory, separate token). Reserved names that cannot be used as tenants: `tasks`, `snapshots`, `data`, `metadata`. See [multi-tenancy](architecture.md#multi-tenancy) for details.
 
+For deployments where `AGENT_TENANTS` exposure is a concern (env-var leak, container config, systemd unit), the token field accepts a bcrypt hash instead of plaintext. Generate one with `btrfs-nfs-csi hash-token` and paste it into the config; clients still send the plaintext as bearer. See [rbac.md#hashed-tokens](rbac.md#hashed-tokens).
+
 </details>
 
 ## Persistent Secret

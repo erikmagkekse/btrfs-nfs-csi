@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"crypto/subtle"
 	"encoding/base64"
 	"net/http"
 	"strings"
@@ -29,15 +28,15 @@ func roleOf(c *echo.Context) models.TenantRole {
 func identityOf(c *echo.Context) string    { v, _ := c.Get(ctxKeyIdentity).(string); return v }
 func fingerprintOf(c *echo.Context) string { v, _ := c.Get(ctxKeyFingerprint).(string); return v }
 
-func AuthMiddleware(tenants map[string]models.TenantInfo, fingerprints map[string]string) echo.MiddlewareFunc {
+func AuthMiddleware(tokens *TokenSet) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
-			auth := c.Request().Header.Get("Authorization")
-			if auth == "" {
+			authHdr := c.Request().Header.Get("Authorization")
+			if authHdr == "" {
 				return authFailed(c, "missing authorization header")
 			}
 
-			scheme, token, ok := strings.Cut(auth, " ")
+			scheme, token, ok := strings.Cut(authHdr, " ")
 			if !ok {
 				return authFailed(c, "malformed authorization header")
 			}
@@ -60,7 +59,7 @@ func AuthMiddleware(tenants map[string]models.TenantInfo, fingerprints map[strin
 				return authFailed(c, "unsupported auth scheme: "+scheme)
 			}
 
-			info, ok := lookupTenant(tenants, providedToken)
+			info, fp, ok := tokens.Verify(providedToken)
 			if !ok {
 				c.Set(ctxKeyDenial, denialInvalidToken)
 				return authFailed(c, "invalid token")
@@ -70,7 +69,7 @@ func AuthMiddleware(tenants map[string]models.TenantInfo, fingerprints map[strin
 			if info.Identity != "" {
 				c.Set(ctxKeyIdentity, info.Identity)
 			}
-			if fp, ok := fingerprints[providedToken]; ok {
+			if fp != "" {
 				c.Set(ctxKeyFingerprint, fp)
 			}
 
@@ -96,22 +95,6 @@ func AuthMiddleware(tenants map[string]models.TenantInfo, fingerprints map[strin
 			return next(c)
 		}
 	}
-}
-
-// lookupTenant runs the compare against every configured token so neither
-// the match position nor the presence of a match is observable via timing.
-func lookupTenant(tenants map[string]models.TenantInfo, provided string) (models.TenantInfo, bool) {
-	providedBytes := []byte(provided)
-	var matched models.TenantInfo
-	var found int
-	for token, info := range tenants {
-		eq := subtle.ConstantTimeCompare([]byte(token), providedBytes)
-		if eq == 1 {
-			matched = info
-		}
-		found |= eq
-	}
-	return matched, found == 1
 }
 
 func authFailed(c *echo.Context, reason string) error {

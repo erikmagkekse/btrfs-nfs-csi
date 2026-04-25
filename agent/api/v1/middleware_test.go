@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestAuthMiddleware_InvalidToken_NoTokenInWarnLog(t *testing.T) {
@@ -25,7 +26,7 @@ func TestAuthMiddleware_InvalidToken_NoTokenInWarnLog(t *testing.T) {
 	defer func() { log.Logger = orig }()
 
 	tenants := map[string]models.TenantInfo{"valid-token": {Name: "default", Role: models.RoleAdmin}}
-	mw := AuthMiddleware(tenants, nil)
+	mw := AuthMiddleware(tokensFromMap(t, tenants))
 
 	e := echo.New()
 	handler := mw(func(c *echo.Context) error {
@@ -61,7 +62,7 @@ func TestAuthMiddleware_InvalidToken_TraceContainsToken(t *testing.T) {
 	defer func() { log.Logger = orig }()
 
 	tenants := map[string]models.TenantInfo{"valid-token": {Name: "default", Role: models.RoleAdmin}}
-	mw := AuthMiddleware(tenants, nil)
+	mw := AuthMiddleware(tokensFromMap(t, tenants))
 
 	e := echo.New()
 	handler := mw(func(c *echo.Context) error {
@@ -83,7 +84,7 @@ func TestAuthMiddleware_InvalidToken_TraceContainsToken(t *testing.T) {
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	tenants := map[string]models.TenantInfo{"good-token": {Name: "mytenant", Role: models.RoleAdmin}}
-	mw := AuthMiddleware(tenants, nil)
+	mw := AuthMiddleware(tokensFromMap(t, tenants))
 
 	e := echo.New()
 	var gotTenant string
@@ -109,7 +110,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 
 func TestAuthMiddleware_ReadonlyRejectsWrites(t *testing.T) {
 	tenants := map[string]models.TenantInfo{"ro-token": {Name: "dashboard", Role: models.RoleReadonly}}
-	mw := AuthMiddleware(tenants, nil)
+	mw := AuthMiddleware(tokensFromMap(t, tenants))
 
 	cases := []struct {
 		method     string
@@ -166,7 +167,7 @@ func TestAuthMiddleware_MounterRestricts(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			e := echo.New()
-			api := e.Group("/v1", AuthMiddleware(tenants, nil))
+			api := e.Group("/v1", AuthMiddleware(tokensFromMap(t, tenants)))
 			noop := func(c *echo.Context) error { return c.NoContent(http.StatusOK) }
 			api.GET("/volumes", noop)
 			api.GET("/volumes/:name", noop)
@@ -193,7 +194,7 @@ func TestAuthMiddleware_IdentitySetInContext(t *testing.T) {
 		"user-token":  {Name: "ci", Role: models.RoleUser, Identity: "ci-bot"},
 		"admin-token": {Name: "ops", Role: models.RoleAdmin},
 	}
-	mw := AuthMiddleware(tenants, nil)
+	mw := AuthMiddleware(tokensFromMap(t, tenants))
 
 	cases := []struct {
 		token      string
@@ -232,7 +233,7 @@ func TestAuthMiddleware_ValidToken_MultipleTenants(t *testing.T) {
 		"token-b": {Name: "bravo", Role: models.RoleUser},
 		"token-c": {Name: "charlie", Role: models.RoleAdmin},
 	}
-	mw := AuthMiddleware(tenants, nil)
+	mw := AuthMiddleware(tokensFromMap(t, tenants))
 
 	cases := []struct {
 		token      string
@@ -266,8 +267,52 @@ func TestAuthMiddleware_ValidToken_MultipleTenants(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_BcryptToken_AcceptedAndCachedAcrossRequests(t *testing.T) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte("plain-secret"), bcrypt.MinCost)
+	require.NoError(t, err)
+	ts, err := NewTokenSet([]TokenCredential{
+		{Stored: string(hashed), Info: models.TenantInfo{Name: "ops", Role: models.RoleAdmin, Identity: "ansible"}},
+	}, testFingerprint)
+	require.NoError(t, err)
+
+	mw := AuthMiddleware(ts)
+
+	send := func(token string) (int, *echo.Context) {
+		e := echo.New()
+		var ctxAfter *echo.Context
+		handler := mw(func(c *echo.Context) error {
+			ctxAfter = c
+			return c.NoContent(http.StatusOK)
+		})
+		req := httptest.NewRequest(http.MethodGet, "/v1/volumes", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		require.NoError(t, handler(c))
+		return rec.Code, ctxAfter
+	}
+
+	code, c := send("plain-secret")
+	assert.Equal(t, http.StatusOK, code)
+	require.NotNil(t, c)
+	assert.Equal(t, "ops", c.Get("tenant"))
+	assert.Equal(t, models.RoleAdmin, c.Get("role"))
+	assert.Equal(t, "ansible", c.Get("identity"))
+	assert.NotEmpty(t, c.Get("token_fingerprint"))
+
+	// Second request with the same plaintext goes through the cache; sentinel
+	// the bcrypt hash so a slow-path verify would fail.
+	ts.entries[0].bcryptHash = []byte("$2y$04$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+	code, _ = send("plain-secret")
+	assert.Equal(t, http.StatusOK, code, "cache should short-circuit slow bcrypt verify")
+
+	// Wrong password still rejected.
+	code, _ = send("wrong-secret")
+	assert.Equal(t, http.StatusUnauthorized, code)
+}
+
 func TestAuthMiddleware_EmptyTenants(t *testing.T) {
-	mw := AuthMiddleware(nil, nil)
+	mw := AuthMiddleware(nil)
 
 	e := echo.New()
 	handler := mw(func(c *echo.Context) error {
@@ -283,21 +328,21 @@ func TestAuthMiddleware_EmptyTenants(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-func TestLookupTenant_NoMatchWithSimilarLengthToken(t *testing.T) {
-	tenants := map[string]models.TenantInfo{
+func TestVerifyTokenSet_NoMatchWithSimilarLengthToken(t *testing.T) {
+	ts := tokensFromMap(t, map[string]models.TenantInfo{
 		"token-a": {Name: "alpha", Role: models.RoleAdmin},
 		"token-b": {Name: "bravo", Role: models.RoleUser},
-	}
+	})
 
-	matched, ok := lookupTenant(tenants, "token-x")
+	matched, _, ok := ts.Verify("token-x")
 	assert.False(t, ok)
 	assert.Empty(t, matched.Name)
 
-	matched, ok = lookupTenant(tenants, "")
+	matched, _, ok = ts.Verify("")
 	assert.False(t, ok)
 	assert.Empty(t, matched.Name)
 
-	matched, ok = lookupTenant(tenants, "token-a")
+	matched, _, ok = ts.Verify("token-a")
 	assert.True(t, ok)
 	assert.Equal(t, "alpha", matched.Name)
 	assert.Equal(t, models.RoleAdmin, matched.Role)
