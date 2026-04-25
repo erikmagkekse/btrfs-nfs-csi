@@ -385,6 +385,9 @@ const docTemplate = `{
                     {
                         "enum": [
                             "scrub",
+                            "balance",
+                            "defragment",
+                            "quota-rescan",
                             "test"
                         ],
                         "type": "string",
@@ -513,7 +516,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates a background task (scrub or test). Returns 202 Accepted with task ID.",
+                "description": "Creates a background task (scrub, balance, defragment, quota-rescan, test). Returns 202 Accepted with task ID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -528,6 +531,9 @@ const docTemplate = `{
                     {
                         "enum": [
                             "scrub",
+                            "balance",
+                            "defragment",
+                            "quota-rescan",
                             "test"
                         ],
                         "type": "string",
@@ -554,6 +560,37 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/tokens": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Admin-only. Returns every token within the caller's tenant with its role, identity, and a fingerprint. Tokens themselves are never returned. Cross-tenant visibility is not exposed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "List tokens configured for the caller's tenant",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TenantResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Admin role required",
                         "schema": {
                             "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.ErrorResponse"
                         }
@@ -1030,6 +1067,31 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/whoami": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Echoes the authenticated token's tenant context. Useful for clients to verify what they authenticated as.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Return the caller's tenant, role, and identity",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.WhoamiResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1498,8 +1560,16 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "path": {
+                    "description": "defragment sub-path (relative, requires Volume)",
+                    "type": "string"
+                },
                 "timeout": {
                     "description": "Go duration string, e.g. \"6h\", \"30m\"",
+                    "type": "string"
+                },
+                "volume": {
+                    "description": "defragment target",
                     "type": "string"
                 }
             }
@@ -1652,6 +1722,58 @@ const docTemplate = `{
                 "type": {
                     "description": "task type (\"scrub\", \"test\")",
                     "type": "string"
+                }
+            }
+        },
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TenantResponse": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "tenant name",
+                    "type": "string"
+                },
+                "tokens": {
+                    "description": "every token configured for this tenant",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TenantTokenResponse"
+                    }
+                }
+            }
+        },
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TenantRole": {
+            "type": "string",
+            "enum": [
+                "readonly",
+                "mounter",
+                "user",
+                "admin"
+            ],
+            "x-enum-varnames": [
+                "RoleReadonly",
+                "RoleMounter",
+                "RoleUser",
+                "RoleAdmin"
+            ]
+        },
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TenantTokenResponse": {
+            "type": "object",
+            "properties": {
+                "fingerprint": {
+                    "description": "HMAC-SHA256 fingerprint (hex)",
+                    "type": "string"
+                },
+                "identity": {
+                    "description": "configured identity (empty if unset)",
+                    "type": "string"
+                },
+                "role": {
+                    "description": "token role",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TenantRole"
+                        }
+                    ]
                 }
             }
         },
@@ -1905,6 +2027,31 @@ const docTemplate = `{
                 "uid": {
                     "description": "new owner UID (0-65534)",
                     "type": "integer"
+                }
+            }
+        },
+        "github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.WhoamiResponse": {
+            "type": "object",
+            "properties": {
+                "fingerprint": {
+                    "description": "HMAC-SHA256 fingerprint of the token (hex)",
+                    "type": "string"
+                },
+                "identity": {
+                    "description": "configured identity (empty if unset)",
+                    "type": "string"
+                },
+                "role": {
+                    "description": "role of the calling token",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_erikmagkekse_btrfs-nfs-csi_agent_api_v1_models.TenantRole"
+                        }
+                    ]
+                },
+                "tenant": {
+                    "description": "tenant name",
+                    "type": "string"
                 }
             }
         }

@@ -11,6 +11,20 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
+var (
+	policyCreateExport = Policy{
+		AllowedRoles:     rolesMounterUserAdmin,
+		EnforceCreatedBy: true,
+		EnforceOwnership: true,
+		MounterBypass:    true,
+	}
+	policyDeleteExport = Policy{
+		AllowedRoles:     rolesMounterUserAdmin,
+		EnforceOwnership: true,
+		MounterBypass:    true,
+	}
+)
+
 func exportResponseFrom(e *storage.ExportEntry) models.ExportResponse {
 	return models.ExportResponse{Name: e.Name, CreatedBy: e.Labels[config.LabelCreatedBy], Client: e.Client, CreatedAt: e.CreatedAt}
 }
@@ -32,12 +46,20 @@ func exportDetailResponseFrom(e *storage.ExportEntry) models.ExportDetailRespons
 // @Router       /v1/volumes/{name}/export [post]
 // @Security     BearerAuth
 func (h *Handler) CreateVolumeExport(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 	name := c.Param("name")
 
 	var req models.VolumeExportCreateRequest
 	if err := c.Bind(&req); err != nil || req.Client == "" {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "client is required", Code: storage.ErrBadRequest})
+	}
+
+	existing, err := h.Store.GetVolume(tenant, name)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyCreateExport.Apply(c, existing.Labels, &req.Labels); err != nil {
+		return StorageError(c, err)
 	}
 
 	if err := h.Store.CreateVolumeExport(c.Request().Context(), tenant, name, req.Client, req.Labels); err != nil {
@@ -60,12 +82,20 @@ func (h *Handler) CreateVolumeExport(c *echo.Context) error {
 // @Router       /v1/volumes/{name}/export [delete]
 // @Security     BearerAuth
 func (h *Handler) DeleteVolumeExport(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 	name := c.Param("name")
 
 	var req models.VolumeExportDeleteRequest
 	if err := c.Bind(&req); err != nil || req.Client == "" {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "client is required", Code: storage.ErrBadRequest})
+	}
+
+	existing, err := h.Store.GetVolume(tenant, name)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyDeleteExport.Apply(c, existing.Labels, nil); err != nil {
+		return StorageError(c, err)
 	}
 
 	if err := h.Store.DeleteVolumeExport(c.Request().Context(), tenant, name, req.Client, req.Labels); err != nil {
@@ -88,7 +118,7 @@ func (h *Handler) DeleteVolumeExport(c *echo.Context) error {
 // @Router       /v1/exports [get]
 // @Security     BearerAuth
 func (h *Handler) ListVolumeExports(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 	items, err := h.Store.ListVolumeExports(tenant)
 	if err != nil {
 		return StorageError(c, err)

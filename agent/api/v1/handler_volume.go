@@ -11,6 +11,14 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
+var (
+	policyCreateVolume = Policy{AllowedRoles: rolesUserAdmin, EnforceCreatedBy: true}
+	policyUpdateVolume = Policy{AllowedRoles: rolesUserAdmin, PreserveCreatedBy: true, EnforceOwnership: true}
+	policyDeleteVolume = Policy{AllowedRoles: rolesUserAdmin, EnforceOwnership: true}
+	policyCloneVolume  = Policy{AllowedRoles: rolesUserAdmin, EnforceCreatedBy: true, EnforceOwnership: true}
+	policyCreateClone  = Policy{AllowedRoles: rolesUserAdmin, EnforceCreatedBy: true, EnforceOwnership: true}
+)
+
 func volumeResponseFrom(meta *storage.VolumeMetadata) models.VolumeResponse {
 	return models.VolumeResponse{
 		Name:      meta.Name,
@@ -66,11 +74,15 @@ func volumeDetailResponseFrom(meta *storage.VolumeMetadata) models.VolumeDetailR
 // @Router       /v1/volumes [post]
 // @Security     BearerAuth
 func (h *Handler) CreateVolume(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 
 	var req storage.VolumeCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body", Code: storage.ErrBadRequest})
+	}
+
+	if err := policyCreateVolume.Apply(c, nil, &req.Labels); err != nil {
+		return StorageError(c, err)
 	}
 
 	meta, err := h.Store.CreateVolume(c.Request().Context(), tenant, req)
@@ -97,7 +109,7 @@ func (h *Handler) CreateVolume(c *echo.Context) error {
 // @Router       /v1/volumes [get]
 // @Security     BearerAuth
 func (h *Handler) ListVolumes(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 	vols, err := h.Store.ListVolumes(tenant)
 	if err != nil {
 		return StorageError(c, err)
@@ -125,7 +137,7 @@ func (h *Handler) ListVolumes(c *echo.Context) error {
 // @Router       /v1/volumes/{name} [get]
 // @Security     BearerAuth
 func (h *Handler) GetVolume(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 
 	meta, err := h.Store.GetVolume(tenant, c.Param("name"))
 	if err != nil {
@@ -149,12 +161,20 @@ func (h *Handler) GetVolume(c *echo.Context) error {
 // @Router       /v1/volumes/{name} [patch]
 // @Security     BearerAuth
 func (h *Handler) UpdateVolume(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 	name := c.Param("name")
 
 	var req storage.VolumeUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body", Code: storage.ErrBadRequest})
+	}
+
+	existing, err := h.Store.GetVolume(tenant, name)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyUpdateVolume.Apply(c, existing.Labels, req.Labels); err != nil {
+		return StorageError(c, err)
 	}
 
 	meta, err := h.Store.UpdateVolume(c.Request().Context(), tenant, name, req)
@@ -176,9 +196,18 @@ func (h *Handler) UpdateVolume(c *echo.Context) error {
 // @Router       /v1/volumes/{name} [delete]
 // @Security     BearerAuth
 func (h *Handler) DeleteVolume(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
+	name := c.Param("name")
 
-	if err := h.Store.DeleteVolume(c.Request().Context(), tenant, c.Param("name")); err != nil {
+	existing, err := h.Store.GetVolume(tenant, name)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyDeleteVolume.Apply(c, existing.Labels, nil); err != nil {
+		return StorageError(c, err)
+	}
+
+	if err := h.Store.DeleteVolume(c.Request().Context(), tenant, name); err != nil {
 		return StorageError(c, err)
 	}
 
@@ -201,11 +230,19 @@ func (h *Handler) DeleteVolume(c *echo.Context) error {
 // @Router       /v1/volumes/clone [post]
 // @Security     BearerAuth
 func (h *Handler) CloneVolume(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 
 	var req storage.VolumeCloneRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body", Code: storage.ErrBadRequest})
+	}
+
+	src, err := h.Store.GetVolume(tenant, req.Source)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyCloneVolume.Apply(c, src.Labels, &req.Labels); err != nil {
+		return StorageError(c, err)
 	}
 
 	meta, err := h.Store.CloneVolume(c.Request().Context(), tenant, req)
@@ -233,11 +270,19 @@ func (h *Handler) CloneVolume(c *echo.Context) error {
 // @Router       /v1/clones [post]
 // @Security     BearerAuth
 func (h *Handler) CreateClone(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 
 	var req storage.CloneCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body", Code: storage.ErrBadRequest})
+	}
+
+	src, err := h.Store.GetSnapshot(tenant, req.Snapshot)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyCreateClone.Apply(c, src.Labels, &req.Labels); err != nil {
+		return StorageError(c, err)
 	}
 
 	meta, err := h.Store.CreateClone(c.Request().Context(), tenant, req)

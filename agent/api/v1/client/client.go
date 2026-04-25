@@ -137,6 +137,11 @@ func newClient(url, token string, cfg ClientConfig) (*Client, error) {
 	if token == "" {
 		return nil, fmt.Errorf("agent token must not be empty")
 	}
+	if cfg.Identity != "" {
+		if err := config.ValidateIdentity(cfg.Identity); err != nil {
+			return nil, err
+		}
+	}
 	hc := cfg.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: cfg.Timeout}
@@ -472,6 +477,29 @@ func (c *Client) GetTask(ctx context.Context, id string) (*models.TaskDetailResp
 // DELETE /v1/tasks/:id
 func (c *Client) CancelTask(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/v1/tasks/"+id, nil, nil)
+}
+
+// --- Auth ---
+
+// Whoami returns the caller's own tenant, role, identity, and fingerprint.
+// GET /v1/whoami
+func (c *Client) Whoami(ctx context.Context) (*models.WhoamiResponse, error) {
+	var resp models.WhoamiResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/whoami", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ListTokens returns the tokens configured for the caller's tenant (admin-only).
+// Tokens are represented by fingerprint only; never in plaintext.
+// GET /v1/tokens
+func (c *Client) ListTokens(ctx context.Context) (*models.TenantResponse, error) {
+	var resp models.TenantResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/tokens", nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // --- Stats & Health ---

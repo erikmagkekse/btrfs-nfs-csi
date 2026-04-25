@@ -175,8 +175,21 @@ Each tenant is isolated (separate directory, separate token). Reserved names tha
 
 </details>
 
+## Persistent Secret
+
+On first start the agent generates a 512-byte root secret at `${AGENT_BASE_PATH}/metadata/root_secret` (mode `0600`, dir `0700`) plus a `root_secret.bak` replica next to it. The secret is the agent's per-installation cryptographic root: every purpose-specific key is derived from it via HKDF with a versioned info string, so that one root can serve multiple subsystems without sharing key material. Today only HMAC-SHA256 token fingerprints (printed by `btrfs-nfs-csi whoami` and `btrfs-nfs-csi tokens`) consume it. Future features that need stable, agent-local crypto (e.g. signing short-lived issued tokens) will derive their own subkeys from the same root, no extra config required.
+
+Stable fingerprints across restarts let you correlate audit logs with a configured token over time. See [rbac.md](rbac.md#token-fingerprints).
+
+**Backup.** Snapshot the entire `${AGENT_BASE_PATH}/metadata/` directory as part of your DR plan. The contents are sensitive material, treat them like a private key.
+
+**Recovery.**
+
+- Primary lost, backup intact: agent rewrites the primary from the backup on next start.
+- Backup lost, primary intact: agent rewrites the backup on next start.
+- Both lost: a new secret is generated, all token fingerprints change. Tokens themselves keep working (`AGENT_TENANTS` is unchanged), but historical fingerprints in audit logs no longer match. To preserve fingerprint continuity, restore from backup before restart.
+- Primary and backup mismatch: startup aborts with a clear error. Inspect both, remove the stale one (or restore from backup), then restart.
+
 ## Integrations
 
 With the agent running, deploy an integration to connect your workload orchestrator. See [Integrations](integrations/) for available options.
-
-For Kubernetes: [Deploy the CSI driver](integrations/kubernetes/)

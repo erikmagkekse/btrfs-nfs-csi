@@ -4,7 +4,7 @@
 
 | Metric | Type | Labels |
 |---|---|---|
-| `btrfs_nfs_csi_agent_http_requests_total` | Counter | `method`, `path`, `code` |
+| `btrfs_nfs_csi_agent_http_requests_total` | Counter | `method`, `path`, `code`, `reason` |
 | `btrfs_nfs_csi_agent_http_request_duration_seconds` | Histogram | `method`, `path` |
 | `btrfs_nfs_csi_agent_volumes` | Gauge | `tenant` |
 | `btrfs_nfs_csi_agent_exports` | Gauge | `tenant` |
@@ -41,6 +41,8 @@
 
 **Buckets (http_request_duration):** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]`
 
+**`reason` label:** empty for ordinary outcomes, set to one of `invalid_token`, `role_denied`, `identity_mismatch`, `ownership` when the agent rejected the request. See [rbac.md](rbac.md#denial-telemetry) for what each value means and which check produced it.
+
 Device IO metrics are updated every 5s (configurable via `AGENT_DEVICE_IO_INTERVAL`). Device errors and filesystem allocation are updated every 1m (configurable via `AGENT_DEVICE_STATS_INTERVAL`). Missing devices (e.g. physically removed drives in a RAID setup) are skipped during IO polling.
 
 ## PromQL Examples (Agent)
@@ -60,6 +62,9 @@ sum(btrfs_nfs_csi_agent_tasks_queued)
 
 # Worker pool utilization
 sum(btrfs_nfs_csi_agent_tasks_running) / btrfs_nfs_csi_agent_tasks_workers
+
+# 403s grouped by denial reason (RBAC visibility)
+sum by (reason) (rate(btrfs_nfs_csi_agent_http_requests_total{code="403"}[5m]))
 ```
 
 Integrations may expose additional metrics. Check the documentation for your integration (e.g. [Kubernetes CSI metrics](integrations/kubernetes/metrics.md)).

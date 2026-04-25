@@ -72,6 +72,7 @@ btrfs-nfs-csi is not a distributed storage system. If you need data replication 
 ### Operations
 - **Labels.** On volumes, snapshots, clones, exports, and tasks.
 - **Multi-tenant.** Token-isolated tenants, one agent serves many consumers.
+- **RBAC.** Four roles (`readonly`, `mounter`, `user`, `admin`) and optional per-token identity. `created-by` ownership scopes mutations to the creator within a tenant. See [rbac.md](docs/rbac.md).
 - **Background tasks.** Scrub, progress tracking, configurable timeouts.
 - **Prometheus metrics.** On all components.
 - **TLS & Swagger.** API with OpenAPI spec.
@@ -238,6 +239,7 @@ Have an idea or want to build an integration? [Open an issue](https://github.com
 |---|---|
 | [Installation](docs/installation.md) | Agent setup, container build |
 | [Configuration](docs/configuration.md) | Environment variables, parameters, TLS |
+| [RBAC](docs/rbac.md) | Tokens, roles, identity, ownership |
 | [Architecture](docs/architecture.md) | Volume lifecycle, ID formats, directory structure, HA |
 | [Operations](docs/operations.md) | Snapshots, clones, expansion, compression, NoCOW, quotas, NFS exports |
 | [Metrics](docs/metrics.md) | Prometheus metrics, PromQL examples |
