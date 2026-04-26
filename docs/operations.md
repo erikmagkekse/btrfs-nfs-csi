@@ -108,7 +108,7 @@ nfsvers=4.2,hard,noatime,rsize=1048576,wsize=1048576,nconnect=8
 
 ## Tasks
 
-The agent runs heavy maintenance and per-volume work as background tasks. Tasks are started via `btrfs-nfs-csi task create <type>`, persisted to disk, and survive restarts (interrupted ones are marked `failed`). Completed tasks are cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h). Every task accepts the common flags `--timeout`, `--wait` / `-W`, and `--label`. Role and ownership rules are detailed in [rbac.md](rbac.md#per-handler-matrix).
+The agent runs heavy maintenance and per-volume work as background tasks. Tasks are started via `btrfs-nfs-csi task create <type>`, persisted to disk, and survive restarts (interrupted ones are marked `failed`). Completed tasks are cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h). Every task accepts the common flags `--timeout`, `--wait` / `-W`, and `--label`. Role and ownership rules are detailed in [rbac.md](rbac.md#per-endpoint-matrix).
 
 ### Scrub
 
@@ -120,7 +120,7 @@ The agent runs heavy maintenance and per-volume work as background tasks. Tasks 
 | **Scope** | filesystem-wide |
 | **Required args** | none |
 | **Optional flags** | `--readonly` / `-r`: audit-only, no repair attempt.<br>`--force` / `-f`: start even if a previous scrub record exists on the FS.<br>`--ioprio-class`: IO priority class (`0` none, `1` realtime, `2` best-effort, `3` idle).<br>`--ioprio-classdata`: priority within the class (`0`-`7`, `0` highest). |
-| **Mutex** | scrub / balance / quota-rescan |
+| **Conflicts with** | scrub / balance / quota-rescan |
 | **Progress** | live, kernel reports byte counter |
 | **Result** | bytes scrubbed, error counts |
 | **Notes** | `-B` (foreground) is always set so the agent can track progress and enforce timeouts. Externally started scrubs (e.g. `btrfs scrub start` on the host) are detected and duplicates are rejected. |
@@ -141,7 +141,7 @@ btrfs-nfs-csi task create scrub --ioprio-class=3 -W # idle IO priority (good for
 | **Scope** | filesystem-wide, classic qgroups only (`btrfs quota enable`) |
 | **Required args** | none |
 | **Optional flags** | none beyond common |
-| **Mutex** | scrub / balance / quota-rescan |
+| **Conflicts with** | scrub / balance / quota-rescan |
 | **Progress** | coarse (`0%` pending, `50%` running, `100%` done). btrfs has no structured progress for rescan. |
 | **Notes** | Simple quotas (squota, kernel 6.7+, `btrfs quota enable -s`) do not support rescan. Accounting there is per-extent-lifetime with no historical state to rebuild. Running rescan on a squota filesystem fails fast with a clear error. |
 
@@ -159,7 +159,7 @@ btrfs-nfs-csi task create quota-rescan -W
 | **Scope** | volume or sub-path within a volume, ownership-checked against the source volume (same rule as snapshot and clone) |
 | **Required args** | `--volume` |
 | **Optional flags** | `--path`: sub-path relative to the volume data dir. Absolute paths and `..` traversal are rejected. Symlinks must resolve under the target dir.<br>`--compress zstd\|lzo\|zlib\|none` (default `none`): recompress during defrag.<br>`--no-recursive`: do not recurse into subdirectories (default is recursive).<br>`--threshold <bytes>`: target extent size. btrfs skips files whose extents already exceed it. |
-| **Mutex** | none, runs concurrently with scrub or balance |
+| **Conflicts with** | none, runs concurrently with scrub or balance |
 | **Progress** | coarse (`0%` pending, `50%` running, `100%` done). A defragment that had started but failed or was cancelled stays at `50%`, distinguishing it from one that never got going. |
 | **Notes** | Snapshots are read-only and cannot be defragmented, clone first if you need a point-in-time defrag. Defragment writes new extents before freeing the old ones, so the volume needs free quota headroom (100% qgroup quota fails with `Disk quota exceeded`). Can break block-sharing between snapshots and clones, so disk usage may grow noticeably afterwards. |
 
@@ -179,7 +179,7 @@ btrfs-nfs-csi task create defragment --volume pg-main --compress=zstd -W  # reco
 | **Scope** | filesystem-wide |
 | **Required args** | none (unfiltered balance rewrites every chunk and logs a warning, almost never what you want on a running FS) |
 | **Optional flags** | `--dusage <pct>`, `--musage <pct>`: consolidate data/metadata chunks below `pct` full.<br>`--dconvert <profile>`, `--mconvert <profile>`: change RAID profile (`raid1`, `single`, ...).<br>`--ddevid <id>`, `--mdevid <id>`: drain a specific device by ID.<br>`--force` / `-f`: required when reducing redundancy.<br>`--soft`: only convert chunks not already in the target profile. |
-| **Mutex** | scrub / balance / quota-rescan |
+| **Conflicts with** | scrub / balance / quota-rescan |
 | **Progress** | live, kernel reports chunks remaining |
 | **Notes** | `task cancel <id>` triggers `btrfs balance cancel` on the kernel side, not just a process kill. Balance state is not persisted across reboots, so interrupted balances do not resume automatically. A scheduled monthly balance is analogous to the scrub timer above with `ExecStart=btrfs-nfs-csi task create balance --dusage=75 -W`. |
 
@@ -262,7 +262,7 @@ btrfs-nfs-csi version
 
 **Global flags:** `--agent-url`, `--agent-token`, `--output` / `-o` (table, wide, json).
 
-**Output formats:** `table` (default), `wide` (extra columns), `json` (raw API response). Combine with `-o json,wide` for detailed JSON. `-o json` suppresses output for mutation commands without API response (delete, export add/rm, task cancel).
+**Output formats:** `table` (default), `wide` (extra columns), `json` (raw API response). Combine with `-o json,wide` for detailed JSON. `-o json` suppresses output for commands that change state without an API response (delete, export add/rm, task cancel).
 
 **Column filter:** `--columns` / `-c` selects which columns to display. Single column omits the header for clean piping to `xargs`, `wc`, etc.
 
