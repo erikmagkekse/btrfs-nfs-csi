@@ -145,7 +145,11 @@ func (s *Storage) loadCache() {
 				if !e.IsDir() || e.Name() == config.SnapshotsDir {
 					continue
 				}
-				dataDir := s.volumes.DataPath(tenant, e.Name())
+				dataDir, err := s.volumes.DataPath(tenant, e.Name())
+				if err != nil {
+					log.Warn().Err(err).Str("tenant", tenant).Str("volume", e.Name()).Msg("cache: invalid volume path, skipping")
+					continue
+				}
 				if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 					log.Warn().Str("tenant", tenant).Str("volume", e.Name()).Str("path", dataDir).Msg("cache: data directory missing, skipping phantom volume")
 					continue
@@ -165,7 +169,11 @@ func (s *Storage) loadCache() {
 				if !e.IsDir() {
 					continue
 				}
-				dataDir := s.snapshots.DataPath(tenant, e.Name())
+				dataDir, err := s.snapshots.DataPath(tenant, e.Name())
+				if err != nil {
+					log.Warn().Err(err).Str("tenant", tenant).Str("snapshot", e.Name()).Msg("cache: invalid snapshot path, skipping")
+					continue
+				}
 				if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 					log.Warn().Str("tenant", tenant).Str("snapshot", e.Name()).Str("path", dataDir).Msg("cache: data directory missing, skipping phantom snapshot")
 					continue

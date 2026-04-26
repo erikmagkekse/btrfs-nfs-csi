@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -54,8 +55,11 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	// operations
-	volDir := s.volumes.Dir(tenant, req.Name)
-	dataDir := s.volumes.DataPath(tenant, req.Name)
+	volDir, err := s.volumes.Dir(tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
+	dataDir := filepath.Join(volDir, config.DataDir)
 
 	// Serialize concurrent creators of the same name. Losers block here and
 	// then observe the winner's cache entry on the Get below, returning a
@@ -205,7 +209,10 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	}
 	defer release()
 
-	dataDir := s.volumes.DataPath(tenant, name)
+	dataDir, err := s.volumes.DataPath(tenant, name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
 
 	cached, err := s.volumes.Get(tenant, name)
 	if err != nil {
@@ -362,7 +369,10 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		return nil, err
 	}
 
-	cloneDir := s.volumes.Dir(tenant, req.Name)
+	cloneDir, err := s.volumes.Dir(tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
 
 	// Serialize concurrent creators of the same name (see CreateVolume).
 	unlock, err := s.volumes.Lock(ctx, tenant, req.Name)
@@ -379,8 +389,11 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("create clone directory: %v", err)}
 	}
 
-	srcData := s.volumes.DataPath(tenant, req.Source)
-	cloneData := s.volumes.DataPath(tenant, req.Name)
+	srcData, err := s.volumes.DataPath(tenant, req.Source)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
+	cloneData := filepath.Join(cloneDir, config.DataDir)
 
 	cleanup := func() {
 		if err := s.btrfs.SubvolumeDelete(ctx, cloneData); err != nil {
@@ -460,7 +473,11 @@ func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 		return &StorageError{Code: ErrBusy, Message: fmt.Sprintf("volume %q still has active NFS exports", name)}
 	}
 
-	dataDir := s.volumes.DataPath(tenant, name)
+	volDir, err := s.volumes.Dir(tenant, name)
+	if err != nil {
+		return &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
+	dataDir := filepath.Join(volDir, config.DataDir)
 	if err := s.btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
 		log.Error().Err(err).Msg("failed to delete subvolume")
 		return fmt.Errorf("btrfs subvolume delete failed: %w", err)
@@ -468,7 +485,6 @@ func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 
 	s.volumes.Delete(tenant, name)
 
-	volDir := s.volumes.Dir(tenant, name)
 	if err := os.RemoveAll(volDir); err != nil {
 		log.Error().Err(err).Msg("failed to remove volume directory")
 		return fmt.Errorf("failed to remove volume directory: %w", err)

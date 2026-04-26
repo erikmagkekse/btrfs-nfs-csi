@@ -52,7 +52,12 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 			return true
 		}
 
-		dataDir := s.volumes.DataPath(tenant, name)
+		dataDir, err := s.volumes.DataPath(tenant, name)
+		if err != nil {
+			log.Warn().Err(err).Str("volume", name).Msg("usage updater: invalid volume path, skipping")
+			failed++
+			return true
+		}
 		meta := *cached
 		count++
 		changed := false
@@ -138,7 +143,12 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 		}
 		snapCount++
 
-		dataDir := s.snapshots.DataPath(tenant, name)
+		dataDir, err := s.snapshots.DataPath(tenant, name)
+		if err != nil {
+			log.Warn().Err(err).Str("snapshot", name).Msg("usage updater: invalid snapshot path, skipping")
+			snapFailed++
+			return true
+		}
 
 		if usageMap == nil {
 			return true
