@@ -72,7 +72,11 @@ func (s *Storage) reconcileExports(ctx context.Context, tenant string) {
 		if t != tenant {
 			return true
 		}
-		volDir := s.volumes.Dir(tenant, name)
+		volDir, err := s.volumes.Dir(tenant, name)
+		if err != nil {
+			log.Error().Err(err).Str("name", name).Msg("nfs reconciler: invalid volume path")
+			return true
+		}
 		actual := actualExports[volDir]
 		for _, ip := range uniqueExportIPs(meta.Exports) {
 			if actual != nil && actual[ip] {

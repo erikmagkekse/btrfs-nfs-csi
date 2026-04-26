@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -32,7 +33,10 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	if err != nil {
 		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source volume %q not found", req.Volume)}
 	}
-	srcData := s.volumes.DataPath(tenant, req.Volume)
+	srcData, err := s.volumes.DataPath(tenant, req.Volume)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
 
 	// Serialize concurrent creators of the same snapshot name (see CreateVolume).
 	unlock, err := s.snapshots.Lock(ctx, tenant, req.Name)
@@ -44,7 +48,10 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 	if existing, err := s.snapshots.Get(tenant, req.Name); err == nil {
 		return existing, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("snapshot %q already exists", req.Name)}
 	}
-	snapDir := s.snapshots.Dir(tenant, req.Name)
+	snapDir, err := s.snapshots.Dir(tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
 
 	// operations
 	if err := os.MkdirAll(snapDir, s.defaultDirMode); err != nil {
@@ -52,7 +59,7 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("failed to create snapshot directory: %v", err)}
 	}
 
-	dstData := s.snapshots.DataPath(tenant, req.Name)
+	dstData := filepath.Join(snapDir, config.DataDir)
 	if err := s.btrfs.SubvolumeSnapshot(ctx, srcData, dstData, true); err != nil {
 		if isSubvolumeAlreadyExistsError(err) {
 			log.Warn().Err(err).Str("path", dstData).Msg("snapshot target already exists on disk")
@@ -147,7 +154,11 @@ func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error
 		return &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("snapshot %q not found", name)}
 	}
 
-	dataDir := s.snapshots.DataPath(tenant, name)
+	snapDir, err := s.snapshots.Dir(tenant, name)
+	if err != nil {
+		return &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
+	dataDir := filepath.Join(snapDir, config.DataDir)
 	if err := s.btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
 		log.Error().Err(err).Msg("failed to delete snapshot subvolume")
 		return fmt.Errorf("btrfs subvolume delete failed: %w", err)
@@ -155,7 +166,6 @@ func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error
 
 	s.snapshots.Delete(tenant, name)
 
-	snapDir := s.snapshots.Dir(tenant, name)
 	if err := os.RemoveAll(snapDir); err != nil {
 		log.Error().Err(err).Msg("failed to remove snapshot directory")
 		return fmt.Errorf("failed to remove snapshot directory: %w", err)

@@ -3,6 +3,7 @@ package meta
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,22 +68,41 @@ func (s *Store[T]) key(tenant, name string) string {
 }
 
 // Dir returns the base directory for the given entry.
-func (s *Store[T]) Dir(tenant, name string) string {
+//
+// Returns an error if tenant or name are not local paths (absolute, empty,
+// or contain ".."). Callers should still validate inputs upstream via
+// config.ValidateTenantName and config.ValidateSubvolumeName, both of which
+// restrict to a strict regex. The filepath.IsLocal guard here is defence in
+// depth so that any future weakening of upstream validation cannot turn this
+// helper into a path traversal sink, and it lets static analysers recognise
+// the sanitiser.
+func (s *Store[T]) Dir(tenant, name string) (string, error) {
+	if !filepath.IsLocal(tenant) || !filepath.IsLocal(name) {
+		return "", fmt.Errorf("storage/meta: non-local path component: tenant=%q name=%q", tenant, name)
+	}
 	parts := make([]string, 0, 3+len(s.pathSegments))
 	parts = append(parts, s.basePath, tenant)
 	parts = append(parts, s.pathSegments...)
 	parts = append(parts, name)
-	return filepath.Join(parts...)
+	return filepath.Join(parts...), nil
 }
 
 // MetaPath returns the metadata file path for the given entry.
-func (s *Store[T]) MetaPath(tenant, name string) string {
-	return filepath.Join(s.Dir(tenant, name), config.MetadataFile)
+func (s *Store[T]) MetaPath(tenant, name string) (string, error) {
+	dir, err := s.Dir(tenant, name)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, config.MetadataFile), nil
 }
 
 // DataPath returns the data directory path for the given entry.
-func (s *Store[T]) DataPath(tenant, name string) string {
-	return filepath.Join(s.Dir(tenant, name), config.DataDir)
+func (s *Store[T]) DataPath(tenant, name string) (string, error) {
+	dir, err := s.Dir(tenant, name)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, config.DataDir), nil
 }
 
 // Seed populates the cache without writing to disk. Used at startup.
@@ -98,7 +118,10 @@ func (s *Store[T]) Get(tenant, name string) (*T, error) {
 	if v, ok := s.cache.Load(k); ok {
 		return v.(*T), nil
 	}
-	diskPath := s.MetaPath(tenant, name)
+	diskPath, err := s.MetaPath(tenant, name)
+	if err != nil {
+		return nil, err
+	}
 	var val T
 	if err := readJSON(diskPath, &val); err != nil {
 		return nil, err
@@ -110,7 +133,11 @@ func (s *Store[T]) Get(tenant, name string) (*T, error) {
 
 // Store writes metadata to disk (atomic) and updates the cache.
 func (s *Store[T]) Store(tenant, name string, val *T) error {
-	if err := writeJSONAtomic(s.MetaPath(tenant, name), val); err != nil {
+	metaPath, err := s.MetaPath(tenant, name)
+	if err != nil {
+		return err
+	}
+	if err := writeJSONAtomic(metaPath, val); err != nil {
 		return err
 	}
 	cp := *val
@@ -133,18 +160,26 @@ func (s *Store[T]) Store(tenant, name string, val *T) error {
 const lockAcquireTimeout = 30 * time.Second
 
 func (s *Store[T]) Lock(ctx context.Context, tenant, name string) (func(), error) {
+	metaPath, err := s.MetaPath(tenant, name)
+	if err != nil {
+		return nil, err
+	}
 	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > lockAcquireTimeout {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, lockAcquireTimeout)
 		defer cancel()
 	}
-	return pathLockCtx(ctx, s.MetaPath(tenant, name))
+	return pathLockCtx(ctx, metaPath)
 }
 
 // Update performs a read-modify-write with per-path locking.
 // Reads from cache (disk fallback), applies fn, writes to disk, updates cache.
 func (s *Store[T]) Update(tenant, name string, fn func(*T)) (*T, error) {
-	release := pathLock(s.MetaPath(tenant, name))
+	metaPath, err := s.MetaPath(tenant, name)
+	if err != nil {
+		return nil, err
+	}
+	release := pathLock(metaPath)
 	defer release()
 	return s.UpdateLocked(tenant, name, fn)
 }
@@ -153,7 +188,10 @@ func (s *Store[T]) Update(tenant, name string, fn func(*T)) (*T, error) {
 // hold it (via Lock()) to serialize the entire operation, e.g. when multiple
 // reads and external side effects need to be consistent with the final write.
 func (s *Store[T]) UpdateLocked(tenant, name string, fn func(*T)) (*T, error) {
-	diskPath := s.MetaPath(tenant, name)
+	diskPath, err := s.MetaPath(tenant, name)
+	if err != nil {
+		return nil, err
+	}
 	val, err := s.Get(tenant, name)
 	if err != nil {
 		return nil, err
@@ -168,9 +206,15 @@ func (s *Store[T]) UpdateLocked(tenant, name string, fn func(*T)) (*T, error) {
 }
 
 // Delete removes an entry from cache and clears the immutable flag on disk.
-func (s *Store[T]) Delete(tenant, name string) {
-	ClearImmutable(s.MetaPath(tenant, name))
-	s.cache.Delete(s.key(tenant, name))
+// Returns true if the entry was present in the cache, false otherwise so
+// callers can distinguish a real removal from a no-op. Skips the disk step
+// silently if (tenant, name) is not a valid path.
+func (s *Store[T]) Delete(tenant, name string) bool {
+	if metaPath, err := s.MetaPath(tenant, name); err == nil {
+		ClearImmutable(metaPath)
+	}
+	_, loaded := s.cache.LoadAndDelete(s.key(tenant, name))
+	return loaded
 }
 
 // Range iterates over all cached entries.
@@ -183,7 +227,10 @@ func (s *Store[T]) Range(fn func(tenant, name string, val *T) bool) {
 
 // LoadFromDisk reads metadata from disk and seeds the cache. Used at startup.
 func (s *Store[T]) LoadFromDisk(tenant, name string) (*T, error) {
-	diskPath := s.MetaPath(tenant, name)
+	diskPath, err := s.MetaPath(tenant, name)
+	if err != nil {
+		return nil, err
+	}
 	var val T
 	if err := readJSON(diskPath, &val); err != nil {
 		return nil, err
