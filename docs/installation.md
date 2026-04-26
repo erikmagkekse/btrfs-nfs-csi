@@ -19,8 +19,8 @@ The fastest way to get the agent running. Requires a mounted btrfs filesystem wi
 # export AGENT_TENANTS=default:$(openssl rand -hex 16)
 # export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdX  # optional, auto-format as btrfs + mount to AGENT_BASE_PATH 
-# export VERSION=0.10.0
-# export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.10.0  # override full image ref
+# export VERSION=0.11.0
+# export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.11.0  # override full image ref
 # export SKIP_PACKAGE_INSTALL=1
 
 curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh # | sudo -E bash
@@ -33,12 +33,14 @@ curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scr
 | `AGENT_BASE_PATH` | `/export/data` | btrfs mount point |
 | `AGENT_TENANTS` | `default:<random>` | tenant:token pairs |
 | `AGENT_LISTEN_ADDR` | `:8080` | listen address |
-| `VERSION` | `0.10.0` | container image tag |
+| `VERSION` | `0.11.0` | container image tag |
 | `IMAGE` | `ghcr.io/erikmagkekse/btrfs-nfs-csi:<VERSION>` | full container image reference (overrides `VERSION`) |
 | `AGENT_BLOCK_DISK` | (unset) | block device to auto-format as btrfs and mount (e.g. `/dev/sdb`) |
 | `SKIP_PACKAGE_INSTALL` | (unset) | set to `1` to skip package installation |
 
 The script installs prerequisites (podman, NFS server, btrfs-progs), generates a config file, sets up a Podman Quadlet, and starts the service.
+
+**Supported distributions.** The quickstart needs Podman 4.4 or newer because the agent ships as a Quadlet container. Tested on Debian 13, Ubuntu 24.04, openSUSE Leap 15/16, and Fedora 42/43. Older Debian/Ubuntu releases (Debian 11/12, Ubuntu 22.04) ship Podman 3.x or 4.3, which lack Quadlet, install a newer Podman from your distro's backports or upstream repo first, then re-run with `SKIP_PACKAGE_INSTALL=1`. RHEL-family distros (RHEL/Alma/Rocky/CentOS Stream) need `btrfs-progs` from EPEL and a kernel that still has the btrfs module, RHEL 10 dropped btrfs from the kernel entirely so it cannot be used. Arch and NixOS work via their own packaging paths (see [`flake.nix`](https://github.com/erikmagkekse/btrfs-nfs-csi/blob/main/flake.nix) for NixOS).
 
 **Update:** Run the same command again to update. The script detects an existing installation, preserves your tenant config, updates the container image + Quadlet file, and restarts the service. Pass `--yes` / `-y` to skip the confirmation prompt (e.g. for CI).
 
@@ -173,13 +175,13 @@ AGENT_TENANTS=cluster-a:token-aaa,cluster-b:token-bbb
 
 Each tenant is isolated (separate directory, separate token). Reserved names that cannot be used as tenants: `tasks`, `snapshots`, `data`, `metadata`. See [multi-tenancy](architecture.md#multi-tenancy) for details.
 
-For deployments where `AGENT_TENANTS` exposure is a concern (env-var leak, container config, systemd unit), the token field accepts a bcrypt hash instead of plaintext. Generate one with `btrfs-nfs-csi hash-token` and paste it into the config; clients still send the plaintext as bearer. See [rbac.md#hashed-tokens](rbac.md#hashed-tokens).
+For deployments where `AGENT_TENANTS` exposure is a concern (env-var leak, container config, systemd unit), the token field accepts a bcrypt hash instead of plaintext. Generate one with `btrfs-nfs-csi hash-token` and paste it into the config. Clients still send the plaintext as bearer. See [rbac.md#hashed-tokens](rbac.md#hashed-tokens).
 
 </details>
 
 ## Persistent Secret
 
-On first start the agent generates a 512-byte root secret at `${AGENT_BASE_PATH}/metadata/root_secret` (mode `0600`, dir `0700`) plus a `root_secret.bak` replica next to it. The secret is the agent's per-installation cryptographic root: every purpose-specific key is derived from it via HKDF with a versioned info string, so that one root can serve multiple subsystems without sharing key material. Today only HMAC-SHA256 token fingerprints (printed by `btrfs-nfs-csi whoami` and `btrfs-nfs-csi tokens`) consume it. Future features that need stable, agent-local crypto (e.g. signing short-lived issued tokens) will derive their own subkeys from the same root, no extra config required.
+On first start the agent generates a 512-byte secret at `${AGENT_BASE_PATH}/metadata/root_secret` (file mode `0600`, directory mode `0700`), plus a `root_secret.bak` copy next to it. This secret is what makes token fingerprints stable across restarts: the same token always shows the same fingerprint as long as the secret is the same. Today the secret is only used for token fingerprints (the values shown by `btrfs-nfs-csi whoami` and `btrfs-nfs-csi tokens`). Future features that need agent-local cryptography will use it without any extra configuration.
 
 Stable fingerprints across restarts let you correlate audit logs with a configured token over time. See [rbac.md](rbac.md#token-fingerprints).
 

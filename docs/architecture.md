@@ -25,7 +25,7 @@ Delete    --> DELETE /v1/volumes/:name   (subvolume delete)
 ```
 {AGENT_BASE_PATH}/
 ├── metadata/
-│   ├── root_secret         <-- per-installation HKDF root (mode 0600)
+│   ├── root_secret         <-- per-installation crypto root (mode 0600)
 │   └── root_secret.bak     <-- replica, primary/backup mismatch aborts startup
 ├── tasks/
 │   └── {id}.json           <-- persisted task state

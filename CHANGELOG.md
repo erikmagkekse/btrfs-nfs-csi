@@ -1,24 +1,30 @@
 # Changelog
 
-## v0.10.1 (unreleased)
+## v0.11.0
+
+Security and operations release. Adds three-level RBAC, bcrypt-hashable tokens, denial telemetry, token introspection, and four new btrfs maintenance task types.
 
 ### Features
-- New `balance` task type (`task create balance`) with full flag set (usage/profile/device filters, RAID conversion via `dconvert`/`mconvert`/`sconvert`, `force`). Mutex serializes Scrub and Balance so they cannot run concurrently. Cancel propagates to kernel via `btrfs balance cancel`.
-- Scrub task accepts `--readonly`, `--force`, `--ioprio-class`, and `--ioprio-classdata` (CLI) / `opts` (API). Invalid values rejected with `INVALID`; `-B` remains hardcoded for progress tracking.
-- New `defragment` task type (`task create defragment`) targeting a specific `--volume`, optionally scoped to a `--path` sub-directory. Supports `--compress`, `--no-recursive`, and `--threshold`. Path traversal and symlink escapes are rejected at the validation layer. Snapshots are not supported because the agent creates them read-only; clones (writable) can be defragmented like any volume.
-- New `quota-rescan` task type (`task create quota-rescan`) rebuilds btrfs qgroup accounting filesystem-wide. Mutually exclusive with scrub and balance. Note: only supported on classic qgroups; simple quotas (squota) fail fast with a clear error, as btrfs does not support rescan on that mode.
+- Add btrfs balance task with scrub/balance mutex (#141)
+- Add scrub task flags: readonly, force, ioprio-class, ioprio-classdata (#142)
+- Add defragment task, tenant-scoped with path-traversal safety (#143)
+- Add quota-rescan task with squota-aware error translation (#144)
+- Quickstart-agent.sh hardening: Podman version check, system-disk guard, existing-FS confirm, port-conflict check, Quadlet-download error path
 
 ### Security
-- `AGENT_TENANTS` token field accepts bcrypt hashes (`$2a$/$2b$/$2y$`) in addition to plaintext. New `btrfs-nfs-csi hash-token --cost N` subcommand generates them locally (no `htpasswd` or `openssl` needed). Successful verifies are cached under `HMAC(root_secret, providedToken)` so repeat requests skip the bcrypt round-trip.
-- Constant-time token comparison in the agent auth middleware.
-- Three-level RBAC via `AGENT_TENANTS` entries `name:token[:role[:identity]]`. Roles (`readonly`, `mounter`, `user`, `admin`) gate endpoint access. Identity (`a-zA-Z0-9_-`, 1-32) stamps `created-by` on creates and scopes mutations to the creator. Levels can be mixed in one config. Full matrix in `docs/rbac.md`.
-- `created-by` enforcement on every mutating handler. Source-ownership on snapshot/clone/export/defragment so a token cannot derive resources from another identity's data. Update boundary on `PATCH`: `created-by` cannot be cleared or rewritten, including by admins.
-- Server-managed labels rejected when set by clients. `tenant` is hard-reserved at the API boundary; `clone.source.*` and `created-by` are server-injected and validated against identity.
-- Denial telemetry: every `403` carries a structured `reason` label (`invalid_token`, `role_denied`, `identity_mismatch`, `ownership`) on the `http_requests_total` Prometheus counter, plus a warn log with client IP, tenant, path, token fingerprint, role, and identity.
-- Token introspection. `GET /v1/whoami` returns the caller's tenant, role, identity, and HMAC-SHA256 fingerprint. `GET /v1/tokens` (admin-only) lists the caller's tenant with every configured token's fingerprint, role, and identity. Raw tokens are never returned. Fingerprints derive via HKDF from a per-installation secret in `AGENT_BASE_PATH/metadata/root_secret` with a `root_secret.bak` replica, primary/backup mismatch aborts startup.
+- Add three-level RBAC: roles, identity, and resource ownership (#150)
+- Accept bcrypt-hashed tokens in AGENT_TENANTS, add hash-token CLI (#151)
+- Harden tenant auth: constant-time compare, reserve internal names (#140)
 
 ### Bug Fixes
-- Reserve internal directory names (`tasks`, `snapshots`, `data`, `metadata`, case-insensitive) as invalid tenant names and as invalid volume/clone names. `AGENT_TENANTS` is validated at boot; volume/clone names are validated at the API boundary.
+- Reject client-supplied clone.source.* labels at API boundary (#152)
+- Fix pagination defaults and reject invalid cursors (#153)
+- Quickstart-agent.sh: `findmnt` returning empty no longer kills the script under `set -e`
+
+### Dependencies
+- Bump `k8s.io/api` from 0.35.3 to 0.35.4 (#139)
+- Bump `k8s.io/client-go` from 0.35.3 to 0.35.4 (#136)
+- Bump `k8s.io/mount-utils` from 0.35.3 to 0.35.4 (#138)
 
 ## v0.10.0
 
