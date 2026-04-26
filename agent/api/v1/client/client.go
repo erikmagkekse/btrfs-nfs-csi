@@ -105,6 +105,7 @@ type Client struct {
 	token         string
 	http          *http.Client
 	identity      string
+	whoami        *models.WhoamiResponse
 	pageLimit     int
 	prefetch      int
 	prefetchBytes int64
@@ -161,8 +162,27 @@ func newClient(url, token string, cfg ClientConfig) (*Client, error) {
 }
 
 // Identity returns the client's identity label value (e.g. "cli", "k8s").
+// This is the env-configured identity used to stamp `created-by` labels;
+// it can differ from the per-token identity returned by Whoami.
 func (c *Client) Identity() string {
 	return c.identity
+}
+
+// Whoami returns the cached caller info (tenant, role, identity, fingerprint).
+// Returns nil until Resolve succeeds.
+func (c *Client) Whoami() *models.WhoamiResponse {
+	return c.whoami
+}
+
+// Resolve fetches the caller's tenant, role, identity, and fingerprint via
+// /v1/whoami and caches them. Safe to call multiple times; later calls overwrite.
+func (c *Client) Resolve(ctx context.Context) error {
+	var resp models.WhoamiResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/whoami", nil, &resp); err != nil {
+		return err
+	}
+	c.whoami = &resp
+	return nil
 }
 
 func (c *Client) ensureIdentity(labels map[string]string) map[string]string {
@@ -480,16 +500,6 @@ func (c *Client) CancelTask(ctx context.Context, id string) error {
 }
 
 // --- Auth ---
-
-// Whoami returns the caller's own tenant, role, identity, and fingerprint.
-// GET /v1/whoami
-func (c *Client) Whoami(ctx context.Context) (*models.WhoamiResponse, error) {
-	var resp models.WhoamiResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/whoami", nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
 
 // ListTokens returns the tokens configured for the caller's tenant (admin-only).
 // Tokens are represented by fingerprint only; never in plaintext.
