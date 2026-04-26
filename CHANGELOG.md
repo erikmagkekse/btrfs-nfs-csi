@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.11.0
+
+Security and operations release. Adds three-level RBAC, bcrypt-hashable tokens, denial telemetry, token introspection, and four new btrfs maintenance task types.
+
+### Features
+- Add btrfs balance task with scrub/balance mutex (#141)
+- Add scrub task flags: readonly, force, ioprio-class, ioprio-classdata (#142)
+- Add defragment task, tenant-scoped with path-traversal safety (#143)
+- Add quota-rescan task with squota-aware error translation (#144)
+- Quickstart-agent.sh hardening: Podman version check, system-disk guard, existing-FS confirm, port-conflict check, Quadlet-download error path
+
+### Security
+- Add three-level RBAC: roles, identity, and resource ownership (#150)
+- Accept bcrypt-hashed tokens in AGENT_TENANTS, add hash-token CLI (#151)
+- Harden tenant auth: constant-time compare, reserve internal names (#140)
+
+### Bug Fixes
+- Reject client-supplied clone.source.* labels at API boundary (#152)
+- Fix pagination defaults and reject invalid cursors (#153)
+- Quickstart-agent.sh: `findmnt` returning empty no longer kills the script under `set -e`
+
+### Dependencies
+- Bump `k8s.io/api` from 0.35.3 to 0.35.4 (#139)
+- Bump `k8s.io/client-go` from 0.35.3 to 0.35.4 (#136)
+- Bump `k8s.io/mount-utils` from 0.35.3 to 0.35.4 (#138)
+
 ## v0.10.0
 
 Major feature release. The agent is now a multi-purpose storage backend with a standalone CLI, REST API, task system, and label-based multi-tenancy. 
@@ -104,7 +130,7 @@ This release adds the Helm chart as the primary deployment method for the CSI dr
 - Rename `helm.yml` to `ci-helm.yml`, add `helm-release.yml` as reusable workflow (#71)
 
 ### Breaking Changes
-- `btrfs_nfs_csi_controller_agent_health_total` metric removed — use `agent_ops_total{operation="health_check"}` instead (#69)
+- `btrfs_nfs_csi_controller_agent_health_total` metric removed, use `agent_ops_total{operation="health_check"}` instead (#69)
 - Health checks now tracked in `agent_ops_total` and `agent_duration_seconds` with `operation=health_check` (#69)
 
 ## v0.9.9
@@ -126,7 +152,7 @@ This release adds the Helm chart as the primary deployment method for the CSI dr
 - Unit tests for driver utils (ResolveNodeIP) (#59)
 
 ### Security
-- Bump `google.golang.org/grpc` to v1.79.3 — fixes CVE-2026-33186 (authorization bypass via missing leading slash in `:path`, CVSS 9.1 Critical)
+- Bump `google.golang.org/grpc` to v1.79.3, fixes CVE-2026-33186 (authorization bypass via missing leading slash in `:path`, CVSS 9.1 Critical)
 
 ### Other
 - Improved controller agent version check message on non-matching commit builds, issue #54 (#56)

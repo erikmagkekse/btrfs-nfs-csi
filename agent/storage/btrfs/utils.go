@@ -219,6 +219,62 @@ func parseScrubStatus(out string) (*ScrubStatus, error) {
 	return s, nil
 }
 
+// parseBalanceStatus parses `btrfs balance status -v` output.
+// Expected states:
+//   - "No balance found on '/path'"          -> idle
+//   - "Balance on '/path' is running"        -> running
+//   - "Balance on '/path' is paused"         -> paused
+//   - "Balance on '/path' is cancelling"     -> running + cancel pending
+//
+// Progress line (when running/paused):
+//
+//	"N out of about M chunks balanced (K considered), P% left"
+func parseBalanceStatus(out string) (*BalanceStatus, error) {
+	s := &BalanceStatus{}
+	for line := range strings.SplitSeq(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(trimmed, "No balance found"):
+			return s, nil
+		case strings.Contains(trimmed, "is running"), strings.Contains(trimmed, "is cancelling"):
+			s.Running = true
+		case strings.Contains(trimmed, "is paused"):
+			s.Running = true
+			s.Paused = true
+		}
+		if strings.Contains(trimmed, "chunks balanced") {
+			fields := strings.Fields(trimmed)
+			// "N out of about M chunks balanced (K considered), P% left"
+			if len(fields) >= 10 && fields[1] == "out" && fields[2] == "of" && fields[3] == "about" {
+				s.ChunksDone, _ = strconv.ParseUint(fields[0], 10, 64)
+				s.ChunksTotal, _ = strconv.ParseUint(fields[4], 10, 64)
+			}
+		}
+	}
+	return s, nil
+}
+
+// parseQuotaRescanStatus parses `btrfs quota rescan -s` output.
+// btrfs-progs emits:
+//   - "no rescan operation in progress"                  -> idle
+//   - "quota rescan status:\nrunning, current key ..."   -> running
+func parseQuotaRescanStatus(out string) *QuotaRescanStatus {
+	s := &QuotaRescanStatus{}
+	for line := range strings.SplitSeq(out, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "no rescan") {
+			return s
+		}
+		if strings.HasPrefix(trimmed, "running") {
+			s.Running = true
+		}
+	}
+	return s
+}
+
 // subvolEntry holds a parsed line from `btrfs subvolume list -o`.
 type subvolEntry struct {
 	ID   string

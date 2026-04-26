@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -21,9 +22,37 @@ func taskResultSummary(resp *models.TaskDetailResponse) string {
 	switch resp.Type {
 	case models.TaskTypeScrub:
 		return scrubResultSummary(resp)
+	case models.TaskTypeBalance:
+		return balanceResultSummary(resp)
 	default:
 		return genericResultSummary(resp.Result)
 	}
+}
+
+func balanceResultSummary(resp *models.TaskDetailResponse) string {
+	var s btrfs.BalanceStatus
+	if json.Unmarshal(resp.Result, &s) != nil {
+		return genericResultSummary(resp.Result)
+	}
+	switch resp.Status {
+	case models.TaskStatusCompleted:
+		if s.ChunksDone > 0 {
+			return fmt.Sprintf("%d chunks balanced", s.ChunksDone)
+		}
+	case models.TaskStatusRunning:
+		if s.ChunksTotal > 0 {
+			return fmt.Sprintf("%d/%d chunks", s.ChunksDone, s.ChunksTotal)
+		}
+	case models.TaskStatusCancelled:
+		if s.ChunksTotal > 0 {
+			return fmt.Sprintf("cancelled at %d/%d chunks", s.ChunksDone, s.ChunksTotal)
+		}
+	case models.TaskStatusFailed:
+		if s.LastError != "" {
+			return s.LastError
+		}
+	}
+	return ""
 }
 
 func scrubResultSummary(resp *models.TaskDetailResponse) string {
@@ -45,9 +74,6 @@ func scrubResultSummary(resp *models.TaskDetailResponse) string {
 		if errs > 0 {
 			parts = append(parts, fmt.Sprintf("%d errors", errs))
 		}
-		if len(parts) == 0 {
-			return ""
-		}
 		return strings.Join(parts, ", ")
 	case models.TaskStatusCompleted:
 		speed := ""
@@ -62,10 +88,8 @@ func scrubResultSummary(resp *models.TaskDetailResponse) string {
 		if errs > 0 {
 			return fmt.Sprintf("%d errors", errs)
 		}
-		return ""
-	default:
-		return ""
 	}
+	return ""
 }
 
 func genericResultSummary(result json.RawMessage) string {
@@ -73,11 +97,7 @@ func genericResultSummary(result json.RawMessage) string {
 	if json.Unmarshal(result, &m) != nil {
 		return ""
 	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(m))
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
 		parts = append(parts, fmt.Sprintf("%s: %v", k, m[k]))
@@ -208,7 +228,21 @@ func taskCancel(ctx context.Context, cmd *cli.Command) error {
 }
 
 func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
-	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd)}
+	opts := map[string]string{}
+	if cmd.Bool("readonly") {
+		opts["readonly"] = "true"
+	}
+	if cmd.Bool("force") {
+		opts["force"] = "true"
+	}
+	if cmd.IsSet("ioprio-class") {
+		opts["ioprio_class"] = fmt.Sprintf("%d", cmd.Int("ioprio-class"))
+	}
+	if cmd.IsSet("ioprio-classdata") {
+		opts["ioprio_classdata"] = fmt.Sprintf("%d", cmd.Int("ioprio-classdata"))
+	}
+
+	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd), Opts: opts}
 	if t := cmd.Duration("timeout"); t > 0 {
 		req.Timeout = t.String()
 	}
@@ -223,6 +257,107 @@ func taskCreateScrub(ctx context.Context, cmd *cli.Command) error {
 	}
 	if !isJSON(cmd) {
 		fmt.Printf("scrub started (task %s)\n", resp.TaskID)
+	}
+	return waitForTask(ctx, resp.TaskID)
+}
+
+func taskCreateBalance(ctx context.Context, cmd *cli.Command) error {
+	opts := map[string]string{}
+	for _, k := range []string{"dusage", "musage", "susage"} {
+		if cmd.IsSet(k) {
+			opts[k] = fmt.Sprintf("%d", cmd.Int(k))
+		}
+	}
+	for _, k := range []string{"dprofiles", "mprofiles", "dconvert", "mconvert", "sconvert"} {
+		if v := cmd.String(k); v != "" {
+			opts[k] = v
+		}
+	}
+	for _, k := range []string{"ddevid", "mdevid"} {
+		if cmd.IsSet(k) {
+			opts[k] = fmt.Sprintf("%d", cmd.Int(k))
+		}
+	}
+	if cmd.Bool("force") {
+		opts["force"] = "true"
+	}
+
+	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd), Opts: opts}
+	if t := cmd.Duration("timeout"); t > 0 {
+		req.Timeout = t.String()
+	}
+	resp, err := apiClient.CreateTask(ctx, models.TaskTypeBalance, req)
+	if err != nil {
+		return err
+	}
+	if !cmd.Bool("wait") {
+		return output(cmd, resp, func() {
+			fmt.Printf("balance started (task %s)\n", resp.TaskID)
+		})
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("balance started (task %s)\n", resp.TaskID)
+	}
+	return waitForTask(ctx, resp.TaskID)
+}
+
+func taskCreateDefragment(ctx context.Context, cmd *cli.Command) error {
+	volume := cmd.String("volume")
+	if volume == "" {
+		return fmt.Errorf("defragment requires --volume")
+	}
+
+	opts := map[string]string{}
+	if v := cmd.String("compress"); v != "" {
+		opts["compress"] = v
+	}
+	if cmd.Bool("no-recursive") {
+		opts["recursive"] = "false"
+	}
+	if cmd.IsSet("threshold") {
+		opts["threshold"] = fmt.Sprintf("%d", cmd.Int("threshold"))
+	}
+
+	req := models.TaskCreateRequest{
+		Labels: parseLabelsFlag(cmd),
+		Opts:   opts,
+		Volume: volume,
+		Path:   cmd.String("path"),
+	}
+	if t := cmd.Duration("timeout"); t > 0 {
+		req.Timeout = t.String()
+	}
+	resp, err := apiClient.CreateTask(ctx, models.TaskTypeDefragment, req)
+	if err != nil {
+		return err
+	}
+	if !cmd.Bool("wait") {
+		return output(cmd, resp, func() {
+			fmt.Printf("defragment started (task %s)\n", resp.TaskID)
+		})
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("defragment started (task %s)\n", resp.TaskID)
+	}
+	return waitForTask(ctx, resp.TaskID)
+}
+
+func taskCreateQuotaRescan(ctx context.Context, cmd *cli.Command) error {
+	req := models.TaskCreateRequest{Labels: parseLabelsFlag(cmd)}
+	if t := cmd.Duration("timeout"); t > 0 {
+		req.Timeout = t.String()
+	}
+	resp, err := apiClient.CreateTask(ctx, models.TaskTypeQuotaRescan, req)
+	if err != nil {
+		return err
+	}
+	if !cmd.Bool("wait") {
+		return output(cmd, resp, func() {
+			fmt.Printf("quota rescan started (task %s)\n", resp.TaskID)
+		})
+	}
+	if !isJSON(cmd) {
+		fmt.Printf("quota rescan started (task %s)\n", resp.TaskID)
 	}
 	return waitForTask(ctx, resp.TaskID)
 }

@@ -11,12 +11,16 @@ import (
 )
 
 var (
+	// httpRequestsTotal counts HTTP requests by method, path, status code,
+	// and optional denial reason. `reason` is empty for ordinary outcomes
+	// and set to one of the denial* constants (see middleware.go) when the
+	// handler rejected the request (invalid token, role gate, ownership, ...).
 	httpRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "btrfs_nfs_csi",
 		Subsystem: "agent",
 		Name:      "http_requests_total",
-		Help:      "Total HTTP requests by method, path, and status code.",
-	}, []string{"method", "path", "code"})
+		Help:      "Total HTTP requests by method, path, status code, and denial reason (empty for non-denials).",
+	}, []string{"method", "path", "code", "reason"})
 
 	httpRequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "btrfs_nfs_csi",
@@ -53,11 +57,12 @@ func MetricsMiddleware() echo.MiddlewareFunc {
 			path := c.RouteInfo().Path
 			resp := c.Response().(*echo.Response)
 			code := strconv.Itoa(resp.Status)
+			reason, _ := c.Get(ctxKeyDenial).(string)
 
-			httpRequestsTotal.WithLabelValues(method, path, code).Inc()
+			httpRequestsTotal.WithLabelValues(method, path, code, reason).Inc()
 			httpRequestDuration.WithLabelValues(method, path).Observe(duration)
 
-			tenant, _ := c.Get("tenant").(string)
+			tenant := tenantOf(c)
 			l := log.Debug().
 				Str("method", method).
 				Str("path", c.Request().URL.Path).

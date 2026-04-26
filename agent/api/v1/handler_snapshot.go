@@ -11,6 +11,11 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
+var (
+	policyCreateSnapshot = Policy{AllowedRoles: rolesUserAdmin, EnforceCreatedBy: true, EnforceOwnership: true}
+	policyDeleteSnapshot = Policy{AllowedRoles: rolesUserAdmin, EnforceOwnership: true}
+)
+
 func snapshotResponseFrom(meta *storage.SnapshotMetadata) models.SnapshotResponse {
 	return models.SnapshotResponse{
 		Name:      meta.Name,
@@ -57,11 +62,19 @@ func snapshotDetailResponseFrom(meta *storage.SnapshotMetadata) models.SnapshotD
 // @Router       /v1/snapshots [post]
 // @Security     BearerAuth
 func (h *Handler) CreateSnapshot(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 
 	var req storage.SnapshotCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid request body", Code: storage.ErrBadRequest})
+	}
+
+	src, err := h.Store.GetVolume(tenant, req.Volume)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyCreateSnapshot.Apply(c, src.Labels, &req.Labels); err != nil {
+		return StorageError(c, err)
 	}
 
 	meta, err := h.Store.CreateSnapshot(c.Request().Context(), tenant, req)
@@ -76,7 +89,7 @@ func (h *Handler) CreateSnapshot(c *echo.Context) error {
 }
 
 func (h *Handler) listSnapshotsPage(c *echo.Context, volume string) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 	snaps, err := h.Store.ListSnapshots(tenant, volume)
 	if err != nil {
 		return StorageError(c, err)
@@ -137,7 +150,7 @@ func (h *Handler) ListVolumeSnapshots(c *echo.Context) error {
 // @Router       /v1/snapshots/{name} [get]
 // @Security     BearerAuth
 func (h *Handler) GetSnapshot(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 
 	meta, err := h.Store.GetSnapshot(tenant, c.Param("name"))
 	if err != nil {
@@ -157,9 +170,18 @@ func (h *Handler) GetSnapshot(c *echo.Context) error {
 // @Router       /v1/snapshots/{name} [delete]
 // @Security     BearerAuth
 func (h *Handler) DeleteSnapshot(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
+	name := c.Param("name")
 
-	if err := h.Store.DeleteSnapshot(c.Request().Context(), tenant, c.Param("name")); err != nil {
+	existing, err := h.Store.GetSnapshot(tenant, name)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyDeleteSnapshot.Apply(c, existing.Labels, nil); err != nil {
+		return StorageError(c, err)
+	}
+
+	if err := h.Store.DeleteSnapshot(c.Request().Context(), tenant, name); err != nil {
 		return StorageError(c, err)
 	}
 

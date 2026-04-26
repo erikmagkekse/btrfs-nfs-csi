@@ -166,8 +166,11 @@ func (m *Manager) FilesystemUsage(ctx context.Context, path string) (FilesystemU
 
 // ScrubStart runs a btrfs scrub in foreground mode (-B).
 // Blocks until the scrub completes or the context is cancelled.
-func (m *Manager) ScrubStart(ctx context.Context, path string) error {
-	return m.run(ctx, "scrub", "start", "-B", path)
+// Extra args are inserted between -B and path (e.g. -r, -f, -c N, -n N).
+func (m *Manager) ScrubStart(ctx context.Context, path string, args []string) error {
+	cmdArgs := append([]string{"scrub", "start", "-B"}, args...)
+	cmdArgs = append(cmdArgs, path)
+	return m.run(ctx, cmdArgs...)
 }
 
 // ScrubStatus returns the status of the last/current scrub on the filesystem at path.
@@ -177,6 +180,50 @@ func (m *Manager) ScrubStatus(ctx context.Context, path string) (*ScrubStatus, e
 		return nil, err
 	}
 	return parseScrubStatus(out)
+}
+
+// BalanceStart runs a btrfs balance in the foreground. Blocks until the
+// balance completes or the context is cancelled. Note: unlike scrub, killing
+// the process does NOT stop the kernel-side balance; the caller must invoke
+// BalanceCancel on context cancellation.
+func (m *Manager) BalanceStart(ctx context.Context, path string, args []string) error {
+	cmdArgs := append([]string{"balance", "start"}, args...)
+	cmdArgs = append(cmdArgs, path)
+	return m.run(ctx, cmdArgs...)
+}
+
+func (m *Manager) BalanceStatus(ctx context.Context, path string) (*BalanceStatus, error) {
+	// `btrfs balance status` exits non-zero when no balance is running;
+	// parse anyway, parseBalanceStatus handles the "No balance" message.
+	out, _ := m.cmd.Run(ctx, m.bin, "balance", "status", "-v", path)
+	return parseBalanceStatus(out)
+}
+
+func (m *Manager) BalanceCancel(ctx context.Context, path string) error {
+	return m.run(ctx, "balance", "cancel", path)
+}
+
+// Defragment runs a btrfs filesystem defragment against the given path.
+// Blocks until complete or the context is cancelled. Extra args (compression,
+// recursion, threshold) are inserted between the subcommand and the path.
+func (m *Manager) Defragment(ctx context.Context, path string, args []string) error {
+	cmdArgs := append([]string{"filesystem", "defragment"}, args...)
+	cmdArgs = append(cmdArgs, path)
+	return m.run(ctx, cmdArgs...)
+}
+
+// QuotaRescan triggers a btrfs quota rescan and waits for it to finish via -w.
+func (m *Manager) QuotaRescan(ctx context.Context, path string) error {
+	return m.run(ctx, "quota", "rescan", "-w", path)
+}
+
+// QuotaRescanStatus returns whether a rescan is currently in progress.
+func (m *Manager) QuotaRescanStatus(ctx context.Context, path string) (*QuotaRescanStatus, error) {
+	out, err := m.cmd.Run(ctx, m.bin, "quota", "rescan", "-s", path)
+	if err != nil {
+		return nil, err
+	}
+	return parseQuotaRescanStatus(out), nil
 }
 
 // QgroupUsageBulk returns qgroup usage for all subvolumes under path.

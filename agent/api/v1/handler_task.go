@@ -12,6 +12,12 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
+var (
+	policyCreateTask         = Policy{AllowedRoles: rolesUserAdmin, EnforceCreatedBy: true}
+	policyCreateTaskOnVolume = Policy{AllowedRoles: rolesUserAdmin, EnforceCreatedBy: true, EnforceOwnership: true}
+	policyCancelTask         = Policy{AllowedRoles: rolesUserAdmin, EnforceOwnership: true}
+)
+
 func formatTimeout(d time.Duration) string {
 	if d <= 0 {
 		return ""
@@ -55,11 +61,11 @@ func taskDetailResponseFrom(t *task.Task) models.TaskDetailResponse {
 
 // CreateTask godoc
 // @Summary      Create a background task
-// @Description  Creates a background task (scrub or test). Returns 202 Accepted with task ID.
+// @Description  Creates a background task (scrub, balance, defragment, quota-rescan, test). Returns 202 Accepted with task ID.
 // @Tags         tasks
 // @Accept       json
 // @Produce      json
-// @Param        type    path string true "Task type" Enums(scrub, test)
+// @Param        type    path string true "Task type" Enums(scrub, balance, defragment, quota-rescan, test)
 // @Param        request body models.TaskCreateRequest false "Task options"
 // @Success      202 {object} models.TaskCreateResponse
 // @Failure      400 {object} models.ErrorResponse
@@ -75,6 +81,16 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 		}
 	}
 
+	// Admin-only task types depend on taskType path param, not a Policy literal.
+	role := roleOf(c)
+	if isAdminOnlyTaskType(taskType) && role != models.RoleAdmin {
+		denialLog(c, denialRoleDenied).
+			Str("role", string(role)).
+			Str("task_type", taskType).
+			Msg("admin-only task type")
+		return StorageError(c, &storage.StorageError{Code: storage.ErrForbidden, Message: "task type \"" + taskType + "\" requires admin role"})
+	}
+
 	var timeout time.Duration
 	if req.Timeout != "" {
 		var err error
@@ -84,6 +100,25 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 		}
 	}
 
+	ctx := c.Request().Context()
+	tenant := tenantOf(c)
+
+	// Defragment reads ownership from the target volume; other task types have no source.
+	if taskType == models.TaskTypeDefragment {
+		src, gerr := h.Store.GetVolume(tenant, req.Volume)
+		if gerr != nil {
+			return StorageError(c, gerr)
+		}
+		if err := policyCreateTaskOnVolume.Apply(c, src.Labels, &req.Labels); err != nil {
+			return StorageError(c, err)
+		}
+	} else {
+		if err := policyCreateTask.Apply(c, nil, &req.Labels); err != nil {
+			return StorageError(c, err)
+		}
+	}
+
+	req.Labels[config.LabelTenant] = tenant
 	if req.Labels[config.LabelCreatedBy] == "" {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "label \"" + config.LabelCreatedBy + "\" is required", Code: storage.ErrInvalid})
 	}
@@ -92,9 +127,15 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 	var err error
 	switch taskType {
 	case models.TaskTypeScrub:
-		taskID, err = h.Store.StartScrub(c.Request().Context(), req.Opts, req.Labels, timeout)
+		taskID, err = h.Store.StartScrub(ctx, req.Opts, req.Labels, timeout)
+	case models.TaskTypeBalance:
+		taskID, err = h.Store.StartBalance(ctx, req.Opts, req.Labels, timeout)
+	case models.TaskTypeDefragment:
+		taskID, err = h.Store.StartDefragment(ctx, tenant, req.Volume, req.Path, req.Opts, req.Labels, timeout)
+	case models.TaskTypeQuotaRescan:
+		taskID, err = h.Store.StartQuotaRescan(ctx, req.Opts, req.Labels, timeout)
 	case models.TaskTypeTest:
-		taskID, err = h.Store.StartTestTask(c.Request().Context(), req.Opts, req.Labels, timeout)
+		taskID, err = h.Store.StartTestTask(ctx, req.Opts, req.Labels, timeout)
 	default:
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "unknown task type: " + taskType, Code: storage.ErrInvalid})
 	}
@@ -109,7 +150,7 @@ func (h *Handler) CreateTask(c *echo.Context) error {
 // @Description  Returns background tasks. Filter by type. Supports detail, pagination, and label filtering.
 // @Tags         tasks
 // @Produce      json
-// @Param        type   query string false "Filter by task type" Enums(scrub, test)
+// @Param        type   query string false "Filter by task type" Enums(scrub, balance, defragment, quota-rescan, test)
 // @Param        detail query string false "Return full detail" Enums(true)
 // @Param        limit  query int    false "Items per page (0 = pagination disabled)"
 // @Param        after  query string false "Pagination cursor"
@@ -159,7 +200,17 @@ func (h *Handler) GetTask(c *echo.Context) error {
 // @Router       /v1/tasks/{id} [delete]
 // @Security     BearerAuth
 func (h *Handler) CancelTask(c *echo.Context) error {
-	if err := h.Store.Tasks().Cancel(c.Param("id")); err != nil {
+	id := c.Param("id")
+
+	existing, err := h.Store.Tasks().Get(id)
+	if err != nil {
+		return StorageError(c, err)
+	}
+	if err := policyCancelTask.Apply(c, existing.Labels, nil); err != nil {
+		return StorageError(c, err)
+	}
+
+	if err := h.Store.Tasks().Cancel(id); err != nil {
 		return StorageError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)

@@ -24,8 +24,11 @@ Delete    --> DELETE /v1/volumes/:name   (subvolume delete)
 
 ```
 {AGENT_BASE_PATH}/
+├── metadata/
+│   ├── root_secret         <-- per-installation crypto root (mode 0600)
+│   └── root_secret.bak     <-- replica, primary/backup mismatch aborts startup
 ├── tasks/
-│   └── {id}.json          <-- persisted task state
+│   └── {id}.json           <-- persisted task state
 └── {tenant}/
     ├── {volume}/
     │   ├── data/           <-- btrfs subvolume
@@ -63,6 +66,7 @@ On startup, the agent scans the tenant directory and loads volume/snapshot metad
 - One directory per tenant under `AGENT_BASE_PATH`
 - Token to tenant mapping via `AGENT_TENANTS`
 - All API operations scoped to authenticated tenant
+- Roles (`readonly`, `mounter`, `user`, `admin`) and optional per-token identity gate endpoints and per-resource ownership. See [rbac.md](rbac.md).
 - For stronger isolation: separate agents
 
 ## HA

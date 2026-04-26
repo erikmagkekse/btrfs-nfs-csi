@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -175,11 +176,7 @@ func init() {
 // mergeUserLabels merges user labels into dst, skipping reserved/invalid keys.
 // Returns the skipped keys for the caller to handle (e.g. record events).
 func mergeUserLabels(dst, user map[string]string, maxUser int) (skippedKeys []string) {
-	keys := make([]string, 0, len(user))
-	for k := range user {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(user))
 
 	merged := 0
 	truncated := false

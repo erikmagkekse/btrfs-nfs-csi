@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -126,21 +127,33 @@ func (s *Store[T]) Store(tenant, name string, val *T) error {
 // on their second Get. Uses the same refcounted path mutex pool as
 // Update, so Create and Update on the same entry are mutually exclusive.
 //
-// Lock respects ctx: if the caller's context is canceled or times out
-// while waiting for a stuck predecessor, Lock returns ctx.Err() instead
-// of blocking indefinitely. Callers should translate this to a
-// user-visible BUSY error.
+// Lock respects ctx, returning ctx.Err() on cancel or timeout instead of
+// blocking; callers translate that to BUSY. Request contexts usually have
+// no deadline, so lockAcquireTimeout caps the wait at 30s.
+const lockAcquireTimeout = 30 * time.Second
+
 func (s *Store[T]) Lock(ctx context.Context, tenant, name string) (func(), error) {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > lockAcquireTimeout {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, lockAcquireTimeout)
+		defer cancel()
+	}
 	return pathLockCtx(ctx, s.MetaPath(tenant, name))
 }
 
 // Update performs a read-modify-write with per-path locking.
 // Reads from cache (disk fallback), applies fn, writes to disk, updates cache.
 func (s *Store[T]) Update(tenant, name string, fn func(*T)) (*T, error) {
-	diskPath := s.MetaPath(tenant, name)
-	release := pathLock(diskPath)
+	release := pathLock(s.MetaPath(tenant, name))
 	defer release()
+	return s.UpdateLocked(tenant, name, fn)
+}
 
+// UpdateLocked is Update without acquiring the path lock. Caller must already
+// hold it (via Lock()) to serialize the entire operation, e.g. when multiple
+// reads and external side effects need to be consistent with the final write.
+func (s *Store[T]) UpdateLocked(tenant, name string, fn func(*T)) (*T, error) {
+	diskPath := s.MetaPath(tenant, name)
 	val, err := s.Get(tenant, name)
 	if err != nil {
 		return nil, err

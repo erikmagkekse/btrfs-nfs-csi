@@ -15,7 +15,7 @@
 #   AGENT_BASE_PATH       btrfs mount point            (default: /export/data)
 #   AGENT_TENANTS         tenant:token pairs            (default: default:<random>)
 #   AGENT_LISTEN_ADDR     listen address                (default: :8080)
-#   VERSION               image tag                     (default: 0.10.0)
+#   VERSION               image tag                     (default: 0.11.0)
 #   IMAGE                 full container image reference (default: ghcr.io/erikmagkekse/btrfs-nfs-csi:<VERSION>)
 #   AGENT_BLOCK_DISK      block device to auto-format as btrfs and mount (e.g. /dev/sdb, install-only, uses mkfs.btrfs -f!)
 #   SKIP_PACKAGE_INSTALL  set to 1 to skip apt/dnf/pacman
@@ -35,7 +35,9 @@ done
 # defaults
 AGENT_BASE_PATH="${AGENT_BASE_PATH:-/export/data}"
 AGENT_LISTEN_ADDR="${AGENT_LISTEN_ADDR:-:8080}"
-VERSION="${VERSION:-0.10.0}"
+LISTEN_PORT="${AGENT_LISTEN_ADDR##*:}"
+LISTEN_PORT="${LISTEN_PORT:-8080}"
+VERSION="${VERSION:-0.11.0}"
 IMAGE="${IMAGE:-ghcr.io/erikmagkekse/btrfs-nfs-csi:${VERSION}}"
 AGENT_BLOCK_DISK="${AGENT_BLOCK_DISK:-}"
 SKIP_PACKAGE_INSTALL="${SKIP_PACKAGE_INSTALL:-}"
@@ -155,13 +157,68 @@ else
     info "Packages installed."
 fi
 
+# 1b. Quadlet requires Podman 4.4 or newer (introduced 2023-02). The script
+# installs the agent as a Quadlet container; older Podman silently does not
+# generate the systemd unit and the start step later would fail with a
+# confusing "Unit btrfs-nfs-csi-agent.service not found".
+if ! command -v podman &>/dev/null; then
+    fatal "Podman binary not found in PATH. Install Podman 4.4 or newer, or unset SKIP_PACKAGE_INSTALL so this script installs it."
+fi
+podman_ver=$(podman version --format '{{.Client.Version}}' 2>/dev/null || echo "0.0.0")
+podman_major=${podman_ver%%.*}
+podman_minor=${podman_ver#*.}; podman_minor=${podman_minor%%.*}
+if [[ "${podman_major}" -lt 4 || ( "${podman_major}" -eq 4 && "${podman_minor}" -lt 4 ) ]]; then
+    error "Podman ${podman_ver} is too old, this quickstart needs Podman 4.4 or newer (Quadlet support)."
+    case "${DISTRO}" in
+        debian) warn "On Debian/Ubuntu install a newer Podman from backports or the upstream repo (https://podman.io/docs/installation), or upgrade to Debian 13 / Ubuntu 24.04 which ship a recent enough version." ;;
+        rhel)   warn "On RHEL/Alma/Rocky enable the container-tools module (e.g. 'dnf module enable container-tools:rhel8') or install a newer Podman from EPEL." ;;
+        *)      warn "Install Podman 4.4 or newer for your distribution." ;;
+    esac
+    warn "After upgrading Podman on the same server, re-run this script with SKIP_PACKAGE_INSTALL=1 to skip the package step."
+    fatal "Aborting due to incompatible Podman version."
+fi
+
+# 1c. Listen-port availability (fresh install only; on upgrade the existing
+# agent legitimately holds the port).
+if ! ${UPGRADE}; then
+    if [[ ! "${LISTEN_PORT}" =~ ^[0-9]+$ ]]; then
+        fatal "AGENT_LISTEN_ADDR=${AGENT_LISTEN_ADDR} does not end in a numeric port."
+    fi
+    if command -v ss &>/dev/null; then
+        port_holder=$(ss -tlnpH "( sport = :${LISTEN_PORT} )" 2>/dev/null | head -1)
+        if [[ -n "${port_holder}" ]]; then
+            error "Port ${LISTEN_PORT} is already in use on this host:"
+            error "  ${port_holder}"
+            warn "Free the port (stop the conflicting service) or pick a different one via AGENT_LISTEN_ADDR (e.g. AGENT_LISTEN_ADDR=:8090)."
+            fatal "Aborting due to port conflict."
+        fi
+    else
+        warn "ss command not found, skipping port-availability check. Install iproute2 if you want this guard."
+    fi
+fi
+
 # 2. block device (fresh install only)
 if [[ -n "${AGENT_BLOCK_DISK}" ]] && ! ${UPGRADE}; then
     [[ -b "${AGENT_BLOCK_DISK}" ]] || fatal "${AGENT_BLOCK_DISK} is not a block device."
 
-    existing_mount=$(findmnt -n -o TARGET --source "${AGENT_BLOCK_DISK}" 2>/dev/null)
+    existing_mount=$(findmnt -n -o TARGET --source "${AGENT_BLOCK_DISK}" 2>/dev/null || true)
     if [[ -n "${existing_mount}" ]]; then
         fatal "${AGENT_BLOCK_DISK} is already mounted at ${existing_mount}. Unmount it first or remove AGENT_BLOCK_DISK."
+    fi
+
+    # Refuse to format a disk whose partitions are currently mounted somewhere
+    # (typo guard: AGENT_BLOCK_DISK=/dev/sda would wipe the boot disk).
+    disk_basename=$(basename "${AGENT_BLOCK_DISK}")
+    child_mount=$(awk -v d="${disk_basename}" '$1 ~ "^/dev/" d "([0-9]+|p[0-9]+)$" {print $1 " on " $2; exit}' /proc/mounts)
+    if [[ -n "${child_mount}" ]]; then
+        fatal "${AGENT_BLOCK_DISK} has a mounted partition (${child_mount}). Refusing to format. If you really meant a different disk, fix AGENT_BLOCK_DISK."
+    fi
+
+    # Existing-filesystem guard: warn (and require --yes) before erasing.
+    existing_fs=$(blkid -s TYPE -o value "${AGENT_BLOCK_DISK}" 2>/dev/null || true)
+    if [[ -n "${existing_fs}" ]]; then
+        warn "${AGENT_BLOCK_DISK} already contains a ${existing_fs} filesystem. Continuing will erase it."
+        confirm "Format ${AGENT_BLOCK_DISK} as btrfs and erase the existing ${existing_fs} filesystem?" || fatal "Aborted by operator."
     fi
 
     info "Formatting ${AGENT_BLOCK_DISK} as btrfs..."
@@ -232,7 +289,8 @@ fi
 install -d -m 755 "${QUADLET_DIR}"
 
 info "Downloading Quadlet unit file..."
-curl -fsSL "${REPO_RAW}/deploy/agent/btrfs-nfs-csi-agent.container" -o "${QUADLET_FILE}"
+curl -fsSL "${REPO_RAW}/deploy/agent/btrfs-nfs-csi-agent.container" -o "${QUADLET_FILE}" \
+    || fatal "Failed to download Quadlet unit from ${REPO_RAW}/deploy/agent/btrfs-nfs-csi-agent.container, check the host can reach raw.githubusercontent.com."
 
 sed -i "s|^Image=.*|Image=${IMAGE}|" "${QUADLET_FILE}"
 sed -i "s|^Volume=/export/data:/export/data|Volume=${AGENT_BASE_PATH}:${AGENT_BASE_PATH}|" "${QUADLET_FILE}"
@@ -253,8 +311,6 @@ else
 fi
 
 # 9. health check
-LISTEN_PORT="${AGENT_LISTEN_ADDR##*:}"
-LISTEN_PORT="${LISTEN_PORT:-8080}"
 HEALTHZ_URL="http://localhost:${LISTEN_PORT}/healthz"
 
 info "Waiting for agent to become healthy..."

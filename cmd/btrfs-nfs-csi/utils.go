@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/signal"
 	"slices"
@@ -41,11 +42,7 @@ func printLabels(header string, labels map[string]string, indent int) {
 		fmt.Printf("%-*s%s\n", indent, header, "none")
 		return
 	}
-	keys := make([]string, 0, len(labels))
-	for k := range labels {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := slices.Sorted(maps.Keys(labels))
 	for i, k := range keys {
 		if i == 0 {
 			fmt.Printf("%-*s%s=%s\n", indent, header, k, labels[k])

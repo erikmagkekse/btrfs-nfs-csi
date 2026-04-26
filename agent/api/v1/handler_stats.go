@@ -18,7 +18,7 @@ import (
 // @Router       /v1/stats [get]
 // @Security     BearerAuth
 func (h *Handler) Stats(c *echo.Context) error {
-	tenant := c.Get("tenant").(string)
+	tenant := tenantOf(c)
 
 	fs, err := h.Store.Stats(tenant)
 	if err != nil {

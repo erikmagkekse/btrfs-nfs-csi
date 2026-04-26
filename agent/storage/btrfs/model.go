@@ -1,5 +1,11 @@
 package btrfs
 
+// ValidProfiles are the btrfs block-group profiles accepted by -d/-m/-sconvert
+// and -d/-mprofiles filters. Semantic constraints (e.g. raid5 needs >= 2
+// devices) are NOT validated here; btrfs will reject invalid combinations at
+// runtime.
+var ValidProfiles = []string{"single", "dup", "raid0", "raid1", "raid1c3", "raid1c4", "raid10", "raid5", "raid6"}
+
 type SubvolumeInfo struct {
 	Path string
 }
@@ -51,4 +57,16 @@ type ScrubStatus struct {
 	UncorrectableErrs uint64 `json:"uncorrectable_errors"`
 	CorrectedErrs     uint64 `json:"corrected_errors"`
 	Running           bool   `json:"running"`
+}
+
+type BalanceStatus struct {
+	Running     bool   `json:"running"`
+	Paused      bool   `json:"paused"`
+	ChunksDone  uint64 `json:"chunks_done"`
+	ChunksTotal uint64 `json:"chunks_total"`
+	LastError   string `json:"last_error,omitempty"`
+}
+
+type QuotaRescanStatus struct {
+	Running bool `json:"running"`
 }

@@ -8,3 +8,6 @@
 .env
 result
 vendor/
+
+agent/api/v1/swagger/swagger.json
+agent/api/v1/swagger/swagger.yaml

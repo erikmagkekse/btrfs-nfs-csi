@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -166,7 +167,16 @@ func (tm *Manager) Get(id string) (*Task, error) {
 }
 
 // List returns copies of all tasks, optionally filtered by type.
-func (tm *Manager) List(taskType string) []Task {
+// Multiple types are OR'ed. Empty strings in the filter are ignored.
+// Calling without arguments (or with a single empty string) returns all tasks.
+func (tm *Manager) List(taskTypes ...string) []Task {
+	filter := make([]string, 0, len(taskTypes))
+	for _, t := range taskTypes {
+		if t != "" {
+			filter = append(filter, t)
+		}
+	}
+
 	tm.mu.Lock()
 	snapshot := make([]*runningTask, 0, len(tm.tasks))
 	for _, rt := range tm.tasks {
@@ -177,7 +187,7 @@ func (tm *Manager) List(taskType string) []Task {
 	result := make([]Task, 0, len(snapshot))
 	for _, rt := range snapshot {
 		t := rt.state.Load()
-		if taskType != "" && t.Type != taskType {
+		if len(filter) > 0 && !slices.Contains(filter, t.Type) {
 			continue
 		}
 		result = append(result, *t)

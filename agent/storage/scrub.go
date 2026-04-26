@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strconv"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/task"
@@ -10,19 +12,29 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	scrubOptReadonly        = "readonly"
+	scrubOptForce           = "force"
+	scrubOptIoPrioClass     = "ioprio_class"
+	scrubOptIoPrioClassData = "ioprio_classdata"
+)
+
+var scrubOptsKeys = []string{scrubOptReadonly, scrubOptForce, scrubOptIoPrioClass, scrubOptIoPrioClassData}
+
 // StartScrub starts a btrfs scrub as a background task and returns the task ID.
 func (s *Storage) StartScrub(ctx context.Context, opts map[string]string, labels map[string]string, timeout time.Duration) (string, error) {
-	for _, t := range s.tasks.List(string(task.TypeScrub)) {
-		if t.Status == task.TaskRunning || t.Status == task.TaskPending {
-			return "", &StorageError{Code: ErrBusy, Message: "scrub already running"}
-		}
-	}
-	status, err := s.btrfs.ScrubStatus(ctx, s.mountPoint)
-	if err == nil && status.Running {
-		return "", &StorageError{Code: ErrBusy, Message: "scrub already running on filesystem"}
+	s.maintenanceMu.Lock()
+	defer s.maintenanceMu.Unlock()
+	if err := s.ensureMaintenanceFree(ctx); err != nil {
+		return "", err
 	}
 
 	if err := config.ValidateLabels(labels); err != nil {
+		return "", err
+	}
+
+	args, err := scrubArgsFromOpts(opts)
+	if err != nil {
 		return "", err
 	}
 
@@ -31,14 +43,14 @@ func (s *Storage) StartScrub(ctx context.Context, opts map[string]string, labels
 		t = timeout
 	}
 	id := s.tasks.Create(string(task.TypeScrub), task.TaskOpts{Opts: opts, Labels: labels, Timeout: t}, func(ctx context.Context, update *task.Update) error {
-		return s.runScrub(ctx, update)
+		return s.runScrub(ctx, update, args)
 	})
 
-	log.Info().Str("task", id).Str("path", s.mountPoint).Msg("scrub started")
+	log.Info().Str("task", id).Str("path", s.mountPoint).Strs("args", args).Msg("scrub started")
 	return id, nil
 }
 
-func (s *Storage) runScrub(ctx context.Context, update *task.Update) error {
+func (s *Storage) runScrub(ctx context.Context, update *task.Update, args []string) error {
 	stop := update.PollProgress(ctx, func() int {
 		status, err := s.btrfs.ScrubStatus(ctx, s.mountPoint)
 		if err != nil {
@@ -56,7 +68,7 @@ func (s *Storage) runScrub(ctx context.Context, update *task.Update) error {
 		return 0
 	})
 
-	err := s.btrfs.ScrubStart(ctx, s.mountPoint)
+	err := s.btrfs.ScrubStart(ctx, s.mountPoint, args)
 	stop()
 
 	if err != nil {
@@ -72,6 +84,40 @@ func (s *Storage) runScrub(ctx context.Context, update *task.Update) error {
 		log.Warn().Err(err).Msg("failed to store scrub result")
 	}
 	return nil
+}
+
+func scrubArgsFromOpts(opts map[string]string) ([]string, error) {
+	if len(opts) == 0 {
+		return nil, nil
+	}
+	for k := range opts {
+		if !slices.Contains(scrubOptsKeys, k) {
+			return nil, &config.ValidationError{Message: fmt.Sprintf("unknown scrub option %q", k)}
+		}
+	}
+
+	args := make([]string, 0, len(opts))
+	if opts[scrubOptReadonly] == "true" {
+		args = append(args, "-r")
+	}
+	if opts[scrubOptForce] == "true" {
+		args = append(args, "-f")
+	}
+	if v, ok := opts[scrubOptIoPrioClass]; ok {
+		n, err := config.ValidateIntInRange(v, 0, 3, scrubOptIoPrioClass)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "-c", strconv.Itoa(n))
+	}
+	if v, ok := opts[scrubOptIoPrioClassData]; ok {
+		n, err := config.ValidateIntInRange(v, 0, 7, scrubOptIoPrioClassData)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "-n", strconv.Itoa(n))
+	}
+	return args, nil
 }
 
 func (s *Storage) filesystemUsedBytes() uint64 {

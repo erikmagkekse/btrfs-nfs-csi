@@ -37,7 +37,7 @@ jobs:
         run: |
           VERSION=$(cat VERSION)
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          # Allow optional revision suffix on edge tags (e.g. v0.10.0-edge-r1)
+          # Allow optional revision suffix on edge tags (e.g. v0.11.0-edge-r1)
           TAG_BASE="${TAG_VERSION%-r[0-9]*}"
           if [[ "${TAG_BASE}" != "${VERSION}" && "${TAG_BASE}" != "${VERSION}-edge" ]]; then
             echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION file (${VERSION} or ${VERSION}-edge)"

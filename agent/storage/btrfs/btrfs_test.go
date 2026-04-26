@@ -597,10 +597,68 @@ func TestScrubStatus(t *testing.T) {
 		m := &utils.MockRunner{}
 		mgr := newTestManager(m)
 
-		err := mgr.ScrubStart(context.Background(), "/mnt/data")
+		err := mgr.ScrubStart(context.Background(), "/mnt/data", nil)
 		require.NoError(t, err)
 		require.Len(t, m.Calls, 1)
 		assert.Equal(t, []string{"scrub", "start", "-B", "/mnt/data"}, m.Calls[0])
+	})
+
+	t.Run("scrub start inserts extra args between -B and path", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.ScrubStart(context.Background(), "/mnt/data", []string{"-r", "-c", "3"})
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"scrub", "start", "-B", "-r", "-c", "3", "/mnt/data"}, m.Calls[0])
+	})
+
+	t.Run("defragment builds command with extra args", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.Defragment(context.Background(), "/mnt/data/vol/data", []string{"-r", "-czstd"})
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"filesystem", "defragment", "-r", "-czstd", "/mnt/data/vol/data"}, m.Calls[0])
+	})
+
+	t.Run("defragment without args", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.Defragment(context.Background(), "/mnt/data/vol/data", nil)
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"filesystem", "defragment", "/mnt/data/vol/data"}, m.Calls[0])
+	})
+
+	t.Run("quota rescan uses -w wait flag", func(t *testing.T) {
+		m := &utils.MockRunner{}
+		mgr := newTestManager(m)
+
+		err := mgr.QuotaRescan(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"quota", "rescan", "-w", "/mnt/data"}, m.Calls[0])
+	})
+
+	t.Run("quota rescan status parses idle", func(t *testing.T) {
+		m := &utils.MockRunner{Out: "no rescan operation in progress\n"}
+		mgr := newTestManager(m)
+
+		st, err := mgr.QuotaRescanStatus(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.False(t, st.Running)
+	})
+
+	t.Run("quota rescan status parses running", func(t *testing.T) {
+		m := &utils.MockRunner{Out: "quota rescan status:\nrunning, current key (256 96 0)\n"}
+		mgr := newTestManager(m)
+
+		st, err := mgr.QuotaRescanStatus(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.True(t, st.Running)
 	})
 }
 

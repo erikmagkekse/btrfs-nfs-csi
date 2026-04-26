@@ -34,6 +34,64 @@ import (
 	"time"
 )
 
+// --- Tenant auth ---
+
+// TenantRole controls which operations a token is allowed to perform.
+//   - readonly: only GET/HEAD.
+//   - mounter: GET/HEAD on anything, plus POST/DELETE on the export endpoint
+//     of any volume. Nothing else. Intended for CSI nodes / NFS mounters that
+//     need to attach/detach exports but must not create, delete, or mutate
+//     volumes/snapshots/tasks.
+//   - user: tenant-scoped operations, but may not trigger FS-global tasks
+//     (scrub, balance, quota-rescan).
+//   - admin: everything, including FS-global tasks.
+//
+// Default is `admin` for backward compatibility with pre-role `AGENT_TENANTS`
+// entries.
+type TenantRole string
+
+const (
+	RoleReadonly TenantRole = "readonly"
+	RoleMounter  TenantRole = "mounter"
+	RoleUser     TenantRole = "user"
+	RoleAdmin    TenantRole = "admin"
+)
+
+// TenantInfo describes a single `AGENT_TENANTS` entry, keyed by token. The
+// same tenant name may appear under multiple tokens (for token rotation);
+// roles must be consistent across those entries, but Identity is per-token.
+// Identity is the value stamped into the `created-by` label on resources
+// the token creates, and what ownership enforcement compares against.
+type TenantInfo struct {
+	Name     string     // tenant name (shared across tokens of the same tenant)
+	Role     TenantRole // role assigned to this token
+	Identity string     // per-token identity; stamped into created-by and gates ownership (empty = unset)
+}
+
+// WhoamiResponse describes the authenticated caller's own tenant/role/identity.
+type WhoamiResponse struct {
+	Tenant      string     `json:"tenant"`             // tenant name
+	Role        TenantRole `json:"role"`               // role of the calling token
+	Identity    string     `json:"identity,omitempty"` // configured identity (empty if unset)
+	Fingerprint string     `json:"fingerprint"`        // HMAC-SHA256 fingerprint of the token (hex)
+}
+
+// TenantTokenResponse is one token entry inside a tenant. The token itself
+// is never returned; only a non-reversible HMAC-SHA256 fingerprint so
+// operators can distinguish multiple tokens for the same tenant.
+type TenantTokenResponse struct {
+	Fingerprint string     `json:"fingerprint"`        // HMAC-SHA256 fingerprint (hex)
+	Role        TenantRole `json:"role"`               // token role
+	Identity    string     `json:"identity,omitempty"` // configured identity (empty if unset)
+}
+
+// TenantResponse is returned by ListTokens: the caller's own tenant with
+// every token configured for it (fingerprints only, never raw tokens).
+type TenantResponse struct {
+	Name   string                `json:"name"`   // tenant name
+	Tokens []TenantTokenResponse `json:"tokens"` // every token configured for this tenant
+}
+
 // --- Volume requests ---
 
 // VolumeCreateRequest creates a new btrfs subvolume.
@@ -108,12 +166,20 @@ type VolumeExportDeleteRequest struct {
 
 // --- Task requests ---
 
-// TaskCreateRequest creates a background task (scrub, test).
+// TaskCreateRequest creates a background task (scrub, balance, defragment, test).
 // POST /v1/tasks/:type
+//
+// Volume and Path are consumed by type="defragment" to target a specific
+// volume and optionally a sub-path within it; other task types ignore these
+// fields. Defragment does not support snapshots because snapshots are
+// read-only in this agent; clones (which are writable) can be defragmented
+// like any other volume.
 type TaskCreateRequest struct {
 	Timeout string            `json:"timeout,omitempty"` // Go duration string, e.g. "6h", "30m"
 	Opts    map[string]string `json:"opts,omitempty"`    // task-specific options
 	Labels  map[string]string `json:"labels,omitempty"`
+	Volume  string            `json:"volume,omitempty"` // defragment target
+	Path    string            `json:"path,omitempty"`   // defragment sub-path (relative, requires Volume)
 }
 
 // --- Volume responses ---
@@ -394,8 +460,11 @@ const (
 
 // Task type identifiers for POST /v1/tasks/:type.
 const (
-	TaskTypeScrub = "scrub"
-	TaskTypeTest  = "test"
+	TaskTypeScrub       = "scrub"
+	TaskTypeBalance     = "balance"
+	TaskTypeDefragment  = "defragment"
+	TaskTypeQuotaRescan = "quota-rescan"
+	TaskTypeTest        = "test"
 )
 
 // --- Pagination helpers ---
@@ -403,18 +472,19 @@ const (
 // ListOpts configures list endpoint queries (pagination + label filtering).
 type ListOpts struct {
 	After  string   // opaque cursor from a previous response's Next field
-	Limit  int      // items per page (0 = pagination disabled, negative = use client default)
+	Limit  int      // items per page (0 or negative = use client default; positive = explicit)
 	Labels []string // label filters in "key=value" format
 }
 
-// Query builds url.Values for a list request. defaultLimit is used when Limit is negative.
+// Query builds url.Values for a list request. defaultLimit is used when Limit
+// is zero or negative (i.e. the caller did not specify an explicit page size).
 func (o ListOpts) Query(defaultLimit int) url.Values {
 	q := GenerateLabelQuery(o.Labels)
 	if o.After != "" {
 		q.Set("after", o.After)
 	}
 	limit := o.Limit
-	if limit < 0 {
+	if limit <= 0 {
 		limit = defaultLimit
 	}
 	if limit > 0 {

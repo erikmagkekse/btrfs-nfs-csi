@@ -1,196 +1,174 @@
-# Release v0.10.0
+# Release v0.11.0
 
-**Previous: v0.9.11** | **Date: 2026-04-06**
+**Previous: v0.10.0** | **Date: 2026-04-25**
 
-This is a major feature release with 50+ commits. The goal of this project is to
-provide a universal btrfs+NFS storage backend that works beyond Kubernetes. With
-the new standalone CLI, REST API, task system, and label-based multi-tenancy,
-the agent is now ready to serve as a foundation for future integrations like
-Proxmox, Nomad, or any platform that needs managed btrfs storage with NFS
-exports.
+Security and operations release. Adds three-level RBAC (roles, identity, ownership), bcrypt-hashable agent tokens, denial telemetry, token introspection, and four new btrfs maintenance task types (balance, defragment, quota-rescan, plus expanded scrub flags).
 
-Feel free to build your own integration and open a pull request. The agent API
-is stable, documented via OpenAPI, and the CLI can be used for general admin
-tasks, script automation, backup, and archiving. Future plans include FUSE
-access to volumes via the CLI over WebSockets, mTLS support, moving snapshots
-between agents, VolumeGroupSnapshots, and automated repeatable tasks. There is
-so much we can build on top of this, this release is the new foundation for a multi-purpose storage driver!
+No breaking changes for existing CSI users. Helm values, StorageClasses, PVCs, VolumeSnapshots, and the in-tree CSI driver work without modification. One PATCH-path behavior change in `Behavior Changes` does not affect the CSI driver or CLI.
 
-> **⚠️ This release contains breaking API changes.** If you are upgrading
-> from v0.9.x, please read the Upgrade guide down below, before updating.
+> **Heads up:** a new project named **ButterStore** will be forked from this repo in the coming weeks. `btrfs-nfs-csi` started as a Kubernetes CSI driver, ButterStore reframes the codebase as a general-purpose btrfs storage backend (NFS plus FUSE access plus btrfs send/receive replication) with room for Nomad, Proxmox, Docker, and other integrations on top of the same agent. The name leans into the long-running "butter-FS" colloquial pronunciation of btrfs, plus the storage-backend framing. It is a fresh repo, not an in-place rename, `btrfs-nfs-csi` continues to live here. Sorry for the friction this puts on your environment. ButterStore stays backward-compatible with v0.11.0. Upgrading from here will be easy. v0.11.0 ships as `btrfs-nfs-csi` everywhere. Nothing for you to do here.
 
 ---
 
-## New Features
+## Highlights
 
-### CLI Tool
+A quick tour of what's new with copy-paste examples. Detailed reference for each item is further down.
 
-- **Full CLI tool**, New `btrfs-nfs-csi` CLI built on urfave/cli with subcommands for managing volumes, snapshots, exports, and tasks from the command line.
-- **Watch mode**, Real-time polling with `--watch` flag on get commands for monitoring resource changes.
-- **Column filtering**, `--columns` flag to select which table columns are displayed.
-- **Label filtering**, Repeatable `--label key=value` flags on all list operations.
-- **Delete protection**, Resources created by other identities require `--force` confirmation to delete.
-- **Volume label commands**, Add, remove, and list labels on volumes from the CLI (#128).
-- **Health check command**, Dedicated `health` subcommand for driver health status.
-- **Relative resize syntax**, Volume resize supports `+5Gi` relative notation.
+### Role-based access control
 
-### User Labels & Multi-Tenancy
+Tokens in `AGENT_TENANTS` can declare a role and an identity using the format `name:token[:role[:identity]]`. Roles (`readonly`, `mounter`, `user`, `admin`) gate which endpoints the token can call. Identity stamps `created-by` on every resource the token creates and restricts later changes to the same identity. Plain `name:token` entries keep the v0.10.0 behavior.
 
-- **User-defined labels**, Custom `key=value` labels on volumes, snapshots, clones, exports, and tasks with validation (max 32 labels, max 8 user-managed).
-- **Immutable system labels**, System-managed labels (`created-by`, `clone.source.type`, `clone.source.name`) protected from modification after creation.
-- **Default labels**, `DRIVER_DEFAULT_LABELS` env var for controller to stamp all volumes (e.g., cluster identity, environment tags).
-- **Export labels**, NFS exports carry `created-by`, Kubernetes metadata (pvc/pv/node), and custom labels.
-- **Label-based filtering**, All list API endpoints support filtering by label key=value pairs.
+```bash
+AGENT_TENANTS="ops:s3cret:admin,ci:tok-ci:user:ci-bot,nodes:tok-n1:mounter:node-1,dash:tok-dash:readonly"
+```
 
-### Task System
+### Bcrypt-hashable tokens
 
-- **Formal task system**, New subsystem replacing ad-hoc goroutines with a proper task queue, worker pool, and lifecycle management.
-- **Worker pool**, Configurable concurrency (`AGENT_TASK_MAX_CONCURRENT`, default 2).
-- **Task lifecycle**, Full status tracking (pending -> running -> completed/failed/cancelled) with progress, error, and result fields.
-- **Task timeouts**, Per-task timeout configuration with defaults for scrub (24h) and test (6h).
-- **Task cleanup**, Automatic removal of old completed/failed tasks after configurable interval (default 24h).
-- **Task API**, REST endpoints for task creation, listing, detail, and cancellation.
+Store bcrypt hashes in `AGENT_TENANTS` instead of plaintext. The agent verifies them in constant time, caches successful verifies for hot-path performance, and never logs the raw value. Generate hashes locally with the bundled CLI (no `htpasswd` or `openssl` needed).
 
-### PVC-to-PVC Volume Cloning
+```bash
+echo -n "my-token" | btrfs-nfs-csi hash-token --cost 12   # prints $2a$12$...
+```
 
-- **Direct PVC cloning**, Clone from one PVC to another without intermediate snapshot via `dataSource.kind: PersistentVolumeClaim`.
-- **Clone expansion**, Cloned volumes support `allowVolumeExpansion` in StorageClass.
-- **Clone resilience**, Clones preserve source volume properties in snapshot metadata; fallback to snapshot properties if source volume is deleted.
-- **Snapshot volume properties**, Snapshots store original volume compression, nocow, quota, uid, gid, mode for clone fallback.
+### Token introspection
 
-### API Pagination & Documentation
+Two new endpoints let operators check who is authenticated and what tokens are configured for a tenant, without ever exposing the raw token values.
 
-- **Cursor-based pagination**, All list endpoints support `limit` and `after` cursor with snapshot isolation for consistent paging across requests.
-- **Detail variants**, `?detail=true` query parameter on list endpoints for full metadata responses (labels, paths, timestamps).
-- **OpenAPI/Swagger**, Auto-generated spec at `/swagger/swagger.json` with interactive UI (enable with `AGENT_API_SWAGGER_ENABLED`).
-- **Landing page**, Root endpoint with version info and optional Swagger link.
+```bash
+btrfs-nfs-csi whoami    # this token: tenant, role, identity, fingerprint
+btrfs-nfs-csi tokens    # all configured tokens in this tenant (admin only)
+```
 
-### Identity Tracking
+### btrfs maintenance task suite
 
-- **Creator identity injection**, All mutating operations inject `created-by` label from `AGENT_CSI_IDENTITY` for audit trail.
-- **Identity-based delete protection**, Volumes/snapshots can only be deleted by their creator; override requires `--force --yes` or `BTRFS_NFS_CSI_FORCE=true`.
+Three new task types join `scrub` for filesystem-wide and per-volume maintenance, all with a shared mutex (no two filesystem-wide tasks at once) and progress tracking.
 
-### Export Reference Counting
+```bash
+btrfs-nfs-csi task create balance --dusage=75 -W              # rebalance lightly-used chunks
+btrfs-nfs-csi task create balance --dconvert=raid1 --force -W # convert RAID profile
+btrfs-nfs-csi task create defragment --volume my-vol -W       # per-volume defrag
+btrfs-nfs-csi task create quota-rescan -W                     # rebuild qgroup accounting
+```
 
-- **Per-client reference counting**, Kernel NFS export created on first client reference, removed only when last reference is gone.
-- **Per-export metadata**, Each export reference stores IP, labels, and creation timestamp (replaces simple client string list).
+### Scrub flag set
 
-### Storage
+Scrub gained `--readonly`, `--force`, `--ioprio-class`, and `--ioprio-classdata` to control repair behavior and I/O priority. Useful for off-hours scheduled scrubs that should not starve foreground workloads.
 
-- **Squota support**, Detect simple quotas (`squota`) at startup and log the active quota mode (#127).
-- **Label backfill**, Volumes created before v0.10.0 get labels backfilled automatically on `ControllerPublishVolume` (#129).
-
-### Deployment
-
-- **Integration subcommands**, `integration kubernetes controller` and `integration kubernetes driver` replace deprecated top-level commands.
-- **Edge release channel**, Separate edge build workflow with `-edge` suffix and optional revision tags.
-- **OCI image metadata**, Build embeds `org.opencontainers.image` labels for provenance tracking.
-- **Pre-release checks**, CI validates semver, chart version, and vendorHash consistency before release.
+```bash
+btrfs-nfs-csi task create scrub --readonly --ioprio-class=3 -W
+```
 
 ---
 
-## Validation Improvements
+## New Features (detailed)
 
-- **Centralized name validation**, `config.ValidateName()` with consistent regex (1-128 chars: a-z, A-Z, 0-9, `_`, `-`).
-- **Compression validation**, Algorithm checked against allowed list (zstd, lzo, zlib) with per-algorithm max levels (zstd:15, zlib:9, lzo:0).
-- **UID/GID range validation**, `ValidateUID()` / `ValidateGID()` enforce range 0-65534.
-- **File permission validation**, `ValidateMode()` parses octal strings with max 0o7777.
-- **Label validation framework**, Key/value regex patterns, max 32 labels total, max 8 user-managed labels.
-- **Immutable label enforcement**, `requireImmutableLabels()` and `protectImmutableLabels()` prevent deletion or modification of system labels.
-- **Client IP validation**, Rejects wildcards, hostnames, CIDR; only valid IPv4/IPv6 addresses accepted.
-- **Request body validation**, API handlers validate request bodies and return `BAD_REQUEST` with specific messages on binding failures.
-- **Corrupt metadata detection**, Metadata store distinguishes "not found" from read errors with separate `ErrMetadata` code.
-- **Concurrent scrub prevention**, Validates no active scrub task exists before starting a new one (checks both agent and btrfs state).
-- **Volume resize guard**, Enforces new size >= current size (allows equal-size no-op, rejects shrink).
+### Balance Task
 
----
+- **`balance` task type**, `task create balance` on the CLI, `POST /v1/tasks/balance` on the API. Same lifecycle, progress, and cancellation as scrub.
+- **Filters**, Usage filters via `--dusage`, `--musage`, `--susage`. Profile filters via `--dprofiles`, `--mprofiles`. Device filters via `--ddevid`, `--mdevid`.
+- **RAID conversion**, `--dconvert`, `--mconvert`, `--sconvert` for data, metadata, and system block group profile conversion. `--force` allows redundancy reduction.
+- **Cannot run with scrub or quota-rescan**, Balance, scrub, and quota-rescan all touch the whole filesystem and only one runs at a time. Starting a second one while another is running returns `423 BUSY`.
+- **Cancel propagation**, Cancelling the task runs `btrfs balance cancel` so the kernel-level operation stops with the task.
 
-## Error Handling & Messaging
+### Scrub Improvements
 
-- **Structured error responses**, All API errors return consistent `{error, code}` JSON with proper HTTP status codes (`BAD_REQUEST`, `NOT_FOUND`, `CONFLICT`, `LOCKED`, `UNAUTHORIZED`, `METADATA`, `INTERNAL`).
-- **CLI error translation**, `wrapErr()` converts API errors to user-friendly messages: "volume 'test' not found", "already exists", "is busy".
-- **Typed AgentError**, Client-side error type with `IsConflict()`, `IsNotFound()`, `IsLocked()` for programmatic handling without string parsing.
-- **Auth failure diagnostics**, Failed auth logged with specific reason (missing header, malformed, invalid encoding, invalid token), client IP, and path.
-- **Request error logging**, Middleware logs error requests separately (status >= 400) with tenant, path, client IP, response code, and human-readable duration.
-- **Metadata error classification**, New `ErrMetadata` code for corrupt metadata scenarios, separate from `ErrInternal`.
-- **Cleanup failure logging**, Subvolume deletion failures during clone logged at warning level for rollback tracking.
-- **Validation error type**, `ValidationError` distinguishable from storage/system errors via type assertion.
+- **`--readonly`**, Reports errors without attempting repair.
+- **`--force`**, Bypasses the kernel check that prevents starting a scrub on a filesystem that was recently scrubbed.
+- **`--ioprio-class`**, IO priority class (0=none, 1=realtime, 2=best-effort, 3=idle).
+- **`--ioprio-classdata`**, IO priority within class (0-7).
+- **Validation**, The agent rejects invalid values with `400 INVALID` before they reach the kernel. The agent always passes `btrfs scrub`'s `-B` flag itself because progress tracking depends on it, so this is not exposed as an option.
 
----
+### Defragment Task
 
-## Model & API Changes
+- **`defragment` task type**, `task create defragment --volume <name>` defragments a specific tenant volume.
+- **Path scope**, `--path` narrows defragment to a sub-directory under the volume's data root.
+- **Options**, `--compress <algo>` rewrites extents with the given compression, `--threshold <bytes>` sets minimum extent size, `--no-recursive` skips subdirectories.
+- **Path validation**, The agent rejects path traversal (`..`) and symlinks that point outside the volume before any defragment runs against the disk.
+- **Snapshots not supported**, The agent creates snapshots read-only. Clones are writable and defragment normally.
 
-### Breaking Changes
+### Quota Rescan Task
 
-- Volume list responses return `Exports` (count) instead of `Clients` (array of IPs).
-- Export model changed from simple client IP list to reference-counted exports with labels. See [Upgrade Guide](#upgrade-guide) for migration steps.
-- Export endpoints now require request body with labels (was simple client IP string).
-- `/v1/exports` returns paginated response with summary/detail variants (was flat list).
-- All create operations require a `created-by` label (mandatory system label).
-- `ExportVolume` renamed to `CreateVolumeExport`, `UnexportVolume` renamed to `DeleteVolumeExport`.
-- `controller` and `driver` top-level commands deprecated in favor of `integration kubernetes controller` and `integration kubernetes driver`.
-
-### New & Changed Models
-
-- **Models package**, Wire-format types moved to independent `agent/api/v1/models/` package, free of external dependencies.
-- **Labels on all entities**, `Labels map[string]string` added to volumes, snapshots, clones, exports, and tasks.
-- **ExportMetadata**, Replaces simple client strings with structured IP, labels, and creation timestamp per export entry.
-- **SnapshotMetadata expansion**, Stores source volume properties (QuotaBytes, NoCOW, Compression, UID, GID, Mode) for clone fallback.
-- **Task model**, Formalized `task.Task` type with progress tracking, labels, timeout, result payload (`json.RawMessage`), and lifecycle states.
-- **Handler modularization**, Monolithic handler split into `handler_volume.go`, `handler_snapshot.go`, `handler_export.go`, `handler_task.go`, `handler_stats.go` with Swagger annotations.
-- **Pagination snapshot cache**, In-memory TTL cache for cursor-based pagination with configurable snapshot count and lifetime.
-- **CreatedBy field**, Volume responses include `CreatedBy` extracted from labels.
+- **`quota-rescan` task type**, `task create quota-rescan` rebuilds btrfs qgroup accounting filesystem-wide.
+- **Cannot run with scrub or balance**, Quota rescan touches the whole filesystem and refuses to start while a scrub or balance task is already running, and vice versa.
+- **Squota error**, Filesystems on simple quotas (`squota`) return a clear error immediately. btrfs does not support rescan in that mode. Only classic qgroups can be rebuilt.
 
 ---
 
-## Security & Hardening
+## Security & Identity
 
-- **Identity injection**, All mutating operations inject `created-by` label from `AGENT_CSI_IDENTITY` for audit trail.
-- **Immutable label protection**, System labels locked after creation; configured via `AGENT_IMMUTABLE_LABELS`.
-- **Delete protection**, Volumes/snapshots can only be deleted by their creator identity; override requires `--force --yes` or `BTRFS_NFS_CSI_FORCE=true`.
-- **Export reference counting**, Kernel NFS export created on first reference, removed on last; prevents orphaned exports.
-- **Volume deletion blocked with active exports**, Returns "busy (active exports?)" error when NFS exports exist, preventing accidental data loss.
-- **CI workflow hardening**, Explicit `permissions: contents: read` on GitHub Actions workflows; pre-release checks for semver, chart version, and vendorHash consistency.
+### Three-Level RBAC
+
+- **Roles**, Four roles (`readonly`, `mounter`, `user`, `admin`) gate endpoint access. Per-endpoint matrix in `docs/rbac.md`.
+- **Identity**, Optional identity string (`a-zA-Z0-9_-`, 1-32). The agent writes it into a `created-by` label on every resource the token creates, and only that identity can change or delete those resources later.
+- **`AGENT_TENANTS` syntax**, `name:token[:role[:identity]]`. Trailing fields are optional, omission gives admin without identity.
+- **Mixed configs**, A tenant can declare any combination of roles and identities in a single `AGENT_TENANTS` value.
+
+### Resource Ownership
+
+- **Source ownership**, Snapshot, clone, export, and defragment verify the caller's identity matches the source's `created-by` label.
+- **`created-by` enforcement**, On every endpoint that creates, updates, or deletes something, the agent compares the calling token's identity to the resource's owner before letting the request through.
+- **PATCH boundary**, `created-by` cannot be cleared or changed via update, including by admins.
+- **Hard-reserved labels**, `tenant`, `clone.source.type`, and `clone.source.name` are rejected with `400 INVALID` if set by a client.
+- **Server-injected `created-by`**, Clients with no token identity may set `created-by` (used by CSI controller and CLI). Clients with a token identity must either omit it or send the matching value.
+
+### Bcrypt Tokens
+
+- **Hashed tokens**, `AGENT_TENANTS` token field accepts bcrypt hashes (`$2a$`, `$2b$`, `$2y$`) alongside plaintext.
+- **`hash-token` subcommand**, `btrfs-nfs-csi hash-token --cost N` reads from stdin and prints a bcrypt hash. No `htpasswd` or `openssl` required.
+- **Verify cache**, The slow bcrypt check runs only on the first request per token. After that the agent remembers the result, so working clients keep their normal latency.
+- **Timing-safe compare**, Plaintext tokens are compared in constant time, so the agent's response time does not leak information about the token to an attacker.
+
+**Side note.** Bcrypt is intentionally slow, which is the point if your `AGENT_TENANTS` ever leaks. The catch: the agent runs that slow check on every rejected request, once per bcrypt entry, so an attacker can spam random tokens to burn CPU without ever holding a real one (with ten entries at the default cost, one bad request costs ~2.5 s). Keep the bcrypt list short, its good for user provided passwords or extended hardening. A planned follow-up will integrate hash generation using the new root_secret.
+
+### Telemetry & Introspection
+
+- **Denial reason metric**, Every `403` increments `http_requests_total` with a `reason` label of `invalid_token`, `role_denied`, `identity_mismatch`, or `ownership`.
+- **Denial log**, Each `403` emits a warn log with client IP, tenant, path, token fingerprint, role, and identity.
+- **`GET /v1/whoami`**, Returns the caller's tenant, role, identity, and a stable fingerprint that maps the token to its audit log entries without exposing the token itself.
+- **`GET /v1/tokens`**, Admin-only. Lists every configured token in the caller's tenant with fingerprint, role, and identity. Raw tokens are never returned.
+- **Root secret**, Fingerprints come from a per-installation secret stored at `AGENT_BASE_PATH/metadata/root_secret`, generated on first boot. A `root_secret.bak` copy sits next to it. If the two ever drift apart, the agent refuses to start so it does not silently invalidate every fingerprint in your audit log.
 
 ---
 
-## Dependency Upgrades
+## Bug Fixes
 
-- `google.golang.org/grpc` 1.79.3 -> 1.80.0
-- `github.com/labstack/echo/v5` 5.0.4 -> 5.1.0
-- `golang.org/x/sys` 0.42.0 -> 0.43.0
-- `golang.org/x/term` 0.41.0 -> 0.42.0
-- `actions/download-artifact` 4 -> 8
-- `actions/upload-artifact` 4 -> 7
-- Added: `swaggo/swag` v1.16.6, `urfave/cli/v3` v3.8.0, CSI snapshotter client v8.4.0
+- **Reserved internal names**, `tasks`, `snapshots`, `data`, and `metadata` (case-insensitive) are rejected as tenant names and as volume/clone names. `AGENT_TENANTS` is validated at boot, volume/clone names are validated at the API boundary.
+- **`clone.source.*` labels hard-rejected** (#152), `clone.source.type` and `clone.source.name` are rejected on volume create, clone, snapshot, export, task, and update endpoints. Previously plain `POST /v1/volumes` accepted them as user labels and the dedicated clone endpoints silently overwrote them.
+- **Pagination defaults applied** (#153), `AGENT_DEFAULT_PAGE_LIMIT` (server) and `AGENT_HTTP_CLIENT_PAGE_LIMIT` (client) now apply when no explicit limit is provided. Previously they only took effect on explicit negative values.
+- **Pagination cursor errors return 400** (#153), Invalid, expired, or cross-list cursors return `400 INVALID` instead of restarting from page 1.
+
+---
+
+## Behavior Changes
+
+- **PATCH rejects same-value `clone.source.*`**, A `PATCH` request that includes `clone.source.type` or `clone.source.name` returns `400 INVALID` even when the supplied value matches the current one. The CSI driver and CLI send delta updates and rely on the server-side label auto-merge, so no in-tree client is affected.
 
 ---
 
 ## Upgrade Guide
 
-### A note to existing Kubernetes users
+### Kubernetes CSI users
 
-This release adds a lot of new surface area (CLI, REST API, task system, labels) and lays the groundwork for integrations beyond Kubernetes. If you are using btrfs-nfs-csi purely as a CSI driver, nothing changes for you. Your Helm values, StorageClasses, PVCs, and snapshots continue to work exactly as before. The new features are additive, the Kubernetes integration is fully backwards compatible. See the [CLI documentation](docs/operations.md#cli) for what's new.
+Drop-in upgrade. Helm values, StorageClasses, PVCs, VolumeSnapshots, and clones continue to work. The CSI driver does not set any of the affected labels and uses no reserved names. Bump the image tag to `0.11.0`.
 
-There are a few things to be aware of after upgrading:
+### `AGENT_TENANTS`
 
-- **Volume labels**, Volumes created before v0.10.0 have no labels. Labels are backfilled automatically when pods are rescheduled (`ControllerPublishVolume` sets `created-by`, `kubernetes.pvc.name`, `kubernetes.pvc.namespace`, and `kubernetes.pvc.storageclassname`). No manual action required, labels appear gradually as pods restart (rolling updates, node drains, pod evictions).
-- **Snapshot labels**, Snapshots created before v0.10.0 will not have labels. This is purely cosmetic, they continue to work for restores and clones.
-- **Manual setup.yaml users**, If you deploy from `deploy/driver/setup.yaml` instead of Helm, re-apply the updated manifest. Key changes:
-  - Container image updated to `0.10.0`.
-  - Controller args changed from `["controller"]` to `["integration", "kubernetes", "controller"]`.
-  - Driver args changed from `["driver"]` to `["integration", "kubernetes", "driver"]`.
-  - `--extra-create-metadata` added to csi-provisioner (required for PVC label propagation).
-  - `hostNetwork: true` is now enabled by default on the driver DaemonSet (NFS4 sessions survive driver pod restarts). Previously this was commented out.
-- **Stale NFS exports**, The export model changed from a simple client IP list to reference-counted exports with labels. Pre-0.10.0 exports are migrated automatically(created-by=migrated) but may leave orphaned entries. Volumes with stale exports cannot be deleted by the controller (the agent returns "busy"). If this happens, you will see it in the PVC events and controller logs. To clean up:
-  1. Scale down or delete the workloads using the affected volumes.
-  2. Wait ~3 minutes until the VolumeAttachments are fully removed.
-  3. Remove the stale exports: `btrfs-nfs-csi export list -o wide`, then `btrfs-nfs-csi export remove <volume> <client>` for each stale entry.
-  4. Scale your workloads back up. The controller will create fresh exports with the new reference-counted model.
+Existing `name:token` entries continue to behave as admin without identity. No config change required to keep the v0.10.0 behavior. Opt into RBAC by adding `:role` or `:role:identity` per token. See `docs/rbac.md`.
+
+### Reserved internal names
+
+`tasks`, `snapshots`, `data`, `metadata` (case-insensitive) are now rejected as tenant names and as volume/clone names. Rename any existing tenant or volume with one of these names before upgrading. The agent fails at boot if `AGENT_TENANTS` contains a reserved tenant name.
+
+### Server-managed labels
+
+`tenant`, `clone.source.type`, `clone.source.name` are rejected if set by a client. The CSI driver and CLI never set these. Custom REST automation that sends them must stop doing so.
+
+### Manual `setup.yaml` users
+
+Update the container image tag in `deploy/driver/setup.yaml` to `0.11.0`.
 
 ---
 
 ## Deprecations
 
-- `controller` and `driver` top-level commands deprecated in favor of `integration kubernetes controller` and `integration kubernetes driver`.
-- Web dashboard feature removed from README and code
+None.

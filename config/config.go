@@ -3,6 +3,9 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -10,12 +13,14 @@ var (
 	ValidName     = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 	ValidLabelKey = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
 	ValidLabelVal = regexp.MustCompile(`^[a-zA-Z0-9._-]{0,128}$`)
+	ValidIdentity = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,32}$`)
 )
 
 const (
 	MaxLabels      = 32
 	MaxUserLabels  = 8
 	LabelCreatedBy = "created-by"
+	LabelTenant    = "tenant"
 
 	IdentityCLI           = "cli"
 	IdentityK8sController = "k8s"
@@ -25,6 +30,29 @@ const (
 	LabelCloneSourceType = "clone.source.type"
 	LabelCloneSourceName = "clone.source.name"
 )
+
+const (
+	DataDir      = "data"
+	MetadataFile = "metadata.json"
+	SnapshotsDir = "snapshots"
+	TasksDir     = "tasks"
+)
+
+// ReservedTenantNames collide with directory names the agent creates or may
+// create directly under AGENT_BASE_PATH. Tenant names are compared
+// case-insensitively because btrfs on Linux is case-sensitive but users
+// would otherwise be surprised by a mixed-case bypass.
+var ReservedTenantNames = []string{TasksDir, SnapshotsDir, DataDir, "metadata"}
+
+// SoftReservedLabelKeys are server-managed labels. CLI and K8s integrations
+// reject these client-side for UX; Agent API consumers should use v1.Client
+// which handles them automatically.
+var SoftReservedLabelKeys = []string{LabelCreatedBy, LabelCloneSourceType, LabelCloneSourceName, LabelTenant}
+
+// HardReservedLabelKeys are rejected by the HTTP API itself if a client
+// tries to set them. `created-by` is not listed here because the API
+// handles it via identity matching (stamp/preserve), not blanket rejection.
+var HardReservedLabelKeys = []string{LabelTenant, LabelCloneSourceType, LabelCloneSourceName}
 
 // ValidationError is returned by ValidateName and ValidateLabels.
 // Consumers can type-assert to distinguish validation errors from other errors.
@@ -41,6 +69,48 @@ func ValidateName(name string) error {
 	return nil
 }
 
+func ValidateIdentity(identity string) error {
+	if !ValidIdentity.MatchString(identity) {
+		return &ValidationError{Message: fmt.Sprintf("invalid identity: %q (must be 1-32 chars, only a-z A-Z 0-9 _ -)", identity)}
+	}
+	return nil
+}
+
+func ValidateTenantName(name string) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
+	if slices.Contains(ReservedTenantNames, strings.ToLower(name)) {
+		return &ValidationError{Message: fmt.Sprintf("tenant name %q is reserved", name)}
+	}
+	return nil
+}
+
+// ValidateSubvolumeName rejects names that would collide with agent-managed
+// directories at the tenant root (tasks/snapshots/data/metadata), since a
+// DELETE of such a resource would wipe real tenant state.
+func ValidateSubvolumeName(name string) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
+	if slices.Contains(ReservedTenantNames, strings.ToLower(name)) {
+		return &ValidationError{Message: fmt.Sprintf("resource name %q is reserved", name)}
+	}
+	return nil
+}
+
+// ValidateIntInRange parses val as an integer and checks it is between min and
+// max (inclusive). Returns a ValidationError with the fieldName for reporting.
+func ValidateIntInRange(val string, min, max int, fieldName string) (int, error) {
+	n, err := strconv.Atoi(val)
+	if err != nil || n < min || n > max {
+		return 0, &ValidationError{Message: fmt.Sprintf("invalid %s value %q (expected integer %d-%d)", fieldName, val, min, max)}
+	}
+	return n, nil
+}
+
+// ValidateLabels enforces MaxLabels plus key/value character rules.
+// MaxUserLabels is an integration-side cap; see ValidateUserLabelCount.
 func ValidateLabels(labels map[string]string) error {
 	if len(labels) > MaxLabels {
 		return &ValidationError{Message: fmt.Sprintf("too many labels: %d (max %d)", len(labels), MaxLabels)}
@@ -56,17 +126,20 @@ func ValidateLabels(labels map[string]string) error {
 	return nil
 }
 
-// SoftReservedLabelKeys are managed automatically (identity, clone source tracking).
-// Cannot be set via K8s annotations or CLI flags. Agent API consumers should use v1.Client
-// which handles these automatically.
-var SoftReservedLabelKeys = []string{LabelCreatedBy, LabelCloneSourceType, LabelCloneSourceName}
-
-const (
-	DataDir      = "data"
-	MetadataFile = "metadata.json"
-	SnapshotsDir = "snapshots"
-	TasksDir     = "tasks"
-)
+// ValidateUserLabelCount caps user-settable keys (non-soft-reserved) at
+// MaxUserLabels. For CLI/controller inputs; the API layer does not call it.
+func ValidateUserLabelCount(labels map[string]string) error {
+	userCount := 0
+	for k := range labels {
+		if !slices.Contains(SoftReservedLabelKeys, k) {
+			userCount++
+		}
+	}
+	if userCount > MaxUserLabels {
+		return &ValidationError{Message: fmt.Sprintf("too many user labels: %d (max %d)", userCount, MaxUserLabels)}
+	}
+	return nil
+}
 
 type AgentConfig struct {
 	BasePath               string        `env:"AGENT_BASE_PATH" envDefault:"./storage"`
@@ -91,6 +164,7 @@ type AgentConfig struct {
 	TaskMaxConcurrent      int           `env:"AGENT_TASK_MAX_CONCURRENT" envDefault:"2"`
 	TaskDefaultTimeout     time.Duration `env:"AGENT_TASK_DEFAULT_TIMEOUT" envDefault:"6h"`
 	TaskScrubTimeout       time.Duration `env:"AGENT_TASK_SCRUB_TIMEOUT" envDefault:"24h"`
+	TaskBalanceTimeout     time.Duration `env:"AGENT_TASK_BALANCE_TIMEOUT" envDefault:"24h"`
 	TaskPollInterval       time.Duration `env:"AGENT_TASK_POLL_INTERVAL" envDefault:"5s"`
 	DefaultPageLimit       int           `env:"AGENT_DEFAULT_PAGE_LIMIT" envDefault:"0"`
 	PaginationSnapshotTTL  time.Duration `env:"AGENT_API_PAGINATION_SNAPSHOT_TTL" envDefault:"30s"`

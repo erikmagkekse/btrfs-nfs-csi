@@ -11,16 +11,32 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// AuthMiddleware validates Bearer or Basic auth and resolves the token to a tenant name.
-func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
+// Context keys set by AuthMiddleware. Read via the *Of accessors below.
+const (
+	ctxKeyTenant      = "tenant"
+	ctxKeyRole        = "role"
+	ctxKeyIdentity    = "identity"
+	ctxKeyFingerprint = "token_fingerprint"
+	ctxKeyDenial      = "denial_reason"
+)
+
+func tenantOf(c *echo.Context) string { v, _ := c.Get(ctxKeyTenant).(string); return v }
+func roleOf(c *echo.Context) models.TenantRole {
+	v, _ := c.Get(ctxKeyRole).(models.TenantRole)
+	return v
+}
+func identityOf(c *echo.Context) string    { v, _ := c.Get(ctxKeyIdentity).(string); return v }
+func fingerprintOf(c *echo.Context) string { v, _ := c.Get(ctxKeyFingerprint).(string); return v }
+
+func AuthMiddleware(tokens *TokenSet) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
-			auth := c.Request().Header.Get("Authorization")
-			if auth == "" {
+			authHdr := c.Request().Header.Get("Authorization")
+			if authHdr == "" {
 				return authFailed(c, "missing authorization header")
 			}
 
-			scheme, token, ok := strings.Cut(auth, " ")
+			scheme, token, ok := strings.Cut(authHdr, " ")
 			if !ok {
 				return authFailed(c, "malformed authorization header")
 			}
@@ -43,11 +59,38 @@ func AuthMiddleware(tenants map[string]string) echo.MiddlewareFunc {
 				return authFailed(c, "unsupported auth scheme: "+scheme)
 			}
 
-			tenant, ok := tenants[providedToken]
+			info, fp, ok := tokens.Verify(providedToken)
 			if !ok {
+				c.Set(ctxKeyDenial, denialInvalidToken)
 				return authFailed(c, "invalid token")
 			}
-			c.Set("tenant", tenant)
+			c.Set(ctxKeyTenant, info.Name)
+			c.Set(ctxKeyRole, info.Role)
+			if info.Identity != "" {
+				c.Set(ctxKeyIdentity, info.Identity)
+			}
+			if fp != "" {
+				c.Set(ctxKeyFingerprint, fp)
+			}
+
+			method := c.Request().Method
+			if info.Role == models.RoleReadonly {
+				if method != http.MethodGet && method != http.MethodHead {
+					c.Set(ctxKeyDenial, denialRoleDenied)
+					return StorageError(c, &storage.StorageError{Code: storage.ErrForbidden, Message: "readonly role cannot perform " + method})
+				}
+			}
+			if info.Role == models.RoleMounter {
+				switch {
+				case method == http.MethodGet, method == http.MethodHead:
+					// allow, no route lookup needed
+				case (method == http.MethodPost || method == http.MethodDelete) && c.RouteInfo().Path == "/v1/volumes/:name/export":
+					// allow
+				default:
+					c.Set(ctxKeyDenial, denialRoleDenied)
+					return StorageError(c, &storage.StorageError{Code: storage.ErrForbidden, Message: "mounter role: only GET/HEAD and POST/DELETE /volumes/:name/export"})
+				}
+			}
 
 			return next(c)
 		}
