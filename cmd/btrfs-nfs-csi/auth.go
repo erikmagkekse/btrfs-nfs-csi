@@ -100,10 +100,7 @@ func shortFP(fp string, wide bool) string {
 }
 
 func showWhoami(ctx context.Context, cmd *cli.Command) error {
-	resp, err := apiClient.Whoami(ctx)
-	if err != nil {
-		return err
-	}
+	resp := apiClient.Whoami()
 	return output(cmd, resp, func() {
 		fmt.Printf("tenant:      %s\n", resp.Tenant)
 		fmt.Printf("role:        %s\n", resp.Role)
