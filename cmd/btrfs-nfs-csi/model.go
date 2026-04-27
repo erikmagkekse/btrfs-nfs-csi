@@ -315,7 +315,11 @@ func taskCmd() *cli.Command {
 						sortBy = sortCreated
 					}
 					rev := !cmd.Bool("asc")
-					opts := buildListOpts(cmd)
+					opts := cliListOpts{
+						ListOpts: models.ListOpts{Labels: splitLabelsFlag(cmd)},
+						allSet:   cmd.Bool("all"),
+						labelSet: cmd.IsSet("label"),
+					}
 					if !opts.allSet {
 						opts.Labels = append(opts.Labels, config.LabelTenant+"="+apiClient.Whoami().Tenant)
 					}
