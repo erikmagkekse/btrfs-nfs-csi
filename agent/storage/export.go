@@ -64,7 +64,7 @@ func (s *Storage) CreateVolumeExport(ctx context.Context, tenant, name, client s
 		}
 	}
 
-	log.Info().Str("tenant", tenant).Str("name", name).Str("client", client).Msg("NFS export added")
+	log.Ctx(ctx).Info().Str("name", name).Str("client", client).Msg("NFS export added")
 	return nil
 }
 
@@ -128,7 +128,7 @@ func (s *Storage) DeleteVolumeExport(ctx context.Context, tenant, name, client s
 		}
 	}
 
-	log.Info().Str("tenant", tenant).Str("name", name).Str("client", client).Msg("NFS export removed")
+	log.Ctx(ctx).Info().Str("name", name).Str("client", client).Msg("NFS export removed")
 	return nil
 }
 

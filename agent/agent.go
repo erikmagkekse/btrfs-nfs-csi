@@ -24,8 +24,16 @@ import (
 	env "github.com/caarlos0/env/v11"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+func init() {
+	// Make log.Ctx(ctx) fall back to the global logger when no per-request
+	// or per-worker logger has been put into the context. Storage code can
+	// then use log.Ctx(ctx) unconditionally without checking origin.
+	zerolog.DefaultContextLogger = &log.Logger
+}
 
 type Agent struct {
 	cfg     *config.AgentConfig
@@ -80,6 +88,7 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 			},
 		}),
 	})
+	e.Use(v1.LoggerMiddleware())             // place per-request logger in ctx; must run before Metrics + Auth
 	e.Use(middleware.BodyLimit(1024 * 1024)) // 1MB
 	e.Use(v1.MetricsMiddleware())
 

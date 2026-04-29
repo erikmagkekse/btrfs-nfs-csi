@@ -33,8 +33,9 @@ func (s *Storage) startUsageUpdater(ctx context.Context, mgr *btrfs.Manager, int
 }
 
 func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant string) {
+	ctx = log.With().Str("tenant", tenant).Logger().WithContext(ctx)
 	start := time.Now()
-	log.Debug().Str("tenant", tenant).Msg("usage updater: starting scan")
+	log.Ctx(ctx).Debug().Msg("usage updater: starting scan")
 
 	// bulk-fetch qgroup usage: 2 btrfs commands total instead of 2*N
 	var usageMap map[string]btrfs.QgroupInfo
@@ -42,7 +43,7 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 		var err error
 		usageMap, err = mgr.QgroupUsageBulk(ctx, s.mountPoint)
 		if err != nil {
-			log.Warn().Err(err).Str("tenant", tenant).Msg("usage updater: bulk qgroup query failed, skipping usage updates")
+			log.Ctx(ctx).Warn().Err(err).Msg("usage updater: bulk qgroup query failed, skipping usage updates")
 		}
 	}
 
@@ -133,7 +134,7 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 	})
 
 	VolumesGauge.WithLabelValues(tenant).Set(float64(count))
-	log.Info().Str("tenant", tenant).Int("volumes", count).Int("updated", updated).Int("failed", failed).Str("took", time.Since(start).String()).Msg("usage updater: scan complete")
+	log.Ctx(ctx).Info().Int("volumes", count).Int("updated", updated).Int("failed", failed).Str("took", time.Since(start).String()).Msg("usage updater: scan complete")
 
 	// update snapshot usage
 	var snapUpdated, snapFailed, snapCount int
@@ -178,5 +179,5 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 		return true
 	})
 
-	log.Debug().Str("tenant", tenant).Int("snapshots", snapCount).Int("updated", snapUpdated).Int("failed", snapFailed).Msg("usage updater: snapshot scan complete")
+	log.Ctx(ctx).Debug().Int("snapshots", snapCount).Int("updated", snapUpdated).Int("failed", snapFailed).Msg("usage updater: snapshot scan complete")
 }

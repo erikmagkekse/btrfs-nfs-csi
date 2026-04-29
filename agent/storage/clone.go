@@ -127,6 +127,6 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 
-	log.Info().Str("tenant", tenant).Str("name", req.Name).Str("snapshot", req.Snapshot).Msg("clone created")
+	log.Ctx(ctx).Info().Str("name", req.Name).Str("snapshot", req.Snapshot).Msg("clone created")
 	return &vol, nil
 }

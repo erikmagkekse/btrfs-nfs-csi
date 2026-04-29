@@ -8,8 +8,25 @@ import (
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+// LoggerMiddleware places a per-request copy of the global logger into the
+// request context so subsequent middleware can mutate it via UpdateContext
+// (adding tenant, identity, fingerprint after auth) and downstream code can
+// pick it up with log.Ctx(ctx). Without this, UpdateContext would mutate the
+// global logger.
+func LoggerMiddleware() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			req := c.Request()
+			l := log.Logger.With().Logger()
+			c.SetRequest(req.WithContext(l.WithContext(req.Context())))
+			return next(c)
+		}
+	}
+}
 
 // Context keys set by AuthMiddleware. Read via the *Of accessors below.
 const (
@@ -72,6 +89,17 @@ func AuthMiddleware(tokens *TokenSet) echo.MiddlewareFunc {
 			if fp != "" {
 				c.Set(ctxKeyFingerprint, fp)
 			}
+
+			log.Ctx(c.Request().Context()).UpdateContext(func(zc zerolog.Context) zerolog.Context {
+				zc = zc.Str("tenant", info.Name).Str("role", string(info.Role))
+				if info.Identity != "" {
+					zc = zc.Str("identity", info.Identity)
+				}
+				if fp != "" {
+					zc = zc.Str("token_fingerprint", fp)
+				}
+				return zc
+			})
 
 			method := c.Request().Method
 			if info.Role == models.RoleReadonly {

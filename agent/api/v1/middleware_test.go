@@ -621,6 +621,107 @@ func TestPolicyApply(t *testing.T) {
 	}
 }
 
+// TestMetricsMiddleware_AccessLogIncludesAuthFields verifies the per-request
+// access log emitted by MetricsMiddleware carries tenant/role/identity/
+// token_fingerprint after AuthMiddleware ran UpdateContext on the per-request
+// logger placed by LoggerMiddleware. Pinning this protects the audit story.
+func TestMetricsMiddleware_AccessLogIncludesAuthFields(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Logger
+	log.Logger = zerolog.New(&buf).With().Timestamp().Logger()
+	defer func() { log.Logger = orig }()
+
+	tenants := map[string]models.TenantInfo{
+		"user-token": {Name: "ci", Role: models.RoleUser, Identity: "ci-bot"},
+	}
+
+	e := echo.New()
+	e.Use(LoggerMiddleware())
+	e.Use(MetricsMiddleware())
+	api := e.Group("/v1", AuthMiddleware(tokensFromMap(t, tenants)))
+	api.GET("/whoami", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/whoami", nil)
+	req.Header.Set("Authorization", "Bearer user-token")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	out := buf.String()
+	assert.Contains(t, out, `"message":"request"`, "expected access log line")
+	assert.Contains(t, out, `"tenant":"ci"`)
+	assert.Contains(t, out, `"role":"user"`)
+	assert.Contains(t, out, `"identity":"ci-bot"`)
+	assert.Contains(t, out, `"token_fingerprint":`)
+	assert.Contains(t, out, `"code":200`)
+	assert.Contains(t, out, `"method":"GET"`)
+	assert.Contains(t, out, `"path":"/v1/whoami"`)
+	assert.NotContains(t, out, `"reason":`, "no denial reason on success")
+}
+
+// TestMetricsMiddleware_HealthzNotLogged verifies that GET /healthz produces
+// no access log line. The agent's CSI node-driver pollt that endpoint every
+// few seconds and would flood the log otherwise.
+func TestMetricsMiddleware_HealthzNotLogged(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Logger
+	log.Logger = zerolog.New(&buf).With().Timestamp().Logger()
+	defer func() { log.Logger = orig }()
+
+	e := echo.New()
+	e.Use(LoggerMiddleware())
+	e.Use(MetricsMiddleware())
+	e.GET("/healthz", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
+	e.GET("/v1/whatever", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
+
+	healthReq := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	healthRec := httptest.NewRecorder()
+	e.ServeHTTP(healthRec, healthReq)
+	require.Equal(t, http.StatusOK, healthRec.Code)
+	assert.NotContains(t, buf.String(), `"message":"request"`, "/healthz must not emit access log")
+
+	buf.Reset()
+
+	otherReq := httptest.NewRequest(http.MethodGet, "/v1/whatever", nil)
+	otherRec := httptest.NewRecorder()
+	e.ServeHTTP(otherRec, otherReq)
+	require.Equal(t, http.StatusOK, otherRec.Code)
+	otherOut := buf.String()
+	assert.Contains(t, otherOut, `"message":"request"`, "non-/healthz must emit access log")
+	assert.Contains(t, otherOut, `"path":"/v1/whatever"`)
+}
+
+// TestMetricsMiddleware_NotFoundLogsRealStatusAndUserAgent verifies that a
+// request to an unregistered path logs at warn level with code=404 (not 200)
+// and that the User-Agent header lands in the access log. echo's default
+// error handler writes the 404 after middleware unwinds, so reading
+// Response.Status directly would still show 200, the middleware therefore
+// uses echo.ResolveResponseStatus to resolve the err.
+func TestMetricsMiddleware_NotFoundLogsRealStatusAndUserAgent(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Logger
+	log.Logger = zerolog.New(&buf).With().Timestamp().Logger()
+	defer func() { log.Logger = orig }()
+
+	e := echo.New()
+	e.Use(LoggerMiddleware())
+	e.Use(MetricsMiddleware())
+	e.GET("/known", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/totally-fake", nil)
+	req.Header.Set("User-Agent", "ZGrab/0.x (scanner)")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNotFound, rec.Code)
+
+	out := buf.String()
+	assert.Contains(t, out, `"level":"warn"`, "4xx must log at warn level")
+	assert.Contains(t, out, `"code":404`)
+	assert.Contains(t, out, `"path":"/totally-fake"`)
+	assert.Contains(t, out, `"user_agent":"ZGrab/0.x (scanner)"`)
+	assert.NotContains(t, out, `"code":200`, "must not report 200 for a 404")
+}
+
 // TestPolicyApply_RejectsHardReservedLabels exercises every policy that
 // stamps or preserves labels against every server-managed key. Any
 // combination must fail at the API boundary rather than silently overwrite
