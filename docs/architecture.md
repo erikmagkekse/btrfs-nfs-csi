@@ -43,7 +43,7 @@ Delete    --> DELETE /v1/volumes/:name   (subvolume delete)
 
 ## Task System
 
-Long-running operations (scrub, future: cross-agent transfers) run as background tasks with progress tracking.
+Long-running operations run as background tasks with progress tracking. Current task types: `scrub`, `balance`, `quota-rescan`, `defragment`, and `test` (no-op smoke test). Future: cross-agent transfers (btrfs send/receive).
 
 - Worker pool limits concurrent tasks (`AGENT_TASK_MAX_CONCURRENT`, default 2, 0 = unlimited)
 - Tasks that exceed the limit queue as `pending` until a slot frees up
@@ -52,6 +52,9 @@ Long-running operations (scrub, future: cross-agent transfers) run as background
 - Status transitions (pending, running, completed, failed, cancelled) are persisted to disk
 - On agent restart, interrupted running/pending tasks are marked as `failed`
 - Completed tasks are cleaned up after `AGENT_TASK_CLEANUP_INTERVAL` (default 24h)
+- Filesystem-wide tasks (`scrub`, `balance`, `quota-rescan`) share a mutex, only one runs at a time. `defragment` is per-volume and runs concurrently with them.
+
+See [operations.md](operations.md#tasks) for per-task flags, scope, and examples.
 
 ## Pagination
 
