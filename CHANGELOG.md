@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.11.1
+
+Patch release. Final lap before the project is replaced by ButterStore (see `RELEASE.md`).
+
+### Bug Fixes
+- Honour AGENT_CSI_IDENTITY in default list filter (#158)
+
+### Improvements
+- Silence CodeQL go/path-injection false positives (#157)
+
+### Dependencies
+- Bump `github.com/rs/zerolog` from 1.35.0 to 1.35.1 (#145)
+
 ## v0.11.0
 
 Security and operations release. Adds three-level RBAC, bcrypt-hashable tokens, denial telemetry, token introspection, and four new btrfs maintenance task types.

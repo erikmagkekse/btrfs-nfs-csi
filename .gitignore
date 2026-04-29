@@ -9,5 +9,8 @@
 result
 vendor/
 
+.*/
+!.github/
+
 agent/api/v1/swagger/swagger.json
 agent/api/v1/swagger/swagger.yaml
