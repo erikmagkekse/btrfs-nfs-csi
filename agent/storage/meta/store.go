@@ -30,17 +30,25 @@ func ClearImmutable(path string) { toggleImmutable(path, false) }
 func toggleImmutable(path string, set bool) {
 	f, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("path", path).Bool("set", set).Msg("immutable: open failed")
+		}
 		return
 	}
 	defer func() { _ = f.Close() }()
 	var flags int
-	_, _, _ = syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), fsIocGetFlags, uintptr(unsafe.Pointer(&flags)))
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), fsIocGetFlags, uintptr(unsafe.Pointer(&flags))); errno != 0 {
+		log.Warn().Err(errno).Str("path", path).Msg("immutable: FS_IOC_GETFLAGS failed")
+		return
+	}
 	if set {
 		flags |= fsImmutableFL
 	} else {
 		flags &^= fsImmutableFL
 	}
-	_, _, _ = syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), fsIocSetFlags, uintptr(unsafe.Pointer(&flags)))
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), fsIocSetFlags, uintptr(unsafe.Pointer(&flags))); errno != 0 {
+		log.Warn().Err(errno).Str("path", path).Bool("set", set).Msg("immutable: FS_IOC_SETFLAGS failed")
+	}
 }
 
 // Store is a generic in-memory metadata cache backed by disk.
