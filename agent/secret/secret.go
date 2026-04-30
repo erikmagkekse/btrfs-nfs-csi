@@ -13,10 +13,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 )
 
 const (
-	metadataDir    = "metadata" // shares the name reserved in config.ReservedTenantNames so it can never collide with a tenant
 	fileName       = "root_secret"
 	backupSuffix   = ".bak"
 	secretFileMode = 0o600
@@ -63,7 +64,7 @@ func (m *Manager) Fingerprint(token string) string {
 }
 
 func loadOrCreate(basePath string) ([]byte, error) {
-	dir := filepath.Join(basePath, metadataDir)
+	dir := filepath.Join(basePath, config.MetadataDir)
 	if err := os.MkdirAll(dir, secretDirMode); err != nil {
 		return nil, fmt.Errorf("create metadata dir: %w", err)
 	}
@@ -119,6 +120,10 @@ func loadOrCreate(basePath string) ([]byte, error) {
 // absent is recoverable by restoring from the other replica. Permissions
 // are checked: any group/world bits abort startup so a chmod-by-mistake
 // (or a malicious actor) can't turn the secret into a leaked credential.
+// A truncated file (size below entropyLen, e.g. from a writeAtomic crash
+// before rename) is treated as broken so low-entropy input is never fed
+// to HKDF as IKM. Larger files are accepted to keep the format
+// forward-compatible if entropyLen ever shrinks.
 func readExisting(path string) ([]byte, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -129,6 +134,9 @@ func readExisting(path string) ([]byte, error) {
 	}
 	if mode := info.Mode().Perm(); mode&0o077 != 0 {
 		return nil, fmt.Errorf("%s has insecure permissions %#o, expected %#o (chmod %#o and restart)", path, mode, secretFileMode, secretFileMode)
+	}
+	if size := info.Size(); size < entropyLen {
+		return nil, fmt.Errorf("%s is %d bytes, expected at least %d (truncated write?), inspect both replicas and remove the broken one before restarting", path, size, entropyLen)
 	}
 	return os.ReadFile(path)
 }

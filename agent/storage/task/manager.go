@@ -24,9 +24,9 @@ type Manager struct {
 
 // NewManager creates a new Manager with persistence under taskDir.
 // maxConcurrent limits the number of tasks running simultaneously.
-func NewManager(taskDir string, maxConcurrent int, pollInterval time.Duration) *Manager {
+func NewManager(taskDir string, maxConcurrent int, pollInterval time.Duration) (*Manager, error) {
 	if err := os.MkdirAll(taskDir, 0o755); err != nil {
-		log.Fatal().Err(err).Str("path", taskDir).Msg("failed to create tasks directory")
+		return nil, fmt.Errorf("create tasks directory %q: %w", taskDir, err)
 	}
 	if pollInterval <= 0 {
 		pollInterval = 5 * time.Second
@@ -45,7 +45,7 @@ func NewManager(taskDir string, maxConcurrent int, pollInterval time.Duration) *
 		log.Warn().Msg("task manager initialized with unlimited concurrency")
 	}
 	tm.loadFromDisk()
-	return tm
+	return tm, nil
 }
 
 // Create starts a task as a background goroutine and returns its ID.
@@ -244,8 +244,11 @@ func (tm *Manager) Cleanup(maxAge time.Duration) {
 		switch t.Status {
 		case TaskCompleted, TaskFailed, TaskCancelled:
 			if t.CompletedAt != nil && t.CompletedAt.Before(cutoff) {
+				if err := os.Remove(tm.taskFile(id)); err != nil && !os.IsNotExist(err) {
+					log.Warn().Err(err).Str("task", id).Msg("task cleanup: failed to remove file, retrying on next tick")
+					continue
+				}
 				delete(tm.tasks, id)
-				_ = os.Remove(tm.taskFile(id))
 				removed++
 			}
 		}

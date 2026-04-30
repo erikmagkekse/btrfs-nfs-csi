@@ -98,7 +98,9 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 			log.Warn().Err(err).Str("path", dataDir).Msg("subvolume already exists on disk")
 			return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("volume %q already exists on disk", req.Name)}
 		}
-		_ = os.RemoveAll(volDir)
+		if rmErr := os.RemoveAll(volDir); rmErr != nil {
+			log.Warn().Err(rmErr).Str("path", volDir).Msg("cleanup: failed to remove directory")
+		}
 		log.Error().Err(err).Str("path", dataDir).Msg("failed to create subvolume")
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs subvolume create failed: %v", err)}
 	}

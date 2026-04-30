@@ -65,7 +65,9 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 			log.Warn().Err(err).Str("path", dstData).Msg("snapshot target already exists on disk")
 			return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("snapshot %q already exists on disk", req.Name)}
 		}
-		_ = os.RemoveAll(snapDir)
+		if rmErr := os.RemoveAll(snapDir); rmErr != nil {
+			log.Warn().Err(rmErr).Str("path", snapDir).Msg("cleanup: failed to remove directory")
+		}
 		log.Error().Err(err).Msg("failed to create snapshot")
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
 	}
@@ -92,7 +94,9 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 		if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
 			log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
 		}
-		_ = os.RemoveAll(snapDir)
+		if rmErr := os.RemoveAll(snapDir); rmErr != nil {
+			log.Warn().Err(rmErr).Str("path", snapDir).Msg("cleanup: failed to remove directory")
+		}
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 

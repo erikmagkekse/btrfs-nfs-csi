@@ -33,6 +33,7 @@ const (
 
 const (
 	DataDir      = "data"
+	MetadataDir  = "metadata"
 	MetadataFile = "metadata.json"
 	SnapshotsDir = "snapshots"
 	TasksDir     = "tasks"
@@ -42,7 +43,7 @@ const (
 // create directly under AGENT_BASE_PATH. Tenant names are compared
 // case-insensitively because btrfs on Linux is case-sensitive but users
 // would otherwise be surprised by a mixed-case bypass.
-var ReservedTenantNames = []string{TasksDir, SnapshotsDir, DataDir, "metadata"}
+var ReservedTenantNames = []string{TasksDir, SnapshotsDir, DataDir, MetadataDir}
 
 // SoftReservedLabelKeys are server-managed labels. CLI and K8s integrations
 // reject these client-side for UX; Agent API consumers should use v1.Client
