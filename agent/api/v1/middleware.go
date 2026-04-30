@@ -126,8 +126,8 @@ func AuthMiddleware(tokens *TokenSet) echo.MiddlewareFunc {
 }
 
 func authFailed(c *echo.Context, reason string) error {
-	log.Warn().Str("client", c.RealIP()).Str("path", c.Request().URL.Path).Str("reason", reason).Msg("auth failed")
-	log.Trace().Str("client", c.RealIP()).Str("authorization", c.Request().Header.Get("Authorization")).Msg("auth failed detail")
+	log.Ctx(c.Request().Context()).Warn().Str("client", c.RealIP()).Str("path", c.Request().URL.Path).Str("reason", reason).Msg("auth failed")
+	log.Ctx(c.Request().Context()).Trace().Str("client", c.RealIP()).Str("authorization", c.Request().Header.Get("Authorization")).Msg("auth failed detail")
 	c.Response().Header().Set("WWW-Authenticate", `Basic realm="agent"`)
 	return c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 		Error: "invalid auth token",

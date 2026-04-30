@@ -18,6 +18,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func init() {
+	zerolog.DefaultContextLogger = &log.Logger
+}
+
 func TestAuthMiddleware_InvalidToken_NoTokenInWarnLog(t *testing.T) {
 	// capture log output at warn level (trace is intentionally allowed to contain tokens)
 	var buf bytes.Buffer
@@ -689,6 +693,48 @@ func TestMetricsMiddleware_HealthzNotLogged(t *testing.T) {
 	otherOut := buf.String()
 	assert.Contains(t, otherOut, `"message":"request"`, "non-/healthz must emit access log")
 	assert.Contains(t, otherOut, `"path":"/v1/whatever"`)
+}
+
+// TestStorageEventLogInheritsAuthFields verifies that downstream code (the
+// storage layer) calling log.Ctx(ctx) inside a handler picks up the
+// tenant/role/identity/token_fingerprint that AuthMiddleware stamped onto
+// the per-request logger via UpdateContext. This is what makes "volume
+// created" event lines carry the same audit fields as the access log.
+func TestStorageEventLogInheritsAuthFields(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Logger
+	log.Logger = zerolog.New(&buf).With().Timestamp().Logger()
+	defer func() { log.Logger = orig }()
+
+	tenants := map[string]models.TenantInfo{
+		"user-token": {Name: "ops", Role: models.RoleUser, Identity: "ci-bot"},
+	}
+
+	e := echo.New()
+	e.Use(LoggerMiddleware())
+	api := e.Group("/v1", AuthMiddleware(tokensFromMap(t, tenants)))
+	api.POST("/volumes", func(c *echo.Context) error {
+		// Mirror what agent/storage/volume.go does after CreateVolume.
+		log.Ctx(c.Request().Context()).Info().
+			Str("name", "my-vol").
+			Str("path", "/data/ops/my-vol").
+			Msg("volume created")
+		return c.NoContent(http.StatusCreated)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/volumes", nil)
+	req.Header.Set("Authorization", "Bearer user-token")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	out := buf.String()
+	assert.Contains(t, out, `"message":"volume created"`)
+	assert.Contains(t, out, `"name":"my-vol"`)
+	assert.Contains(t, out, `"tenant":"ops"`)
+	assert.Contains(t, out, `"role":"user"`)
+	assert.Contains(t, out, `"identity":"ci-bot"`)
+	assert.Contains(t, out, `"token_fingerprint":`)
 }
 
 // TestMetricsMiddleware_NotFoundLogsRealStatusAndUserAgent verifies that a
