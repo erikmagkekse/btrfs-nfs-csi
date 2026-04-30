@@ -1,8 +1,8 @@
 # Release v0.11.1
 
-**Previous: v0.11.0** | **Date: 2026-04-29**
+**Previous: v0.11.0** | **Date: 2026-04-30**
 
-Per-request audit access log: every API call now emits one log line with tenant, role, identity, token fingerprint, method, path, status, duration, and user agent. Storage event logs (volume created, snapshot deleted, ...) inherit the same caller fields via zerolog's contextual logger, no per-call plumbing. Plus the CLI default list filter follows `AGENT_CSI_IDENTITY`, a CodeQL hardening pass on path handling, the access log status fix (404s no longer report as 200), a zerolog patch bump, and documentation fixes.
+Per-request audit access log: every API call now emits one log line with tenant, role, identity, token fingerprint, method, path, status, duration, and user agent. Storage event logs (volume created, snapshot deleted, ...) inherit the same caller fields via zerolog's contextual logger, no per-call plumbing. Plus the CLI default list filter follows `AGENT_CSI_IDENTITY`, a CodeQL hardening pass on path handling, the access log status fix (404s no longer report as 200), two logging hardenings (Authorization header no longer reachable from a trace log, immutable ioctl failures now surface as warnings), a zerolog patch bump, and documentation fixes.
 
 No breaking changes. `AGENT_TENANTS`, Helm values, StorageClasses, PVCs, VolumeSnapshots, and the in-tree CSI driver work without modification.
 
@@ -50,6 +50,10 @@ Identical for the agent. The only thing that changes is what shows up by default
 
 ---
 
+## Security
+
+- **Drop Authorization header trace log on auth failure** (#161). `authFailed` previously emitted a second log line at trace level containing the raw `Authorization` header, which made debugging easier but meant a misconfigured `LOG_LEVEL=trace` would persist tokens in logs. Removed entirely. Auth failures still log at warn with `client`, `path`, and `reason`, none of which carry the token. Operators who relied on the trace line for debugging should diff the request payload against `AGENT_TENANTS` directly instead.
+
 ## Bug Fixes
 
 - **`AGENT_CSI_IDENTITY` honoured in default list filter** (#158). The CLI default filter was always `created-by=cli`, regardless of the configured identity. Lists now filter by the resolved identity from `/v1/whoami`, falling back to `cli` if no identity is set on the token. The `--all` / `-A` flag still bypasses the filter entirely.
@@ -59,6 +63,7 @@ Identical for the agent. The only thing that changes is what shows up by default
 
 - **CodeQL path-injection false positives silenced** (#157). Storage-layer file operations now route through a small `meta/store` boundary that re-validates paths under the configured base. No behaviour change at runtime, the agent already rejected traversal at the API layer, but CodeQL can no longer point at a long list of `os.ReadFile`/`os.WriteFile` call sites as suspect.
 - **Per-request access log with caller identity** (#160). New `LoggerMiddleware` clones the global zerolog logger into the request context, `AuthMiddleware` stamps `tenant`/`role`/`identity`/`token_fingerprint` onto it via `UpdateContext`, `MetricsMiddleware` emits the access log line at info/warn/error by status (`/healthz` skipped, optional `user_agent` and denial `reason` included). Storage event logs use `log.Ctx(ctx)` so they inherit the same fields without per-call plumbing.
+- **Log ioctl errors in metadata immutable toggle** (#161). The `toggleImmutable` helper in `agent/storage/meta/store.go` previously discarded the `errno` return from both `FS_IOC_GETFLAGS` and `FS_IOC_SETFLAGS`, and silently swallowed `OpenFile` failures. A failure to set the immutable bit on a metadata file (for example on a non-btrfs filesystem, or without `CAP_LINUX_IMMUTABLE`) left the file unprotected with no log signal. The helper now logs at warn level on every non-`ENOENT` open failure and on every non-zero ioctl errno, with `path` and `set` fields attached.
 
 ## Documentation
 
