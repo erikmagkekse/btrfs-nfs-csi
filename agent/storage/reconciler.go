@@ -28,6 +28,7 @@ func (s *Storage) startNFSReconciler(ctx context.Context, interval time.Duration
 }
 
 func (s *Storage) reconcileExports(ctx context.Context, tenant string) {
+	ctx = log.With().Str("tenant", tenant).Logger().WithContext(ctx)
 	tenantDir := filepath.Join(s.basePath, tenant)
 
 	exports, err := s.exporter.ListExports(ctx)
@@ -93,8 +94,8 @@ func (s *Storage) reconcileExports(ctx context.Context, tenant string) {
 	})
 
 	if removed > 0 || restored > 0 {
-		log.Info().Str("tenant", tenant).Int("removed", removed).Int("restored", restored).Msg("nfs reconciler: reconciliation complete")
+		log.Ctx(ctx).Info().Int("removed", removed).Int("restored", restored).Msg("nfs reconciler: reconciliation complete")
 	} else {
-		log.Debug().Str("tenant", tenant).Msg("nfs reconciler: in sync")
+		log.Ctx(ctx).Debug().Msg("nfs reconciler: in sync")
 	}
 }

@@ -1,12 +1,14 @@
 package v1
 
 import (
+	"context"
 	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -51,34 +53,60 @@ func MetricsMiddleware() echo.MiddlewareFunc {
 		return func(c *echo.Context) error {
 			start := time.Now()
 			err := next(c)
-			duration := time.Since(start).Seconds()
+			dur := time.Since(start)
 
 			method := c.Request().Method
 			path := c.RouteInfo().Path
-			resp := c.Response().(*echo.Response)
-			code := strconv.Itoa(resp.Status)
+			// Resolve the real status. echo's DefaultHTTPErrorHandler runs
+			// after middleware unwinds, so reading c.Response().Status alone
+			// would report 200 for handler-returned errors (e.g. 404 from a
+			// not-found path, 401 from auth). echo.ResolveResponseStatus walks
+			// err and returns the status that will actually be sent.
+			_, status := echo.ResolveResponseStatus(c.Response(), err)
+			code := strconv.Itoa(status)
 			reason, _ := c.Get(ctxKeyDenial).(string)
 
 			httpRequestsTotal.WithLabelValues(method, path, code, reason).Inc()
-			httpRequestDuration.WithLabelValues(method, path).Observe(duration)
+			httpRequestDuration.WithLabelValues(method, path).Observe(dur.Seconds())
 
-			tenant := tenantOf(c)
-			l := log.Debug().
+			// Skip the high-frequency CSI healthcheck noise. /metrics lives on
+			// a separate listener (AGENT_METRICS_ADDR), so it never reaches us.
+			if c.Request().URL.Path == "/healthz" {
+				return err
+			}
+
+			l := accessLog(c.Request().Context(), status).
 				Str("method", method).
 				Str("path", c.Request().URL.Path).
-				Str("code", code).
+				Int("code", status).
 				Str("client", c.RealIP()).
-				Str("took", time.Since(start).String())
-			if tenant != "" {
-				l = l.Str("tenant", tenant)
+				Str("took", dur.String())
+			if ua := c.Request().UserAgent(); ua != "" {
+				l = l.Str("user_agent", ua)
 			}
-			if resp.Status >= 400 {
-				l.Msg("request error")
-			} else {
-				l.Msg("request")
+			if reason != "" {
+				l = l.Str("reason", reason)
 			}
+			l.Msg("request")
 
 			return err
 		}
+	}
+}
+
+// accessLog picks the zerolog level for an access log line by status (5xx
+// error, 4xx warn, else info) and returns an event from the per-request
+// contextual logger so tenant/identity/token_fingerprint are inherited.
+// Operators can silence successful requests with LOG_LEVEL=warn while
+// keeping denials and server errors visible.
+func accessLog(ctx context.Context, status int) *zerolog.Event {
+	l := log.Ctx(ctx)
+	switch {
+	case status >= 500:
+		return l.Error()
+	case status >= 400:
+		return l.Warn()
+	default:
+		return l.Info()
 	}
 }

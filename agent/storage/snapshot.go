@@ -96,7 +96,7 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 
-	log.Info().Str("tenant", tenant).Str("name", req.Name).Str("volume", req.Volume).Msg("snapshot created")
+	log.Ctx(ctx).Info().Str("name", req.Name).Str("volume", req.Volume).Msg("snapshot created")
 	return &meta, nil
 }
 
@@ -170,6 +170,6 @@ func (s *Storage) DeleteSnapshot(ctx context.Context, tenant, name string) error
 		log.Error().Err(err).Msg("failed to remove snapshot directory")
 		return fmt.Errorf("failed to remove snapshot directory: %w", err)
 	}
-	log.Info().Str("tenant", tenant).Str("name", name).Msg("snapshot deleted")
+	log.Ctx(ctx).Info().Str("name", name).Msg("snapshot deleted")
 	return nil
 }

@@ -156,7 +156,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 
-	log.Info().Str("tenant", tenant).Str("name", req.Name).Str("path", volDir).Msg("volume created")
+	log.Ctx(ctx).Info().Str("name", req.Name).Str("path", volDir).Msg("volume created")
 	return &meta, nil
 }
 
@@ -339,7 +339,7 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		return nil, fmt.Errorf("failed to update metadata: %w", err)
 	}
 
-	log.Info().Str("tenant", tenant).Str("name", name).Msg("volume updated")
+	log.Ctx(ctx).Info().Str("name", name).Msg("volume updated")
 	return updated, nil
 }
 
@@ -442,7 +442,7 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 
-	log.Info().Str("tenant", tenant).Str("name", req.Name).Str("source", req.Source).Msg("volume cloned")
+	log.Ctx(ctx).Info().Str("name", req.Name).Str("source", req.Source).Msg("volume cloned")
 	return &meta, nil
 }
 
@@ -489,6 +489,6 @@ func (s *Storage) DeleteVolume(ctx context.Context, tenant, name string) error {
 		log.Error().Err(err).Msg("failed to remove volume directory")
 		return fmt.Errorf("failed to remove volume directory: %w", err)
 	}
-	log.Info().Str("tenant", tenant).Str("name", name).Msg("volume deleted")
+	log.Ctx(ctx).Info().Str("name", name).Msg("volume deleted")
 	return nil
 }
