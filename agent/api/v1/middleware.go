@@ -32,7 +32,13 @@ func LoggerMiddleware(secrets *secret.Manager, traceEnabled, allowCustomID bool)
 			if traceEnabled {
 				traceID := ""
 				if allowCustomID {
-					if custom := req.Header.Get(config.HeaderTraceID); custom != "" && config.ValidTraceID.MatchString(custom) {
+					if custom := req.Header.Get(config.HeaderTraceID); custom != "" {
+						if err := config.ValidateTraceID(custom); err != nil {
+							return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+								Error: err.Error(),
+								Code:  storage.ErrInvalid,
+							})
+						}
 						traceID = custom
 					}
 				}

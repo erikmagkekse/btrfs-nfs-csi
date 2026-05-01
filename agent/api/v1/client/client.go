@@ -146,8 +146,10 @@ func newClient(url, token string, cfg ClientConfig) (*Client, error) {
 			return nil, err
 		}
 	}
-	if cfg.TraceID != "" && !config.ValidTraceID.MatchString(cfg.TraceID) {
-		return nil, fmt.Errorf("invalid trace ID: %q (must be 1-64 chars, only a-z A-Z 0-9 _ -)", cfg.TraceID)
+	if cfg.TraceID != "" {
+		if err := config.ValidateTraceID(cfg.TraceID); err != nil {
+			return nil, err
+		}
 	}
 	hc := cfg.HTTPClient
 	if hc == nil {

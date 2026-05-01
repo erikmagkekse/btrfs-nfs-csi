@@ -75,7 +75,14 @@ func ValidateName(name string) error {
 
 func ValidateIdentity(identity string) error {
 	if !ValidIdentity.MatchString(identity) {
-		return &ValidationError{Message: fmt.Sprintf("invalid identity: %q (must be 1-32 chars, only a-z A-Z 0-9 _ -)", identity)}
+		return &ValidationError{Message: fmt.Sprintf("invalid identity: %q (must match %s)", identity, ValidIdentity)}
+	}
+	return nil
+}
+
+func ValidateTraceID(id string) error {
+	if !ValidTraceID.MatchString(id) {
+		return &ValidationError{Message: fmt.Sprintf("invalid trace ID: %q (must match %s)", id, ValidTraceID)}
 	}
 	return nil
 }
