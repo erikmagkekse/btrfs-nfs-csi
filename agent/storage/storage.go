@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -58,63 +57,82 @@ type Storage struct {
 	cachedFilesystem atomic.Pointer[btrfs.FilesystemUsage]
 }
 
-func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []string, dirMode, dataMode, btrfsBin, immutableLabels string, taskMaxConcurrent int, taskDefaultTimeout, taskScrubTimeout, taskBalanceTimeout, taskPollInterval time.Duration) *Storage {
+// Config bundles the parameters required to construct a Storage.
+type Config struct {
+	BasePath        string
+	QuotaEnabled    bool
+	Exporter        nfs.Exporter
+	Tenants         []string
+	DefaultDirMode  string
+	DefaultDataMode string
+	BtrfsBin        string
+	ImmutableLabels string
+
+	TaskMaxConcurrent  int
+	TaskDefaultTimeout time.Duration
+	TaskScrubTimeout   time.Duration
+	TaskBalanceTimeout time.Duration
+	TaskPollInterval   time.Duration
+}
+
+func New(cfg Config) (*Storage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	parsedDirMode, err := strconv.ParseUint(dirMode, 8, 32)
-	if err != nil {
-		log.Fatal().Str("mode", dirMode).Msg("invalid dir mode")
-	}
-	if _, err := strconv.ParseUint(dataMode, 8, 32); err != nil {
-		log.Fatal().Str("mode", dataMode).Msg("invalid data mode")
+	if cfg.Exporter == nil {
+		return nil, fmt.Errorf("exporter must not be nil")
 	}
 
-	info, err := os.Stat(basePath)
+	parsedDirMode, err := utils.ValidateMode(cfg.DefaultDirMode)
+	if err != nil {
+		return nil, fmt.Errorf("dir mode: %w", err)
+	}
+	if _, err := utils.ValidateMode(cfg.DefaultDataMode); err != nil {
+		return nil, fmt.Errorf("data mode: %w", err)
+	}
+
+	info, err := os.Stat(cfg.BasePath)
 	if err != nil || !info.IsDir() {
-		log.Fatal().Str("path", basePath).Msg("base path does not exist or is not a directory")
+		return nil, fmt.Errorf("base path %q does not exist or is not a directory", cfg.BasePath)
 	}
-	if !btrfs.IsBtrfs(basePath) {
-		log.Fatal().Str("path", basePath).Msg("base path is not on a btrfs filesystem")
+	if !btrfs.IsBtrfs(cfg.BasePath) {
+		return nil, fmt.Errorf("base path %q is not on a btrfs filesystem", cfg.BasePath)
 	}
-	mountPoint, err := utils.FindMountPoint(basePath)
+	mountPoint, err := utils.FindMountPoint(cfg.BasePath)
 	if err != nil {
-		log.Fatal().Err(err).Str("path", basePath).Msg("failed to resolve btrfs mount point")
+		return nil, fmt.Errorf("resolve btrfs mount point for %q: %w", cfg.BasePath, err)
 	}
-	if mountPoint != basePath {
-		log.Info().Str("basePath", basePath).Str("mountPoint", mountPoint).Msg("base path is a subdirectory of btrfs mount")
+	if mountPoint != cfg.BasePath {
+		log.Info().Str("basePath", cfg.BasePath).Str("mountPoint", mountPoint).Msg("base path is a subdirectory of btrfs mount")
 	}
-	mgr := btrfs.NewManager(btrfsBin)
+	mgr := btrfs.NewManager(cfg.BtrfsBin)
 	if !mgr.IsAvailable(ctx) {
-		log.Fatal().Msg("btrfs tools not found - is btrfs-progs installed?")
-	}
-	if exporter == nil {
-		log.Fatal().Msg("exporter must not be nil")
+		return nil, fmt.Errorf("btrfs tools not found, is btrfs-progs installed?")
 	}
 
-	if quotaEnabled {
-		if err := mgr.QuotaCheck(ctx, basePath); err != nil {
-			log.Fatal().Str("path", basePath).Msg("AGENT_FEATURE_QUOTA_ENABLED=true but btrfs quota is not enabled (run: btrfs quota enable " + basePath + ")")
+	if cfg.QuotaEnabled {
+		if err := mgr.QuotaCheck(ctx, cfg.BasePath); err != nil {
+			return nil, fmt.Errorf("AGENT_FEATURE_QUOTA_ENABLED=true but btrfs quota is not enabled on %q (run: btrfs quota enable %s): %w", cfg.BasePath, cfg.BasePath, err)
 		}
 	}
 
-	for _, name := range tenants {
+	for _, name := range cfg.Tenants {
 		if err := config.ValidateTenantName(name); err != nil {
-			log.Fatal().Err(err).Str("tenant", name).Msg("invalid tenant name")
+			return nil, fmt.Errorf("invalid tenant name %q: %w", name, err)
 		}
-		td := filepath.Join(basePath, name)
-		if err := os.MkdirAll(td, os.FileMode(parsedDirMode)); err != nil {
-			log.Fatal().Err(err).Str("path", td).Msg("failed to create tenant directory")
+		td := filepath.Join(cfg.BasePath, name)
+		if err := os.MkdirAll(td, fileMode(parsedDirMode)); err != nil {
+			return nil, fmt.Errorf("create tenant directory %q: %w", td, err)
 		}
-		if err := os.MkdirAll(filepath.Join(td, config.SnapshotsDir), os.FileMode(parsedDirMode)); err != nil {
-			log.Fatal().Err(err).Str("path", td).Msg("failed to create tenant snapshots directory")
+		if err := os.MkdirAll(filepath.Join(td, config.SnapshotsDir), fileMode(parsedDirMode)); err != nil {
+			return nil, fmt.Errorf("create tenant snapshots directory under %q: %w", td, err)
 		}
 	}
-	log.Info().Int("count", len(tenants)).Msg("tenants configured")
+	log.Info().Int("count", len(cfg.Tenants)).Msg("tenants configured")
 
 	devices, err := mgr.Devices(ctx, mountPoint)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to resolve block devices")
+		return nil, fmt.Errorf("resolve block devices: %w", err)
 	}
 	for _, d := range devices {
 		if d.Missing {
@@ -128,11 +146,31 @@ func New(basePath string, quotaEnabled bool, exporter nfs.Exporter, tenants []st
 	for i, d := range devices {
 		initialStates[i] = DeviceState{BTRFSDevice: d}
 	}
-	taskDir := filepath.Join(basePath, config.TasksDir)
-	s := &Storage{basePath: basePath, mountPoint: mountPoint, quotaEnabled: quotaEnabled, btrfs: mgr, exporter: exporter, tenants: tenants, defaultDirMode: os.FileMode(parsedDirMode), defaultDataMode: dataMode, immutableLabelKeys: ImmutableLabelKeys(immutableLabels), tasks: task.NewManager(taskDir, taskMaxConcurrent, taskPollInterval), taskDefaultTimeout: taskDefaultTimeout, taskScrubTimeout: taskScrubTimeout, taskBalanceTimeout: taskBalanceTimeout, volumes: meta.NewStore[VolumeMetadata](basePath), snapshots: meta.NewStore[SnapshotMetadata](basePath, config.SnapshotsDir)}
+	taskDir := filepath.Join(cfg.BasePath, config.TasksDir)
+	tm, err := task.NewManager(taskDir, cfg.TaskMaxConcurrent, cfg.TaskPollInterval)
+	if err != nil {
+		return nil, fmt.Errorf("init task manager: %w", err)
+	}
+	s := &Storage{
+		basePath:           cfg.BasePath,
+		mountPoint:         mountPoint,
+		quotaEnabled:       cfg.QuotaEnabled,
+		btrfs:              mgr,
+		exporter:           cfg.Exporter,
+		tenants:            cfg.Tenants,
+		defaultDirMode:     fileMode(parsedDirMode),
+		defaultDataMode:    cfg.DefaultDataMode,
+		immutableLabelKeys: ImmutableLabelKeys(cfg.ImmutableLabels),
+		tasks:              tm,
+		taskDefaultTimeout: cfg.TaskDefaultTimeout,
+		taskScrubTimeout:   cfg.TaskScrubTimeout,
+		taskBalanceTimeout: cfg.TaskBalanceTimeout,
+		volumes:            meta.NewStore[VolumeMetadata](cfg.BasePath),
+		snapshots:          meta.NewStore[SnapshotMetadata](cfg.BasePath, config.SnapshotsDir),
+	}
 	s.cachedDevices.Store(&initialStates)
 	s.loadCache()
-	return s
+	return s, nil
 }
 
 func (s *Storage) loadCache() {
@@ -145,7 +183,11 @@ func (s *Storage) loadCache() {
 				if !e.IsDir() || e.Name() == config.SnapshotsDir {
 					continue
 				}
-				dataDir := s.volumes.DataPath(tenant, e.Name())
+				dataDir, err := s.volumes.DataPath(tenant, e.Name())
+				if err != nil {
+					log.Warn().Err(err).Str("tenant", tenant).Str("volume", e.Name()).Msg("cache: invalid volume path, skipping")
+					continue
+				}
 				if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 					log.Warn().Str("tenant", tenant).Str("volume", e.Name()).Str("path", dataDir).Msg("cache: data directory missing, skipping phantom volume")
 					continue
@@ -165,7 +207,11 @@ func (s *Storage) loadCache() {
 				if !e.IsDir() {
 					continue
 				}
-				dataDir := s.snapshots.DataPath(tenant, e.Name())
+				dataDir, err := s.snapshots.DataPath(tenant, e.Name())
+				if err != nil {
+					log.Warn().Err(err).Str("tenant", tenant).Str("snapshot", e.Name()).Msg("cache: invalid snapshot path, skipping")
+					continue
+				}
 				if _, err := os.Stat(dataDir); os.IsNotExist(err) {
 					log.Warn().Str("tenant", tenant).Str("snapshot", e.Name()).Str("path", dataDir).Msg("cache: data directory missing, skipping phantom snapshot")
 					continue

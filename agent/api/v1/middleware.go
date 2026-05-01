@@ -6,10 +6,54 @@ import (
 	"strings"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/secret"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/labstack/echo/v5"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+// LoggerMiddleware places a per-request copy of the global logger into the
+// request context so subsequent middleware can mutate it via UpdateContext
+// (adding tenant, identity, fingerprint after auth) and downstream code can
+// pick it up with log.Ctx(ctx). Without this, UpdateContext would mutate the
+// global logger.
+//
+// When traceEnabled is true, every request gets a trace ID in logs and the
+// X-Trace-ID response header. Clients may supply their own via X-Trace-ID
+// request header if allowCustomID is true.
+func LoggerMiddleware(secrets *secret.Manager, traceEnabled, allowCustomID bool) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			req := c.Request()
+			l := log.Logger.With().Logger()
+
+			if traceEnabled {
+				traceID := ""
+				if allowCustomID {
+					if custom := req.Header.Get(config.HeaderTraceID); custom != "" {
+						if err := config.ValidateTraceID(custom); err != nil {
+							return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+								Error: err.Error(),
+								Code:  storage.ErrInvalid,
+							})
+						}
+						traceID = custom
+					}
+				}
+				if traceID == "" {
+					traceID = secrets.GenerateID(8)
+				}
+				l = l.With().Str("trace_id", traceID).Logger()
+				c.Response().Header().Set(config.HeaderTraceID, traceID)
+			}
+
+			c.SetRequest(req.WithContext(l.WithContext(req.Context())))
+			return next(c)
+		}
+	}
+}
 
 // Context keys set by AuthMiddleware. Read via the *Of accessors below.
 const (
@@ -73,6 +117,17 @@ func AuthMiddleware(tokens *TokenSet) echo.MiddlewareFunc {
 				c.Set(ctxKeyFingerprint, fp)
 			}
 
+			log.Ctx(c.Request().Context()).UpdateContext(func(zc zerolog.Context) zerolog.Context {
+				zc = zc.Str("tenant", info.Name).Str("role", string(info.Role))
+				if info.Identity != "" {
+					zc = zc.Str("identity", info.Identity)
+				}
+				if fp != "" {
+					zc = zc.Str("token_fingerprint", fp)
+				}
+				return zc
+			})
+
 			method := c.Request().Method
 			if info.Role == models.RoleReadonly {
 				if method != http.MethodGet && method != http.MethodHead {
@@ -98,8 +153,7 @@ func AuthMiddleware(tokens *TokenSet) echo.MiddlewareFunc {
 }
 
 func authFailed(c *echo.Context, reason string) error {
-	log.Warn().Str("client", c.RealIP()).Str("path", c.Request().URL.Path).Str("reason", reason).Msg("auth failed")
-	log.Trace().Str("client", c.RealIP()).Str("authorization", c.Request().Header.Get("Authorization")).Msg("auth failed detail")
+	log.Ctx(c.Request().Context()).Warn().Str("client", c.RealIP()).Str("path", c.Request().URL.Path).Str("reason", reason).Msg("auth failed")
 	c.Response().Header().Set("WWW-Authenticate", `Basic realm="agent"`)
 	return c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 		Error: "invalid auth token",

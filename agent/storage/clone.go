@@ -34,7 +34,10 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	if err := requireImmutableLabels(s.immutableLabelKeys, labels); err != nil {
 		return nil, err
 	}
-	srcData := s.snapshots.DataPath(tenant, req.Snapshot)
+	srcData, err := s.snapshots.DataPath(tenant, req.Snapshot)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
 	snap, snapErr := s.snapshots.Get(tenant, req.Snapshot)
 	if snapErr != nil {
 		return nil, &StorageError{Code: ErrNotFound, Message: fmt.Sprintf("source snapshot %q not found", req.Snapshot)}
@@ -52,7 +55,10 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 			Mode:        snap.Mode,
 		}
 	}
-	cloneDir := s.volumes.Dir(tenant, req.Name)
+	cloneDir, err := s.volumes.Dir(tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
 
 	// Serialize concurrent creators of the same name (see CreateVolume).
 	unlock, err := s.volumes.Lock(ctx, tenant, req.Name)
@@ -71,13 +77,18 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("failed to create clone directory: %v", err)}
 	}
 
-	dstData := s.volumes.DataPath(tenant, req.Name)
+	dstData, err := s.volumes.DataPath(tenant, req.Name)
+	if err != nil {
+		return nil, &StorageError{Code: ErrInvalid, Message: err.Error()}
+	}
 	if err := s.btrfs.SubvolumeSnapshot(ctx, srcData, dstData, false); err != nil {
 		if isSubvolumeAlreadyExistsError(err) {
 			log.Warn().Err(err).Str("path", dstData).Msg("clone target already exists on disk")
 			return nil, &StorageError{Code: ErrAlreadyExists, Message: fmt.Sprintf("clone %q already exists on disk", req.Name)}
 		}
-		_ = os.RemoveAll(cloneDir)
+		if rmErr := os.RemoveAll(cloneDir); rmErr != nil {
+			log.Warn().Err(rmErr).Str("path", cloneDir).Msg("cleanup: failed to remove directory")
+		}
 		log.Error().Err(err).Msg("failed to create clone")
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
 	}
@@ -88,7 +99,9 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 			if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
 				log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
 			}
-			_ = os.RemoveAll(cloneDir)
+			if rmErr := os.RemoveAll(cloneDir); rmErr != nil {
+				log.Warn().Err(rmErr).Str("path", cloneDir).Msg("cleanup: failed to remove directory")
+			}
 			return nil, fmt.Errorf("qgroup limit failed: %w", err)
 		}
 	}
@@ -114,10 +127,12 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
 			log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
 		}
-		_ = os.RemoveAll(cloneDir)
+		if rmErr := os.RemoveAll(cloneDir); rmErr != nil {
+			log.Warn().Err(rmErr).Str("path", cloneDir).Msg("cleanup: failed to remove directory")
+		}
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 
-	log.Info().Str("tenant", tenant).Str("name", req.Name).Str("snapshot", req.Snapshot).Msg("clone created")
+	log.Ctx(ctx).Info().Str("name", req.Name).Str("snapshot", req.Snapshot).Msg("clone created")
 	return &vol, nil
 }

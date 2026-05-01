@@ -99,6 +99,9 @@ func (s *StorageIntegrationSuite) SetupSuite() {
 	taskDir := filepath.Join(s.mnt, config.TasksDir)
 	s.Require().NoError(os.MkdirAll(taskDir, 0o755))
 
+	tm, err := task.NewManager(taskDir, 0, 0)
+	s.Require().NoError(err)
+
 	s.storage = &Storage{
 		basePath:        s.mnt,
 		mountPoint:      s.mnt,
@@ -108,7 +111,7 @@ func (s *StorageIntegrationSuite) SetupSuite() {
 		tenants:         []string{"test"},
 		defaultDirMode:  0o755,
 		defaultDataMode: "2770",
-		tasks:           task.NewManager(taskDir, 0, 0),
+		tasks:           tm,
 		volumes:         meta.NewStore[VolumeMetadata](s.mnt),
 		snapshots:       meta.NewStore[SnapshotMetadata](s.mnt, config.SnapshotsDir),
 	}
@@ -556,7 +559,8 @@ func (s *StorageIntegrationSuite) TestTaskLoadFromDisk() {
 	writeTestJSONFile(s.T(), filepath.Join(taskDir, "stale-task-123.json"), &staleTask)
 
 	// create new TaskManager (triggers loadFromDisk)
-	tm := task.NewManager(taskDir, 0, 0)
+	tm, err := task.NewManager(taskDir, 0, 0)
+	s.Require().NoError(err)
 
 	// stale task should be marked failed
 	tsk, err := tm.Get("stale-task-123")
@@ -619,7 +623,8 @@ func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
 	writeTestJSONFile(s.T(), filepath.Join(taskDir, "stale-scrub.json"), &staleTask)
 
 	// create new TaskManager (simulates agent restart)
-	tm := task.NewManager(taskDir, 0, 0)
+	tm, err := task.NewManager(taskDir, 0, 0)
+	s.Require().NoError(err)
 
 	// stale scrub should be failed
 	tsk, err := tm.Get("stale-scrub")

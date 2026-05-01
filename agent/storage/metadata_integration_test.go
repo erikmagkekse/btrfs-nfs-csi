@@ -93,7 +93,9 @@ func (s *UtilsIntegrationSuite) TestStoreWriteAndRead() {
 	s.Assert().Equal(uint64(1024), got.SizeBytes)
 
 	// verify no .tmp remains
-	_, err = os.Stat(store.MetaPath("test", "testvol") + ".tmp")
+	metaPath, err := store.MetaPath("test", "testvol")
+	s.Require().NoError(err)
+	_, err = os.Stat(metaPath + ".tmp")
 	s.Assert().True(os.IsNotExist(err))
 }
 

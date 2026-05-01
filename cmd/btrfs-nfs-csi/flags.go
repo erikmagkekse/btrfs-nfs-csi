@@ -17,7 +17,7 @@ func labelFlag() cli.Flag {
 }
 
 func allFlag() cli.Flag {
-	return &cli.BoolFlag{Name: "all", Aliases: []string{"A"}, Usage: "show all (default: only created-by=cli)"}
+	return &cli.BoolFlag{Name: "all", Aliases: []string{"A"}, Usage: "show all (default: only resources created by the active identity)"}
 }
 
 func sortFlag() cli.Flag {
@@ -80,7 +80,7 @@ func buildListOpts(cmd *cli.Command) cliListOpts {
 	labels := splitLabelsFlag(cmd)
 	allSet := cmd.Bool("all")
 	if !allSet {
-		labels = append(labels, config.LabelCreatedBy+"="+config.IdentityCLI)
+		labels = append(labels, config.LabelCreatedBy+"="+apiClient.Identity())
 	}
 	return cliListOpts{
 		ListOpts: models.ListOpts{Labels: labels},

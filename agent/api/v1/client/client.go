@@ -13,6 +13,7 @@
 //   - AGENT_HTTP_CLIENT_PAGE_LIMIT  -- items per page (default 100)
 //   - AGENT_HTTP_CLIENT_PREFETCH    -- max pages to prefetch (default 8, 0=sequential)
 //   - AGENT_HTTP_CLIENT_PREFETCH_MB -- prefetch byte budget in MB (default 4, 0=unlimited)
+//   - AGENT_HTTP_CLIENT_TRACE_ID    -- custom trace ID sent as X-Trace-ID header
 //   - AGENT_CSI_IDENTITY            -- identity label value
 //
 // # Pagination
@@ -73,6 +74,7 @@ type ClientConfig struct {
 	Timeout       time.Duration `env:"AGENT_HTTP_CLIENT_TIMEOUT" envDefault:"30s"`
 	TLSSkipVerify bool          `env:"AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY"`
 	Identity      string        `env:"AGENT_CSI_IDENTITY"`
+	TraceID       string        `env:"AGENT_HTTP_CLIENT_TRACE_ID"`
 	PageLimit     int           `env:"AGENT_HTTP_CLIENT_PAGE_LIMIT" envDefault:"0"`
 	Prefetch      int           `env:"AGENT_HTTP_CLIENT_PREFETCH" envDefault:"8"`
 	PrefetchMB    int           `env:"AGENT_HTTP_CLIENT_PREFETCH_MB" envDefault:"4"`
@@ -105,6 +107,8 @@ type Client struct {
 	token         string
 	http          *http.Client
 	identity      string
+	traceID       string
+	whoami        *models.WhoamiResponse
 	pageLimit     int
 	prefetch      int
 	prefetchBytes int64
@@ -142,6 +146,11 @@ func newClient(url, token string, cfg ClientConfig) (*Client, error) {
 			return nil, err
 		}
 	}
+	if cfg.TraceID != "" {
+		if err := config.ValidateTraceID(cfg.TraceID); err != nil {
+			return nil, err
+		}
+	}
 	hc := cfg.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: cfg.Timeout}
@@ -154,6 +163,7 @@ func newClient(url, token string, cfg ClientConfig) (*Client, error) {
 		token:         token,
 		http:          hc,
 		identity:      cfg.Identity,
+		traceID:       cfg.TraceID,
 		pageLimit:     cfg.PageLimit,
 		prefetch:      cfg.Prefetch,
 		prefetchBytes: int64(cfg.PrefetchMB) * 1024 * 1024,
@@ -161,8 +171,27 @@ func newClient(url, token string, cfg ClientConfig) (*Client, error) {
 }
 
 // Identity returns the client's identity label value (e.g. "cli", "k8s").
+// This is the env-configured identity used to stamp `created-by` labels;
+// it can differ from the per-token identity returned by Whoami.
 func (c *Client) Identity() string {
 	return c.identity
+}
+
+// Whoami returns the cached caller info (tenant, role, identity, fingerprint).
+// Returns nil until Resolve succeeds.
+func (c *Client) Whoami() *models.WhoamiResponse {
+	return c.whoami
+}
+
+// Resolve fetches the caller's tenant, role, identity, and fingerprint via
+// /v1/whoami and caches them. Safe to call multiple times; later calls overwrite.
+func (c *Client) Resolve(ctx context.Context) error {
+	var resp models.WhoamiResponse
+	if err := c.do(ctx, http.MethodGet, "/v1/whoami", nil, &resp); err != nil {
+		return err
+	}
+	c.whoami = &resp
+	return nil
 }
 
 func (c *Client) ensureIdentity(labels map[string]string) map[string]string {
@@ -481,16 +510,6 @@ func (c *Client) CancelTask(ctx context.Context, id string) error {
 
 // --- Auth ---
 
-// Whoami returns the caller's own tenant, role, identity, and fingerprint.
-// GET /v1/whoami
-func (c *Client) Whoami(ctx context.Context) (*models.WhoamiResponse, error) {
-	var resp models.WhoamiResponse
-	if err := c.do(ctx, http.MethodGet, "/v1/whoami", nil, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
 // ListTokens returns the tokens configured for the caller's tenant (admin-only).
 // Tokens are represented by fingerprint only; never in plaintext.
 // GET /v1/tokens
@@ -667,6 +686,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, result a
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.traceID != "" {
+		req.Header.Set(config.HeaderTraceID, c.traceID)
+	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {

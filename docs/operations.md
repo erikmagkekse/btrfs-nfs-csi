@@ -251,8 +251,7 @@ btrfs-nfs-csi task get <id>
 btrfs-nfs-csi task cancel <id>
 btrfs-nfs-csi task create scrub
 btrfs-nfs-csi task create scrub -W           # wait for completion
-btrfs-nfs-csi task create test
-btrfs-nfs-csi task create test --sleep 10s -W
+btrfs-nfs-csi task create test --sleep 10s -W   # no-op smoke test, useful to verify task plumbing
 btrfs-nfs-csi stats
 btrfs-nfs-csi stats -o wide                  # per-device IO and error details
 btrfs-nfs-csi stats -w                       # watch stats live

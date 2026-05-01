@@ -14,6 +14,7 @@ var (
 	ValidLabelKey = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
 	ValidLabelVal = regexp.MustCompile(`^[a-zA-Z0-9._-]{0,128}$`)
 	ValidIdentity = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,32}$`)
+	ValidTraceID  = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 )
 
 const (
@@ -24,6 +25,8 @@ const (
 
 	IdentityCLI           = "cli"
 	IdentityK8sController = "k8s"
+
+	HeaderTraceID = "X-Trace-ID"
 )
 
 const (
@@ -33,6 +36,7 @@ const (
 
 const (
 	DataDir      = "data"
+	MetadataDir  = "metadata"
 	MetadataFile = "metadata.json"
 	SnapshotsDir = "snapshots"
 	TasksDir     = "tasks"
@@ -42,7 +46,7 @@ const (
 // create directly under AGENT_BASE_PATH. Tenant names are compared
 // case-insensitively because btrfs on Linux is case-sensitive but users
 // would otherwise be surprised by a mixed-case bypass.
-var ReservedTenantNames = []string{TasksDir, SnapshotsDir, DataDir, "metadata"}
+var ReservedTenantNames = []string{TasksDir, SnapshotsDir, DataDir, MetadataDir}
 
 // SoftReservedLabelKeys are server-managed labels. CLI and K8s integrations
 // reject these client-side for UX; Agent API consumers should use v1.Client
@@ -71,7 +75,14 @@ func ValidateName(name string) error {
 
 func ValidateIdentity(identity string) error {
 	if !ValidIdentity.MatchString(identity) {
-		return &ValidationError{Message: fmt.Sprintf("invalid identity: %q (must be 1-32 chars, only a-z A-Z 0-9 _ -)", identity)}
+		return &ValidationError{Message: fmt.Sprintf("invalid identity: %q (must match %s)", identity, ValidIdentity)}
+	}
+	return nil
+}
+
+func ValidateTraceID(id string) error {
+	if !ValidTraceID.MatchString(id) {
+		return &ValidationError{Message: fmt.Sprintf("invalid trace ID: %q (must match %s)", id, ValidTraceID)}
 	}
 	return nil
 }
@@ -170,6 +181,8 @@ type AgentConfig struct {
 	PaginationSnapshotTTL  time.Duration `env:"AGENT_API_PAGINATION_SNAPSHOT_TTL" envDefault:"30s"`
 	PaginationMaxSnapshots int           `env:"AGENT_API_PAGINATION_MAX_SNAPSHOTS" envDefault:"100"`
 	SwaggerEnabled         bool          `env:"AGENT_API_SWAGGER_ENABLED"`
+	TraceEnabled           bool          `env:"AGENT_API_TRACE_ENABLED" envDefault:"true"`
+	TraceAllowCustomID     bool          `env:"AGENT_API_TRACE_ALLOW_CUSTOM_ID"`
 }
 
 type ControllerConfig struct {

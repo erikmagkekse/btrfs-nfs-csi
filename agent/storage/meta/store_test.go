@@ -115,7 +115,8 @@ func TestStore_Delete(t *testing.T) {
 	s, _ := testStore(t)
 	s.Seed("t", "k1", &testMeta{Name: "bye"})
 
-	s.Delete("t", "k1")
+	assert.True(t, s.Delete("t", "k1"), "first delete should report loaded=true")
+	assert.False(t, s.Delete("t", "k1"), "second delete should report loaded=false")
 
 	_, err := s.Get("t", "k1")
 	require.Error(t, err)
@@ -170,18 +171,42 @@ func TestStore_ConcurrentAccess(t *testing.T) {
 
 func TestStore_Dir(t *testing.T) {
 	s := NewStore[testMeta]("/base")
-	assert.Equal(t, "/base/tenant/vol1", s.Dir("tenant", "vol1"))
+	dir, err := s.Dir("tenant", "vol1")
+	require.NoError(t, err)
+	assert.Equal(t, "/base/tenant/vol1", dir)
 
 	sSnap := NewStore[testMeta]("/base", "snapshots")
-	assert.Equal(t, "/base/tenant/snapshots/snap1", sSnap.Dir("tenant", "snap1"))
+	dir, err = sSnap.Dir("tenant", "snap1")
+	require.NoError(t, err)
+	assert.Equal(t, "/base/tenant/snapshots/snap1", dir)
+}
+
+func TestStore_Dir_RejectsNonLocalPath(t *testing.T) {
+	s := NewStore[testMeta]("/base")
+	cases := []struct{ tenant, name string }{
+		{"..", "vol"},
+		{"tenant", ".."},
+		{"tenant", "../escape"},
+		{"tenant", "/abs"},
+		{"", "vol"},
+		{"tenant", ""},
+	}
+	for _, tc := range cases {
+		_, err := s.Dir(tc.tenant, tc.name)
+		assert.Error(t, err, "tenant=%q name=%q", tc.tenant, tc.name)
+	}
 }
 
 func TestStore_MetaPath(t *testing.T) {
 	s := NewStore[testMeta]("/base")
-	assert.Equal(t, "/base/t/v/metadata.json", s.MetaPath("t", "v"))
+	p, err := s.MetaPath("t", "v")
+	require.NoError(t, err)
+	assert.Equal(t, "/base/t/v/metadata.json", p)
 }
 
 func TestStore_DataPath(t *testing.T) {
 	s := NewStore[testMeta]("/base")
-	assert.Equal(t, "/base/t/v/data", s.DataPath("t", "v"))
+	p, err := s.DataPath("t", "v")
+	require.NoError(t, err)
+	assert.Equal(t, "/base/t/v/data", p)
 }

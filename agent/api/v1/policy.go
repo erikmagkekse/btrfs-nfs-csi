@@ -80,10 +80,10 @@ func (p Policy) checkAllowedRoles(c *echo.Context, role models.TenantRole) error
 	if len(p.AllowedRoles) == 0 || slices.Contains(p.AllowedRoles, role) {
 		return nil
 	}
-	denialLog(c, denialRoleDenied).
-		Str("method", c.Request().Method).
-		Str("role", string(role)).
-		Msg("role denied")
+	// No dedicated log line: the access log emitted by MetricsMiddleware
+	// already carries reason=role_denied plus all caller fields and is
+	// strictly a superset of what we'd write here.
+	c.Set(ctxKeyDenial, denialRoleDenied)
 	return &storage.StorageError{
 		Code:    storage.ErrForbidden,
 		Message: "role \"" + string(role) + "\" not allowed for this operation",
@@ -92,11 +92,9 @@ func (p Policy) checkAllowedRoles(c *echo.Context, role models.TenantRole) error
 
 func denialLog(c *echo.Context, reason string) *zerolog.Event {
 	c.Set(ctxKeyDenial, reason)
-	return log.Warn().
+	return log.Ctx(c.Request().Context()).Warn().
 		Str("client", c.RealIP()).
-		Str("tenant", tenantOf(c)).
-		Str("path", c.Request().URL.Path).
-		Str("token_fingerprint", fingerprintOf(c))
+		Str("path", c.Request().URL.Path)
 }
 
 func rejectHardReservedLabels(labels map[string]string) error {

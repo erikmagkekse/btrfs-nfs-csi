@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/urfave/cli/v3"
 )
 
@@ -314,7 +315,14 @@ func taskCmd() *cli.Command {
 						sortBy = sortCreated
 					}
 					rev := !cmd.Bool("asc")
-					opts := buildListOpts(cmd)
+					opts := cliListOpts{
+						ListOpts: models.ListOpts{Labels: splitLabelsFlag(cmd)},
+						allSet:   cmd.Bool("all"),
+						labelSet: cmd.IsSet("label"),
+					}
+					if !opts.allSet {
+						opts.Labels = append(opts.Labels, config.LabelTenant+"="+apiClient.Whoami().Tenant)
+					}
 					return runWatch(ctx, cmd, func() error {
 						return listTasks(ctx, cmd, taskType, sortBy, rev, opts)
 					})

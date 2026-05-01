@@ -37,7 +37,10 @@ func (s *Storage) StartDefragment(ctx context.Context, tenant, volume, relPath s
 	if err := config.ValidateName(volume); err != nil {
 		return "", err
 	}
-	baseDataDir := s.volumes.DataPath(tenant, volume)
+	baseDataDir, err := s.volumes.DataPath(tenant, volume)
+	if err != nil {
+		return "", &config.ValidationError{Message: err.Error()}
+	}
 
 	target, err := resolveDefragTarget(baseDataDir, relPath)
 	if err != nil {

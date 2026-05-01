@@ -352,10 +352,13 @@ var (
 	timingLine string
 )
 
-func initClient(cmd *cli.Command) error {
+func initClient(ctx context.Context, cmd *cli.Command) error {
 	var err error
 	apiClient, err = agentclient.NewClient(cmd.String("agent-url"), cmd.String("agent-token"), config.IdentityCLI)
-	return err
+	if err != nil {
+		return err
+	}
+	return apiClient.Resolve(ctx)
 }
 
 func withCLIHooks(cmds ...*cli.Command) []*cli.Command {
@@ -366,7 +369,7 @@ func withCLIHooks(cmds ...*cli.Command) []*cli.Command {
 			&cli.StringFlag{Name: "output", Aliases: []string{"o"}, Value: outputTable, Usage: "output format: table, wide, json, json,wide"},
 		)
 		cmd.Before = func(ctx context.Context, c *cli.Command) (context.Context, error) {
-			if err := initClient(c); err != nil {
+			if err := initClient(ctx, c); err != nil {
 				return ctx, err
 			}
 			cmdStart = time.Now()
