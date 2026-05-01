@@ -13,15 +13,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 )
 
 const (
-	fileName       = "root_secret"
 	backupSuffix   = ".bak"
 	secretFileMode = 0o600
-	secretDirMode  = 0o700
 	entropyLen     = 512
 
 	// purposeFingerprintV1 is the HKDF info string for the fingerprint
@@ -36,10 +32,11 @@ type Manager struct {
 	fpKey []byte
 }
 
-// NewManager loads or creates basePath/metadata/root_secret and derives the
-// subkeys the agent needs. A primary/backup mismatch aborts startup.
-func NewManager(basePath string) (*Manager, error) {
-	root, err := loadOrCreate(basePath)
+// NewManager loads or creates the root secret at dir/name and derives the
+// subkeys the agent needs. A backup at dir/name.bak is kept in lockstep; a
+// primary/backup mismatch aborts startup.
+func NewManager(dir, name string) (*Manager, error) {
+	root, err := loadOrCreate(dir, name)
 	if err != nil {
 		return nil, err
 	}
@@ -63,17 +60,8 @@ func (m *Manager) Fingerprint(token string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func loadOrCreate(basePath string) ([]byte, error) {
-	dir := filepath.Join(basePath, config.MetadataDir)
-	if err := os.MkdirAll(dir, secretDirMode); err != nil {
-		return nil, fmt.Errorf("create metadata dir: %w", err)
-	}
-	// Tighten dir mode unconditionally: MkdirAll only sets it on creation, so
-	// a pre-existing dir from another tool may be world-readable.
-	if err := os.Chmod(dir, secretDirMode); err != nil {
-		return nil, fmt.Errorf("chmod metadata dir: %w", err)
-	}
-	primary := filepath.Join(dir, fileName)
+func loadOrCreate(dir, name string) ([]byte, error) {
+	primary := filepath.Join(dir, name)
 	backup := primary + backupSuffix
 
 	pData, pErr := readExisting(primary)

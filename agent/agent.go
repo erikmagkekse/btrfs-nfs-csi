@@ -7,7 +7,9 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -105,7 +107,14 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	e.Use(middleware.BodyLimit(1024 * 1024)) // 1MB
 	e.Use(v1.MetricsMiddleware())
 
-	secrets, err := secret.NewManager(cfg.BasePath)
+	metadataDir := filepath.Join(cfg.BasePath, config.MetadataDir)
+	if err := os.MkdirAll(metadataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create metadata dir: %w", err)
+	}
+	if err := os.Chmod(metadataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("chmod metadata dir: %w", err)
+	}
+	secrets, err := secret.NewManager(metadataDir, "root_secret")
 	if err != nil {
 		return nil, fmt.Errorf("init agent secrets: %w", err)
 	}
