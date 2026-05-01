@@ -92,21 +92,6 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 		return nil, fmt.Errorf("init storage: %w", err)
 	}
 
-	// echo + routes. Use a router that rejects auto-OPTIONS: Echo's default
-	// OptionsMethodHandler returns 204 + Allow without running middleware,
-	// letting unauthenticated callers enumerate the route table. We don't
-	// serve browser clients, so dropping CORS preflight is safe.
-	e := echo.NewWithConfig(echo.Config{
-		Router: echo.NewRouter(echo.RouterConfig{
-			OptionsMethodHandler: func(c *echo.Context) error {
-				return c.NoContent(http.StatusMethodNotAllowed)
-			},
-		}),
-	})
-	e.Use(v1.LoggerMiddleware())             // place per-request logger in ctx; must run before Metrics + Auth
-	e.Use(middleware.BodyLimit(1024 * 1024)) // 1MB
-	e.Use(v1.MetricsMiddleware())
-
 	metadataDir := filepath.Join(cfg.BasePath, config.MetadataDir)
 	if err := os.MkdirAll(metadataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create metadata dir: %w", err)
@@ -118,6 +103,21 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init agent secrets: %w", err)
 	}
+
+	// echo + routes. Use a router that rejects auto-OPTIONS: Echo's default
+	// OptionsMethodHandler returns 204 + Allow without running middleware,
+	// letting unauthenticated callers enumerate the route table. We don't
+	// serve browser clients, so dropping CORS preflight is safe.
+	e := echo.NewWithConfig(echo.Config{
+		Router: echo.NewRouter(echo.RouterConfig{
+			OptionsMethodHandler: func(c *echo.Context) error {
+				return c.NoContent(http.StatusMethodNotAllowed)
+			},
+		}),
+	})
+	e.Use(v1.LoggerMiddleware(secrets, cfg.TraceEnabled, cfg.TraceAllowCustomID))
+	e.Use(middleware.BodyLimit(1024 * 1024)) // 1MB
+	e.Use(v1.MetricsMiddleware())
 	tokens, err := v1.NewTokenSet(creds, secrets.Fingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("init token set: %w", err)

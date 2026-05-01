@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/secret"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -17,11 +19,30 @@ import (
 // (adding tenant, identity, fingerprint after auth) and downstream code can
 // pick it up with log.Ctx(ctx). Without this, UpdateContext would mutate the
 // global logger.
-func LoggerMiddleware() echo.MiddlewareFunc {
+//
+// When traceEnabled is true, every request gets a trace ID in logs and the
+// X-Trace-ID response header. Clients may supply their own via X-Trace-ID
+// request header if allowCustomID is true.
+func LoggerMiddleware(secrets *secret.Manager, traceEnabled, allowCustomID bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			req := c.Request()
 			l := log.Logger.With().Logger()
+
+			if traceEnabled {
+				traceID := ""
+				if allowCustomID {
+					if custom := req.Header.Get(config.HeaderTraceID); custom != "" && config.ValidTraceID.MatchString(custom) {
+						traceID = custom
+					}
+				}
+				if traceID == "" {
+					traceID = secrets.GenerateID(8)
+				}
+				l = l.With().Str("trace_id", traceID).Logger()
+				c.Response().Header().Set(config.HeaderTraceID, traceID)
+			}
+
 			c.SetRequest(req.WithContext(l.WithContext(req.Context())))
 			return next(c)
 		}

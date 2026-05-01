@@ -32,6 +32,9 @@
 | `AGENT_API_PAGINATION_SNAPSHOT_TTL` | `30s` | TTL for cursor-based pagination snapshots |
 | `AGENT_API_PAGINATION_MAX_SNAPSHOTS` | `100` | Max concurrent pagination snapshots |
 | `AGENT_API_SWAGGER_ENABLED` | `false` | Enable `GET /swagger.json` endpoint |
+| `AGENT_API_TRACE_ENABLED` | `true` | Generate a trace ID for every request (logged + returned as `X-Trace-ID` header) |
+| `AGENT_API_TRACE_ALLOW_CUSTOM_ID` | `false` | Accept client-provided trace ID via `X-Trace-ID` request header (validated: `[a-zA-Z0-9_-]{1,64}`) |
+| `LOG_FORMAT` | `console` | `json` for structured output (containers, Loki, Datadog), `console` for human-readable |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 
 ## API Client Environment Variables
@@ -46,6 +49,7 @@ Shared by CLI and all integrations (any `v1.Client` user).
 | `AGENT_HTTP_CLIENT_PAGE_LIMIT` | `0` | Items per page for auto-pagination (0 = pagination disabled) |
 | `AGENT_HTTP_CLIENT_PREFETCH` | `8` | Max pages to prefetch concurrently (`0` = sequential) |
 | `AGENT_HTTP_CLIENT_PREFETCH_MB` | `4` | Prefetch byte budget in MB (`0` = unlimited) |
+| `AGENT_HTTP_CLIENT_TRACE_ID` | - | Custom trace ID sent as `X-Trace-ID` header on every request (requires `AGENT_API_TRACE_ALLOW_CUSTOM_ID=true` on the agent) |
 
 ## CLI Environment Variables
 

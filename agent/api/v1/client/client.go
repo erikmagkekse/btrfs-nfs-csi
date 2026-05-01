@@ -13,6 +13,7 @@
 //   - AGENT_HTTP_CLIENT_PAGE_LIMIT  -- items per page (default 100)
 //   - AGENT_HTTP_CLIENT_PREFETCH    -- max pages to prefetch (default 8, 0=sequential)
 //   - AGENT_HTTP_CLIENT_PREFETCH_MB -- prefetch byte budget in MB (default 4, 0=unlimited)
+//   - AGENT_HTTP_CLIENT_TRACE_ID    -- custom trace ID sent as X-Trace-ID header
 //   - AGENT_CSI_IDENTITY            -- identity label value
 //
 // # Pagination
@@ -73,6 +74,7 @@ type ClientConfig struct {
 	Timeout       time.Duration `env:"AGENT_HTTP_CLIENT_TIMEOUT" envDefault:"30s"`
 	TLSSkipVerify bool          `env:"AGENT_HTTP_CLIENT_TLS_SKIP_VERIFY"`
 	Identity      string        `env:"AGENT_CSI_IDENTITY"`
+	TraceID       string        `env:"AGENT_HTTP_CLIENT_TRACE_ID"`
 	PageLimit     int           `env:"AGENT_HTTP_CLIENT_PAGE_LIMIT" envDefault:"0"`
 	Prefetch      int           `env:"AGENT_HTTP_CLIENT_PREFETCH" envDefault:"8"`
 	PrefetchMB    int           `env:"AGENT_HTTP_CLIENT_PREFETCH_MB" envDefault:"4"`
@@ -105,6 +107,7 @@ type Client struct {
 	token         string
 	http          *http.Client
 	identity      string
+	traceID       string
 	whoami        *models.WhoamiResponse
 	pageLimit     int
 	prefetch      int
@@ -143,6 +146,9 @@ func newClient(url, token string, cfg ClientConfig) (*Client, error) {
 			return nil, err
 		}
 	}
+	if cfg.TraceID != "" && !config.ValidTraceID.MatchString(cfg.TraceID) {
+		return nil, fmt.Errorf("invalid trace ID: %q (must be 1-64 chars, only a-z A-Z 0-9 _ -)", cfg.TraceID)
+	}
 	hc := cfg.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: cfg.Timeout}
@@ -155,6 +161,7 @@ func newClient(url, token string, cfg ClientConfig) (*Client, error) {
 		token:         token,
 		http:          hc,
 		identity:      cfg.Identity,
+		traceID:       cfg.TraceID,
 		pageLimit:     cfg.PageLimit,
 		prefetch:      cfg.Prefetch,
 		prefetchBytes: int64(cfg.PrefetchMB) * 1024 * 1024,
@@ -677,6 +684,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, result a
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.traceID != "" {
+		req.Header.Set(config.HeaderTraceID, c.traceID)
+	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {

@@ -38,10 +38,15 @@ func main() {
 		}
 	}
 	zerolog.SetGlobalLevel(level)
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{
-		Out:        os.Stderr,
-		TimeFormat: time.RFC3339,
-	}).With().Timestamp().Logger()
+	switch os.Getenv("LOG_FORMAT") {
+	case "json":
+		log.Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
+	default:
+		log.Logger = zerolog.New(zerolog.ConsoleWriter{
+			Out:        os.Stderr,
+			TimeFormat: time.RFC3339,
+		}).With().Timestamp().Logger()
+	}
 
 	app := &cli.Command{
 		Name:  "btrfs-nfs-csi",

@@ -4,6 +4,9 @@
 
 Per-request audit access log plus default-filter, CodeQL fixes, and logging hardening. Final lap before the project is replaced by ButterStore (see `RELEASE.md`).
 
+### Features
+- Add request tracing and structured JSON log output (#163)
+
 ### Improvements
 - Stamp caller identity onto agent request and event logs (#160)
 - Silence CodeQL go/path-injection false positives (#157)
