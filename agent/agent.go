@@ -7,7 +7,9 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -71,11 +73,24 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	}
 
 	// storage layer
-	store := storage.New(
-		cfg.BasePath, cfg.QuotaEnabled, exp, tenantNames,
-		cfg.DefaultDirMode, cfg.DefaultDataMode, cfg.BtrfsBin, cfg.ImmutableLabels,
-		cfg.TaskMaxConcurrent, cfg.TaskDefaultTimeout, cfg.TaskScrubTimeout, cfg.TaskBalanceTimeout, cfg.TaskPollInterval,
-	)
+	store, err := storage.New(storage.Config{
+		BasePath:           cfg.BasePath,
+		QuotaEnabled:       cfg.QuotaEnabled,
+		Exporter:           exp,
+		Tenants:            tenantNames,
+		DefaultDirMode:     cfg.DefaultDirMode,
+		DefaultDataMode:    cfg.DefaultDataMode,
+		BtrfsBin:           cfg.BtrfsBin,
+		ImmutableLabels:    cfg.ImmutableLabels,
+		TaskMaxConcurrent:  cfg.TaskMaxConcurrent,
+		TaskDefaultTimeout: cfg.TaskDefaultTimeout,
+		TaskScrubTimeout:   cfg.TaskScrubTimeout,
+		TaskBalanceTimeout: cfg.TaskBalanceTimeout,
+		TaskPollInterval:   cfg.TaskPollInterval,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("init storage: %w", err)
+	}
 
 	// echo + routes. Use a router that rejects auto-OPTIONS: Echo's default
 	// OptionsMethodHandler returns 204 + Allow without running middleware,
@@ -92,7 +107,14 @@ func NewAgent(cfg *config.AgentConfig, version, commit string) (*Agent, error) {
 	e.Use(middleware.BodyLimit(1024 * 1024)) // 1MB
 	e.Use(v1.MetricsMiddleware())
 
-	secrets, err := secret.NewManager(cfg.BasePath)
+	metadataDir := filepath.Join(cfg.BasePath, config.MetadataDir)
+	if err := os.MkdirAll(metadataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create metadata dir: %w", err)
+	}
+	if err := os.Chmod(metadataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("chmod metadata dir: %w", err)
+	}
+	secrets, err := secret.NewManager(metadataDir, "root_secret")
 	if err != nil {
 		return nil, fmt.Errorf("init agent secrets: %w", err)
 	}
@@ -163,24 +185,38 @@ func Run(version, commit string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	a.Start(ctx)
+	srvErr, err := a.Start(ctx)
+	if err != nil {
+		return err
+	}
 
-	<-ctx.Done()
-	log.Info().Msg("shutting down")
-	return nil
+	select {
+	case <-ctx.Done():
+		log.Info().Msg("shutting down")
+		return nil
+	case err := <-srvErr:
+		return fmt.Errorf("agent server failed: %w", err)
+	}
 }
 
-func (a *Agent) Start(ctx context.Context) {
+// Start launches the metrics server, background workers, and the HTTP/HTTPS
+// agent server. The listener is bound synchronously, so a bind failure is
+// returned as an error. The returned channel emits a single error if the
+// server exits unexpectedly (anything other than http.ErrServerClosed) and
+// is closed once the server goroutine returns.
+func (a *Agent) Start(ctx context.Context) (<-chan error, error) {
 	startMetricsServer(a.cfg.MetricsAddr)
 
 	a.store.StartWorkers(ctx, a.cfg.UsageInterval, a.cfg.NFSReconcileInterval, a.cfg.DeviceIOInterval, a.cfg.DeviceStatsInterval, a.cfg.TaskCleanupInterval)
 
 	ln, err := net.Listen("tcp", a.cfg.ListenAddr)
 	if err != nil {
-		log.Fatal().Err(err).Str("addr", a.cfg.ListenAddr).Msg("failed to bind listen address")
+		return nil, fmt.Errorf("bind listen address %q: %w", a.cfg.ListenAddr, err)
 	}
 
+	errCh := make(chan error, 1)
 	go func() {
+		defer close(errCh)
 		var srvErr error
 		// MaxHeaderBytes shrinks per-connection header buffer from Go's 1 MiB
 		// default. ReadHeaderTimeout caps slowloris-style open connections
@@ -209,9 +245,10 @@ func (a *Agent) Start(ctx context.Context) {
 			srvErr = s.Serve(ln)
 		}
 		if srvErr != nil && srvErr != http.ErrServerClosed {
-			log.Fatal().Err(srvErr).Msg("agent server failed")
+			errCh <- srvErr
 		}
 	}()
+	return errCh, nil
 }
 
 // parseTenants parses comma-separated `name:token[:role[:identity]]`

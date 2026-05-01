@@ -4,13 +4,10 @@
 
 Per-request audit access log plus default-filter, CodeQL fixes, and logging hardening. Final lap before the project is replaced by ButterStore (see `RELEASE.md`).
 
-### Security
-- Drop Authorization header trace log on auth failure (#161)
-
 ### Improvements
 - Stamp caller identity onto agent request and event logs (#160)
 - Silence CodeQL go/path-injection false positives (#157)
-- Log ioctl errors in metadata immutable toggle (#161)
+- Tighten logging and error handling (#161)
 
 ### Bug Fixes
 - Honour AGENT_CSI_IDENTITY in default list filter (#158)
