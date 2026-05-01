@@ -1,6 +1,6 @@
 # Release v0.11.1
 
-**Previous: v0.11.0** | **Date: 2026-04-30**
+**Previous: v0.11.0** | **Date: 2026-05-01**
 
 Per-request audit access log with caller identity, plus a logging hardening pass that closes a token-leak path and surfaces previously silent errors. CLI default list filter now follows `AGENT_CSI_IDENTITY`. No breaking changes.
 
