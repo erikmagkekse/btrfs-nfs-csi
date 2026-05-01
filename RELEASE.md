@@ -12,13 +12,14 @@ Per-request audit access log with caller identity, plus a logging hardening pass
 
 ### Per-request audit access log
 
-Every API call produces one access log line with full caller identity:
+Every API call produces an access log line with full caller identity, and any storage events emitted during the call inherit the same fields. A volume create from the CLI looks like this:
 
 ```
-INF request method=POST path=/v1/volumes code=201 took=9.4ms tenant=ops role=user identity=ci-bot token_fingerprint=ab12...e1f4 client=10.0.0.5 user_agent=btrfs-nfs-csi-cli/0.11.1
+INF volume created name=my-vol path=/export/data/ops/my-vol tenant=ops role=user identity=cli token_fingerprint=ab12...e1f4
+INF request method=POST path=/v1/volumes/my-vol code=201 took=15.2ms tenant=ops role=user identity=cli token_fingerprint=ab12...e1f4 client=10.0.0.5 user_agent=btrfs-nfs-csi-cli/0.11.1
 ```
 
-Storage events inherit the same caller fields. Level by status: 5xx → error, 4xx → warn, 2xx/3xx → info. `/healthz` is skipped. To trace every action a token took: `grep token_fingerprint=ab12 access.log`.
+Level by status: 5xx → error, 4xx → warn, 2xx/3xx → info. `/healthz` is skipped. To trace every action a token took: `grep token_fingerprint=ab12 access.log`.
 
 ### Default list filter follows the active identity
 
