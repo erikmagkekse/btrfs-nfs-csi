@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/api/v1/models"
+	"github.com/erikmagkekse/btrfs-nfs-csi/agent/secret"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/labstack/echo/v5"
@@ -17,6 +18,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func testSecrets(t *testing.T) *secret.Manager {
+	t.Helper()
+	m, err := secret.NewManager(t.TempDir(), "test_secret")
+	require.NoError(t, err)
+	return m
+}
 
 func init() {
 	zerolog.DefaultContextLogger = &log.Logger
@@ -610,7 +618,7 @@ func TestMetricsMiddleware_AccessLogIncludesAuthFields(t *testing.T) {
 	}
 
 	e := echo.New()
-	e.Use(LoggerMiddleware())
+	e.Use(LoggerMiddleware(testSecrets(t), true, false))
 	e.Use(MetricsMiddleware())
 	api := e.Group("/v1", AuthMiddleware(tokensFromMap(t, tenants)))
 	api.GET("/whoami", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
@@ -643,7 +651,7 @@ func TestMetricsMiddleware_HealthzNotLogged(t *testing.T) {
 	defer func() { log.Logger = orig }()
 
 	e := echo.New()
-	e.Use(LoggerMiddleware())
+	e.Use(LoggerMiddleware(testSecrets(t), true, false))
 	e.Use(MetricsMiddleware())
 	e.GET("/healthz", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
 	e.GET("/v1/whatever", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
@@ -681,7 +689,7 @@ func TestStorageEventLogInheritsAuthFields(t *testing.T) {
 	}
 
 	e := echo.New()
-	e.Use(LoggerMiddleware())
+	e.Use(LoggerMiddleware(testSecrets(t), true, false))
 	api := e.Group("/v1", AuthMiddleware(tokensFromMap(t, tenants)))
 	api.POST("/volumes", func(c *echo.Context) error {
 		// Mirror what agent/storage/volume.go does after CreateVolume.
@@ -720,7 +728,7 @@ func TestMetricsMiddleware_NotFoundLogsRealStatusAndUserAgent(t *testing.T) {
 	defer func() { log.Logger = orig }()
 
 	e := echo.New()
-	e.Use(LoggerMiddleware())
+	e.Use(LoggerMiddleware(testSecrets(t), true, false))
 	e.Use(MetricsMiddleware())
 	e.GET("/known", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
 

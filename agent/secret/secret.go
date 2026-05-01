@@ -9,10 +9,12 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 )
 
 const (
@@ -30,6 +32,7 @@ const (
 // not retained after construction.
 type Manager struct {
 	fpKey []byte
+	idCtr atomic.Uint64
 }
 
 // NewManager loads or creates the root secret at dir/name and derives the
@@ -58,6 +61,23 @@ func (m *Manager) Fingerprint(token string) string {
 	h := hmac.New(sha256.New, m.fpKey)
 	h.Write([]byte(token))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// GenerateID returns a hex ID of n bytes (2*n hex chars) derived from
+// HMAC(key, counter). No syscalls, no entropy pool, safe for high-frequency
+// use. n is clamped to [1, 32].
+func (m *Manager) GenerateID(n int) string {
+	if n < 1 {
+		n = 1
+	} else if n > 32 {
+		n = 32
+	}
+	var buf [8]byte
+	binary.LittleEndian.PutUint64(buf[:], m.idCtr.Add(1))
+	h := hmac.New(sha256.New, m.fpKey)
+	h.Write(buf[:])
+	var digest [32]byte
+	return hex.EncodeToString(h.Sum(digest[:0])[:n])
 }
 
 func loadOrCreate(dir, name string) ([]byte, error) {

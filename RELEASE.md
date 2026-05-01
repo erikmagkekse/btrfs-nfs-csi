@@ -21,6 +21,17 @@ INF request method=POST path=/v1/volumes/my-vol code=201 took=15.2ms tenant=ops 
 
 Level by status: 5xx → error, 4xx → warn, 2xx/3xx → info. `/healthz` is skipped. To trace every action a token took: `grep token_fingerprint=ab12 access.log`.
 
+### Per-request trace IDs
+
+Every request receives a unique `X-Trace-ID` response header for log correlation. IDs are HMAC-derived (no syscalls, no entropy pool). Clients can supply their own ID via the `X-Trace-ID` request header when `AGENT_API_TRACE_ALLOW_CUSTOM_ID=true`.
+
+```bash
+$ curl -s -D - http://agent:8080/v1/volumes -H "Authorization: Bearer $TOKEN" -H "X-Trace-ID: debug-42"
+X-Trace-Id: debug-42
+```
+
+All log lines for that request carry `trace_id=debug-42`. Grep to follow one request through the entire call stack.
+
 ### Default list filter follows the active identity
 
 The CLI used to hardcode `created-by=cli` regardless of `AGENT_CSI_IDENTITY`. It now follows the configured identity. `--all` / `-A` still bypasses.
@@ -45,6 +56,7 @@ The CLI used to hardcode `created-by=cli` regardless of `AGENT_CSI_IDENTITY`. It
 - Task cleanup retries failed file deletions instead of leaving ghost tasks behind (#161).
 - Initialisation, listen-bind, and server-runtime failures shut down through the normal error path instead of `os.Exit` from inside library code (#161).
 - Failed rollback of half-created volumes, snapshots, or clones is logged (#161).
+- `LOG_FORMAT=json` for structured output in container environments (#163).
 
 ## Documentation
 
@@ -63,7 +75,8 @@ Drop-in from v0.11.0. Bump the image tag to `0.11.1`.
 
 - **Kubernetes CSI users:** no action required.
 - **CLI users with a custom identity:** drop any `--all` workaround, the default now matches your identity.
-- **Operators / log shippers:** expect one info-level access log line per authenticated API call. `/healthz` polling does not log. Set `LOG_LEVEL=warn` to silence the success path.
+- **Operators / log shippers:** expect one info-level access log line per authenticated API call with a `trace_id` field. `/healthz` polling does not log. Set `LOG_LEVEL=warn` to silence the success path. To disable trace IDs: `AGENT_API_TRACE_ENABLED=false`. For structured JSON logs: `LOG_FORMAT=json`.
+- **API consumers:** responses now include an `X-Trace-ID` header. Set `AGENT_HTTP_CLIENT_TRACE_ID` to inject a custom ID for cross-system correlation.
 
 ---
 
