@@ -121,11 +121,7 @@ func listTokens(ctx context.Context, cmd *cli.Command) error {
 		w := tab()
 		_, _ = fmt.Fprintln(w, "ROLE\tIDENTITY\tFINGERPRINT")
 		for _, tok := range resp.Tokens {
-			id := tok.Identity
-			if id == "" {
-				id = "-"
-			}
-			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", tok.Role, id, shortFP(tok.Fingerprint, wide))
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", tok.Role, dash(tok.Identity), shortFP(tok.Fingerprint, wide))
 		}
 		_ = w.Flush()
 	})
