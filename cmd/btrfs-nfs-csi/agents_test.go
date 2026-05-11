@@ -112,7 +112,7 @@ func TestTLSLabel(t *testing.T) {
 func TestConfig_ActiveReturnsFalseWhenCurrentAgentMissing(t *testing.T) {
 	cfg := &Config{
 		CurrentAgent: "ghost",
-		Agents:  map[string]Agent{"prod": {URL: "u", Token: "t"}},
+		Agents:       map[string]Agent{"prod": {URL: "u", Token: "t"}},
 	}
 	_, ok := cfg.Active()
 	assert.False(t, ok, "Current names an agent that does not exist")

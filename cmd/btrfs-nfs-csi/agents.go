@@ -417,4 +417,3 @@ func verifyNote(e verifyEntry) string {
 		return ""
 	}
 }
-
