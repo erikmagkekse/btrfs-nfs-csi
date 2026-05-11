@@ -361,11 +361,11 @@ func initClient(ctx context.Context, cmd *cli.Command) error {
 	if resolved.URL == "" || resolved.Token == "" {
 		// Per-field merge so explicit --agent-url or AGENT_URL still
 		// wins when a saved agent is also present.
-		store, err := loadAgents()
+		cfg, err := loadConfig()
 		if err != nil {
 			return err
 		}
-		if active, ok := store.Active(); ok {
+		if active, ok := cfg.Active(); ok {
 			if resolved.URL == "" {
 				resolved.URL = active.URL
 			}

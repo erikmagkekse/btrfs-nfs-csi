@@ -79,6 +79,7 @@ btrfs-nfs-csi is not a distributed storage system. If you need data replication 
 - **HA.** DRBD + Pacemaker active/passive failover.
 
 ### CLI
+- **Saved agents.** `agents login` once, no more `AGENT_URL`/`AGENT_TOKEN` exports.
 - **Watch mode** (`-w`). Auto-refreshing output for any list/get command.
 - **Column filter** (`-c name,size,used`). Show only what you need.
 - **Label filter** (`-l env=prod`). Filter resources by label.
@@ -126,10 +127,12 @@ AGENT_BLOCK_DISK=/dev/sdb curl -fsSL \
 
 ### 2. Use the CLI
 
+Log into the agent once, the CLI saves the endpoint to `~/.btrfs-nfs-csi/config.json` (file `0600`) and uses it as the default for every subsequent command:
+
 ```bash
-export AGENT_URL=http://10.0.0.5:8080
-export AGENT_TOKEN=your-tenant-token    # from step 1
-# export AGENT_CSI_IDENTITY=cli         # optional, default: cli
+btrfs-nfs-csi agents login prod --url http://10.0.0.5:8080
+# enter token at the no-echo prompt, or pipe it in (Docker-style):
+# echo "$AGENT_TOKEN" | btrfs-nfs-csi agents login prod --url http://10.0.0.5:8080
 ```
 
 ```bash
@@ -138,6 +141,8 @@ btrfs-nfs-csi volume list
 btrfs-nfs-csi snapshot create my-app before-deploy
 btrfs-nfs-csi stats
 ```
+
+For one-off shells or CI, `AGENT_URL` and `AGENT_TOKEN` env vars (or `--agent-url`/`--agent-token` flags) still work and take precedence over the saved agent. See [Operations: Saved Agents](docs/operations.md#saved-agents) for `agents ls/use/verify`.
 
 That's it. The agent manages btrfs subvolumes, NFS exports, and quotas. The CLI talks to the agent via REST API. Everything else (container orchestrator integrations, automation, custom tooling) builds on top.
 

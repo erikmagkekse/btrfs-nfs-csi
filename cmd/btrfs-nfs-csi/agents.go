@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -29,106 +27,6 @@ type Agent struct {
 	Role          models.TenantRole `json:"role,omitempty"`
 	Fingerprint   string            `json:"fingerprint,omitempty"`
 	TLSSkipVerify bool              `json:"tls_skip_verify,omitempty"`
-}
-
-type AgentStore struct {
-	Current string           `json:"current,omitempty"`
-	Agents  map[string]Agent `json:"agents,omitempty"`
-}
-
-func (s *AgentStore) Active() (Agent, bool) {
-	if s == nil || s.Current == "" {
-		return Agent{}, false
-	}
-	a, ok := s.Agents[s.Current]
-	return a, ok
-}
-
-// agentsPath honours BTRFS_NFS_CSI_AGENTS_FILE so tests and per-project
-// profiles can redirect away from the default $HOME location.
-func agentsPath() (string, error) {
-	if override := os.Getenv("BTRFS_NFS_CSI_AGENTS_FILE"); override != "" {
-		return override, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("locate home directory: %w", err)
-	}
-	return filepath.Join(home, ".btrfs-nfs-csi", "agents.json"), nil
-}
-
-// loadAgents treats a missing file as an empty store so first-run is
-// indistinguishable from "no agents configured".
-func loadAgents() (*AgentStore, error) {
-	path, err := agentsPath()
-	if err != nil {
-		return nil, err
-	}
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return &AgentStore{Agents: map[string]Agent{}}, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
-	}
-	var s AgentStore
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	if s.Agents == nil {
-		s.Agents = map[string]Agent{}
-	}
-	return &s, nil
-}
-
-// save writes atomically with 0600 + 0700 because the file holds bearer
-// tokens in plaintext.
-func (s *AgentStore) save() error {
-	path, err := agentsPath()
-	if err != nil {
-		return err
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
-	}
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode agents: %w", err)
-	}
-	tmp, err := os.CreateTemp(dir, "agents-*.json.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp: %w", err)
-	}
-	tmpName := tmp.Name()
-	cleanup := true
-	defer func() {
-		if cleanup {
-			_ = os.Remove(tmpName)
-		}
-	}()
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("chmod temp: %w", err)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp: %w", err)
-	}
-	// rename is atomic, but without fsync the new bytes can be lost on
-	// power loss while the directory entry already points at them.
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("sync temp: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("rename into place: %w", err)
-	}
-	cleanup = false
-	return nil
 }
 
 // newAgentClient layers per-agent settings on top of AGENT_HTTP_CLIENT_*
@@ -223,12 +121,12 @@ func agentLogin(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("verify against %s: %w", url, err)
 	}
 
-	store, err := loadAgents()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 	who := client.Whoami()
-	store.Agents[name] = Agent{
+	cfg.Agents[name] = Agent{
 		URL:           url,
 		Token:         token,
 		Identity:      identity,
@@ -237,8 +135,8 @@ func agentLogin(ctx context.Context, cmd *cli.Command) error {
 		Role:          who.Role,
 		Fingerprint:   who.Fingerprint,
 	}
-	store.Current = name
-	if err := store.save(); err != nil {
+	cfg.CurrentAgent = name
+	if err := cfg.save(); err != nil {
 		return err
 	}
 	fmt.Printf("logged in to %s as tenant %q (role=%s, identity=%s)\n", url, who.Tenant, who.Role, identity)
@@ -247,29 +145,29 @@ func agentLogin(ctx context.Context, cmd *cli.Command) error {
 }
 
 func agentLogout(_ context.Context, cmd *cli.Command) error {
-	store, err := loadAgents()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 	name := cmd.Args().First()
 	if name == "" {
-		name = store.Current
+		name = cfg.CurrentAgent
 	}
 	if name == "" {
 		return errors.New("no active agent and no name given")
 	}
-	if _, ok := store.Agents[name]; !ok {
+	if _, ok := cfg.Agents[name]; !ok {
 		return fmt.Errorf("agent %q not found", name)
 	}
-	delete(store.Agents, name)
-	if store.Current == name {
-		store.Current = ""
+	delete(cfg.Agents, name)
+	if cfg.CurrentAgent == name {
+		cfg.CurrentAgent = ""
 	}
-	if err := store.save(); err != nil {
+	if err := cfg.save(); err != nil {
 		return err
 	}
 	fmt.Printf("removed agent %q\n", name)
-	if store.Current == "" && len(store.Agents) > 0 {
+	if cfg.CurrentAgent == "" && len(cfg.Agents) > 0 {
 		fmt.Fprintln(os.Stderr, "warning: no active agent, pick one with `btrfs-nfs-csi agents use <name>`")
 	}
 	return nil
@@ -289,16 +187,16 @@ type agentListEntry struct {
 }
 
 type agentListOutput struct {
-	Current string           `json:"current,omitempty"`
-	Agents  []agentListEntry `json:"agents"`
+	CurrentAgent string           `json:"current_agent,omitempty"`
+	Agents       []agentListEntry `json:"agents"`
 }
 
 func agentList(_ context.Context, cmd *cli.Command) error {
-	store, err := loadAgents()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	if len(store.Agents) == 0 {
+	if len(cfg.Agents) == 0 {
 		if isJSON(cmd) {
 			return output(cmd, agentListOutput{Agents: []agentListEntry{}}, nil)
 		}
@@ -306,13 +204,13 @@ func agentList(_ context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	names := slices.Sorted(maps.Keys(store.Agents))
+	names := slices.Sorted(maps.Keys(cfg.Agents))
 	entries := make([]agentListEntry, len(names))
 	for i, name := range names {
-		a := store.Agents[name]
+		a := cfg.Agents[name]
 		entries[i] = agentListEntry{
 			Name:          name,
-			Active:        name == store.Current,
+			Active:        name == cfg.CurrentAgent,
 			URL:           a.URL,
 			Identity:      a.Identity,
 			Tenant:        a.Tenant,
@@ -322,7 +220,7 @@ func agentList(_ context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	return output(cmd, agentListOutput{Current: store.Current, Agents: entries}, func() {
+	return output(cmd, agentListOutput{CurrentAgent: cfg.CurrentAgent, Agents: entries}, func() {
 		wide := isWide(cmd)
 		w := tab()
 		if wide {
@@ -359,15 +257,15 @@ func agentUse(_ context.Context, cmd *cli.Command) error {
 	if name == "" {
 		return errors.New("missing agent name (usage: btrfs-nfs-csi agents use <name>)")
 	}
-	store, err := loadAgents()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
-	if _, ok := store.Agents[name]; !ok {
+	if _, ok := cfg.Agents[name]; !ok {
 		return fmt.Errorf("agent %q not found", name)
 	}
-	store.Current = name
-	if err := store.save(); err != nil {
+	cfg.CurrentAgent = name
+	if err := cfg.save(); err != nil {
 		return err
 	}
 	fmt.Printf("switched to agent %q\n", name)
@@ -400,7 +298,7 @@ type verifyOutput struct {
 }
 
 func agentVerify(ctx context.Context, cmd *cli.Command) error {
-	store, err := loadAgents()
+	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
@@ -408,23 +306,23 @@ func agentVerify(ctx context.Context, cmd *cli.Command) error {
 	var names []string
 	switch {
 	case cmd.Bool("all"):
-		if len(store.Agents) == 0 {
+		if len(cfg.Agents) == 0 {
 			if isJSON(cmd) {
 				return output(cmd, verifyOutput{Results: []verifyEntry{}}, nil)
 			}
 			fmt.Fprintln(os.Stderr, "no agents configured")
 			return nil
 		}
-		names = slices.Sorted(maps.Keys(store.Agents))
+		names = slices.Sorted(maps.Keys(cfg.Agents))
 	default:
 		name := cmd.Args().First()
 		if name == "" {
-			name = store.Current
+			name = cfg.CurrentAgent
 		}
 		if name == "" {
 			return errors.New("no active agent and no name given (use --all to verify every saved agent)")
 		}
-		if _, ok := store.Agents[name]; !ok {
+		if _, ok := cfg.Agents[name]; !ok {
 			return fmt.Errorf("agent %q not found", name)
 		}
 		names = []string{name}
@@ -434,7 +332,7 @@ func agentVerify(ctx context.Context, cmd *cli.Command) error {
 	var wg sync.WaitGroup
 	for i, name := range names {
 		wg.Go(func() {
-			entries[i] = checkAgent(ctx, name, store.Agents[name], name == store.Current)
+			entries[i] = checkAgent(ctx, name, cfg.Agents[name], name == cfg.CurrentAgent)
 		})
 	}
 	wg.Wait()

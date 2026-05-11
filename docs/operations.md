@@ -194,9 +194,24 @@ btrfs-nfs-csi task create balance --dconvert=raid1 --mconvert=raid1 -W
 btrfs-nfs-csi task create balance --ddevid=3 --mdevid=3 -W
 ```
 
+## Saved Agents
+
+Saved agent endpoints, so the CLI does not need `AGENT_URL`/`AGENT_TOKEN` in every shell. `agents login <name> --url ...` verifies the token via `/v1/whoami` and persists it to `~/.btrfs-nfs-csi/config.json` (file `0600`, dir `0700`). Token reads from no-echo prompt or stdin pipe. Subsequent CLI commands fall back per field to the active entry.
+
+```bash
+echo "$TOKEN" | btrfs-nfs-csi agents login prod --url https://agent.example.com:8080
+btrfs-nfs-csi agents ls
+btrfs-nfs-csi agents use prod
+btrfs-nfs-csi volume list                  # no env vars needed
+btrfs-nfs-csi agents verify --all
+```
+
+Subcommands: `login`, `logout [<name>]`, `ls` (`-o wide`/`-o json`), `use <name>`, `verify [<name>] [--all]`. Precedence: flag > env > active entry. `agents login --tls-skip-verify` persists a per-agent TLS toggle for self-signed endpoints. Token is never written to any stdout, only the on-disk file. Override the path with `BTRFS_NFS_CSI_CONFIG_FILE`.
+
 ## More CLI examples
 
 ```bash
+# When no agent is saved, fall back to env vars:
 export AGENT_URL=http://10.0.0.5:8080
 export AGENT_TOKEN=changeme
 export AGENT_CSI_IDENTITY=cli              # optional, default: cli
