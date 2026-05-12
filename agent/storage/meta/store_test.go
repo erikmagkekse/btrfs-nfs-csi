@@ -153,14 +153,12 @@ func TestStore_ConcurrentAccess(t *testing.T) {
 	require.NoError(t, os.MkdirAll(entryDir, 0o755))
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
+	for i := range 100 {
+		wg.Go(func() {
 			m := &testMeta{Name: "concurrent", Value: i}
 			_ = s.Store("t", "k", m)
 			_, _ = s.Get("t", "k")
-		}(i)
+		})
 	}
 	wg.Wait()
 
