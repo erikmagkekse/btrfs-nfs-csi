@@ -1,82 +1,65 @@
-# Release v0.11.1
+# Release v0.11.2
 
-**Previous: v0.11.0** | **Date: 2026-05-01**
+**Previous: v0.11.1** | **Date: 2026-05-12**
 
-Per-request audit access log with caller identity, plus a logging hardening pass that closes a token-leak path and surfaces previously silent errors. CLI default list filter now follows `AGENT_CSI_IDENTITY`. No breaking changes.
+CLI saved-agent endpoints so the bearer token no longer has to live in shell history, plus a Go 1.26.3 toolchain bump that pulls in the GO-2026-4918 stdlib fix and refreshes the Kubernetes client family to v0.36.0. No breaking changes.
 
-> **`btrfs-nfs-csi` is being deprecated, ButterStore is the successor.** Active development moves to a hard fork named **ButterStore**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Until then, this repo gets a few more releases, then archive.
+> **Successor: ButterStore.** Active development moves to a hard fork named **ButterStore**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived.
 
 ---
 
 ## Highlights
 
-### Per-request audit access log
+### Saved CLI agents
 
-Every API call produces an access log line with full caller identity, and any storage events emitted during the call inherit the same fields. A volume create from the CLI looks like this:
-
-```
-INF volume created name=my-vol path=/export/data/ops/my-vol tenant=ops role=user identity=cli token_fingerprint=ab12...e1f4
-INF request method=POST path=/v1/volumes/my-vol code=201 took=15.2ms tenant=ops role=user identity=cli token_fingerprint=ab12...e1f4 client=10.0.0.5 user_agent=btrfs-nfs-csi-cli/0.11.1
-```
-
-Level by status: 5xx → error, 4xx → warn, 2xx/3xx → info. `/healthz` is skipped. To trace every action a token took: `grep token_fingerprint=ab12 access.log`.
-
-### Per-request trace IDs
-
-Every request receives a unique `X-Trace-ID` response header for log correlation. IDs are HMAC-derived (no syscalls, no entropy pool). Clients can supply their own ID via the `X-Trace-ID` request header when `AGENT_API_TRACE_ALLOW_CUSTOM_ID=true`.
+`btrfs-nfs-csi agents login <name> --url ...` verifies the token via `/v1/whoami`, saves the endpoint to `~/.btrfs-nfs-csi/config.json` (file `0600`, dir `0700`), and makes it active. Every subsequent CLI command falls back per field to the active entry, so plain `btrfs-nfs-csi volume list` works in a fresh shell without exporting `AGENT_URL`/`AGENT_TOKEN`.
 
 ```bash
-$ curl -s -D - http://agent:8080/v1/volumes -H "Authorization: Bearer $TOKEN" -H "X-Trace-ID: debug-42"
-X-Trace-Id: debug-42
+echo "$TOKEN" | btrfs-nfs-csi agents login prod --url https://agent.example.com:8080
+btrfs-nfs-csi agents ls
+btrfs-nfs-csi agents use prod
+btrfs-nfs-csi volume list
+btrfs-nfs-csi agents verify --all
 ```
 
-All log lines for that request carry `trace_id=debug-42`. Grep to follow one request through the entire call stack.
+Subcommands: `login`, `logout [<name>]`, `ls` (`-o wide`/`-o json`), `use <name>`, `verify [<name>] [--all]`. The token reads from a no-echo prompt or a stdin pipe, never as a flag value that would land in shell history. Precedence is `flag > env > active entry`, so the existing env-based workflow keeps working for one-off shells and CI. Tenant, role, and token fingerprint are cached at login time so `agents ls` works offline. `verify` re-checks the token against the running agent and flags any cached field that drifted. Per-agent `--tls-skip-verify` is persisted for self-signed endpoints. Override the config path with `BTRFS_NFS_CSI_CONFIG_FILE`.
 
-### Default list filter follows the active identity
+### Go 1.26.3 and GO-2026-4918
 
-The CLI used to hardcode `created-by=cli` regardless of `AGENT_CSI_IDENTITY`. It now follows the configured identity. `--all` / `-A` still bypasses.
+The toolchain moves from 1.25.0 to 1.26.3 and picks up the stdlib fix for `GO-2026-4918`.
+
+### Kubernetes client family to v0.36.0
+
+`k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, and `k8s.io/mount-utils` jump from `0.35.4` to `0.36.0`. Cluster-side API compatibility is unchanged, this is a routine library refresh that follows upstream's stable release cadence.
 
 ---
 
+## Features
+
+- `agents` subcommand for managing saved remote endpoints (#166). See Highlights.
+
 ## Security
 
-- Auth tokens can no longer leak into logs at any level (#161).
-- Truncated root secret file is rejected at startup instead of producing predictable subkeys (#161).
-
-## Bug Fixes
-
-- `AGENT_CSI_IDENTITY` honoured in default list filter (#158).
-- 4xx/5xx HTTP responses now log at the right level and are counted under the right Prometheus code label (#160).
-
-## Improvements
-
-- CodeQL path-injection false positives silenced (#157).
-- Per-request access log with caller identity (#160). See Highlights.
-- Failed immutable-bit operations on metadata files now log a warning (#161).
-- Task cleanup retries failed file deletions instead of leaving ghost tasks behind (#161).
-- Initialisation, listen-bind, and server-runtime failures shut down through the normal error path instead of `os.Exit` from inside library code (#161).
-- Failed rollback of half-created volumes, snapshots, or clones is logged (#161).
-- `LOG_FORMAT=json` for structured output in container environments (#163).
-
-## Documentation
-
-- Quickstart curl typo fixed.
-- Task system architecture page brought up to date.
+- Bump Go to 1.26.3, fixes GO-2026-4918 (#168).
 
 ## Dependencies
 
-- Bump `github.com/rs/zerolog` from 1.35.0 to 1.35.1 (#145)
+- Bump `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, `k8s.io/mount-utils` from 0.35.4 to 0.36.0 (#168)
+- Bump `google.golang.org/grpc` from 1.80.0 to 1.81.0 (#165)
+- Bump `golang.org/x/term` from 0.42.0 to 0.43.0 (#167)
+- Bump `golang.org/x/crypto` from 0.50.0 to 0.51.0 (#168)
+- Refresh remaining direct and indirect dependencies, including `caarlos0/env`, `labstack/echo`, the swagger/go-openapi stack, and the gnostic/cbor toolchain (#168)
 
 ---
 
 ## Upgrade Guide
 
-Drop-in from v0.11.0. Bump the image tag to `0.11.1`.
+Drop-in from v0.11.1. Bump the image tag to `0.11.2`.
 
-- **Kubernetes CSI users:** no action required.
-- **CLI users with a custom identity:** drop any `--all` workaround, the default now matches your identity.
-- **Operators / log shippers:** expect one info-level access log line per authenticated API call with a `trace_id` field. `/healthz` polling does not log. Set `LOG_LEVEL=warn` to silence the success path. To disable trace IDs: `AGENT_API_TRACE_ENABLED=false`. For structured JSON logs: `LOG_FORMAT=json`.
-- **API consumers:** responses now include an `X-Trace-ID` header. Set `AGENT_HTTP_CLIENT_TRACE_ID` to inject a custom ID for cross-system correlation.
+- **Kubernetes CSI users:** no action required. The new `k8s.io/*` client libraries stay backwards compatible with the same cluster versions, and there are no manifest, RBAC, or StorageClass changes.
+- **CLI users:** existing `AGENT_URL`/`AGENT_TOKEN` workflows keep working unchanged. To switch to the new saved-agent flow, run `agents login <name> --url ...` once per endpoint and pipe the token in. The file under `~/.btrfs-nfs-csi/` is plain JSON with the bearer token, `0600` on the file and `0700` on the directory, treat it like an SSH private key.
+- **CI / one-off shells:** keep using env vars or `--agent-url`/`--agent-token` flags. Flags and env still take precedence over the saved entry, so a single CI shell can override the active agent without touching the config file.
+- **Operators rebuilding from source:** Go 1.26.3 is now the minimum toolchain, the `go.mod` directive is `go 1.26.3`.
 
 ---
 

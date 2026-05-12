@@ -3,11 +3,14 @@
 [![Build](https://github.com/erikmagkekse/btrfs-nfs-csi/actions/workflows/release.yml/badge.svg)](https://github.com/erikmagkekse/btrfs-nfs-csi/actions/workflows/release.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/erikmagkekse/btrfs-nfs-csi)](https://goreportcard.com/report/github.com/erikmagkekse/btrfs-nfs-csi)
 [![License](https://img.shields.io/github/license/erikmagkekse/btrfs-nfs-csi)](LICENSE)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/btrfs-nfs-csi)](https://artifacthub.io/packages/search?repo=btrfs-nfs-csi)
 
 **Turn any Linux box with a btrfs disk into a very capable storage backend.**
 Instant snapshots, writable clones, per-volume quotas, compression, NoCOW (no copy-on-write) for databases, and automatic NFS exports. All from a single Go binary and a REST API. 
 
-> **Pre-1.0.** Stable and used, but minor breaking changes may occur before v1.0. Feedback welcome.
+<img src="docs/assets/images/butterstore.png" alt="ButterStore" width="240">
+
+> **Successor: ButterStore.** Active development moves to a hard fork named **ButterStore**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived.
 
 ---
 
@@ -79,7 +82,7 @@ btrfs-nfs-csi is not a distributed storage system. If you need data replication 
 - **HA.** DRBD + Pacemaker active/passive failover.
 
 ### CLI
-- **Saved agents.** `agents login` once, no more `AGENT_URL`/`AGENT_TOKEN` exports.
+- **Saved agents.** `agents login` once.
 - **Watch mode** (`-w`). Auto-refreshing output for any list/get command.
 - **Column filter** (`-c name,size,used`). Show only what you need.
 - **Label filter** (`-l env=prod`). Filter resources by label.
@@ -121,7 +124,7 @@ AGENT_BLOCK_DISK=/dev/sdb curl -fsSL \
 | `AGENT_TENANTS` | `default:<random>` | tenant:token pairs |
 | `AGENT_LISTEN_ADDR` | `:8080` | Listen address |
 | `AGENT_BLOCK_DISK` | | Optional block device to auto-format as btrfs |
-| `VERSION` | `0.11.1` | Image tag |
+| `VERSION` | `0.11.2` | Image tag |
 
 </details>
 
@@ -222,6 +225,8 @@ Enable `AGENT_API_SWAGGER_ENABLED=true` and the agent serves the full spec at `/
 - [ ] Stable API with no more breaking changes
 - [ ] CSI sanity test suite
 - [ ] End-to-end test suite
+- [ ] Supply Chain protection (via capslock)
+- [ ] Cosign Helm CHart & Container
 - [ ] Grafana dashboards and Prometheus alerting rules
 
 ### Under Consideration
@@ -232,7 +237,6 @@ Enable `AGENT_API_SWAGGER_ENABLED=true` and the agent serves the full spec at `/
 - [ ] **Multi-agent manager.** Central control plane for managing multiple agents across hosts.
 - [ ] **btrfs send/receive.** Stream snapshots between agents via CLI and API.
 - [ ] **Replication.** Scheduled, recurring send/receive to a second agent via task system.
-- [ ] **Separate CLI binary.** Maybe split the CLI from the agent into its own lightweight binary.
 
 Have an idea or want to build an integration? [Open an issue](https://github.com/erikmagkekse/btrfs-nfs-csi/issues) or submit a PR.
 
