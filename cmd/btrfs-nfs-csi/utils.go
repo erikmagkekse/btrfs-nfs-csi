@@ -353,8 +353,33 @@ var (
 )
 
 func initClient(ctx context.Context, cmd *cli.Command) error {
+	resolved := Agent{
+		URL:      cmd.String("agent-url"),
+		Token:    cmd.String("agent-token"),
+		Identity: config.IdentityCLI,
+	}
+	if resolved.URL == "" || resolved.Token == "" {
+		// Per-field merge so explicit --agent-url or AGENT_URL still
+		// wins when a saved agent is also present.
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+		if active, ok := cfg.Active(); ok {
+			if resolved.URL == "" {
+				resolved.URL = active.URL
+			}
+			if resolved.Token == "" {
+				resolved.Token = active.Token
+			}
+			if active.Identity != "" {
+				resolved.Identity = active.Identity
+			}
+			resolved.TLSSkipVerify = active.TLSSkipVerify
+		}
+	}
 	var err error
-	apiClient, err = agentclient.NewClient(cmd.String("agent-url"), cmd.String("agent-token"), config.IdentityCLI)
+	apiClient, err = newAgentClient(resolved)
 	if err != nil {
 		return err
 	}
@@ -366,7 +391,7 @@ func withCLIHooks(cmds ...*cli.Command) []*cli.Command {
 		cmd.Flags = append(cmd.Flags,
 			&cli.StringFlag{Name: "agent-url", Sources: cli.EnvVars("AGENT_URL"), Usage: "agent API URL"},
 			&cli.StringFlag{Name: "agent-token", Sources: cli.EnvVars("AGENT_TOKEN"), Usage: "tenant token"},
-			&cli.StringFlag{Name: "output", Aliases: []string{"o"}, Value: outputTable, Usage: "output format: table, wide, json, json,wide"},
+			outputFlag(),
 		)
 		cmd.Before = func(ctx context.Context, c *cli.Command) (context.Context, error) {
 			if err := initClient(ctx, c); err != nil {
@@ -395,6 +420,22 @@ func watchAction(fn cli.ActionFunc) cli.ActionFunc {
 			return fn(ctx, cmd)
 		})
 	}
+}
+
+func outputFlag() cli.Flag {
+	return &cli.StringFlag{
+		Name:    "output",
+		Aliases: []string{"o"},
+		Value:   outputTable,
+		Usage:   "output format: table, wide, json, json,wide",
+	}
+}
+
+func dash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
 }
 
 func isWide(cmd *cli.Command) bool {

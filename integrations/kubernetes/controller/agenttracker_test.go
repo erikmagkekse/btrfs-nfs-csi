@@ -97,23 +97,10 @@ func TestAgentTrackerConcurrent(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 100 {
-		wg.Add(4)
-		go func() {
-			defer wg.Done()
-			tr.Client("my-sc")
-		}()
-		go func() {
-			defer wg.Done()
-			_, _ = tr.AgentURL("my-sc")
-		}()
-		go func() {
-			defer wg.Done()
-			tr.Agents()
-		}()
-		go func() {
-			defer wg.Done()
-			tr.Track("http://agent:8080", c)
-		}()
+		wg.Go(func() { tr.Client("my-sc") })
+		wg.Go(func() { _, _ = tr.AgentURL("my-sc") })
+		wg.Go(func() { tr.Agents() })
+		wg.Go(func() { tr.Track("http://agent:8080", c) })
 	}
 	wg.Wait()
 }

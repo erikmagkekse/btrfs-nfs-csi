@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.11.2
+
+CLI saved-agent endpoints, Go 1.26.3 toolchain bump with the GO-2026-4918 stdlib fix, and a dependency refresh across the tree. Penultimate v0.11.x stop before the project is replaced by ButterStore (see `RELEASE.md`).
+
+### Features
+- Add `agents` subcommand for managing saved remote endpoints (#166)
+
+### Security
+- Bump Go to 1.26.3, fixes GO-2026-4918 (#168)
+
+### Documentation
+- README: add ButterStore logo
+
+### Dependencies
+- Bump `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, `k8s.io/mount-utils` from 0.35.4 to 0.36.0 (#168)
+- Bump `google.golang.org/grpc` from 1.80.0 to 1.81.0 (#165)
+- Bump `golang.org/x/term` from 0.42.0 to 0.43.0 (#167)
+- Bump `golang.org/x/crypto` from 0.50.0 to 0.51.0 (#168)
+- Refresh remaining direct and indirect dependencies (#168)
+
 ## v0.11.1
 
 Per-request audit access log plus default-filter, CodeQL fixes, and logging hardening. Final lap before the project is replaced by ButterStore (see `RELEASE.md`).

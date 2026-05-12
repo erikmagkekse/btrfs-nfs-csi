@@ -75,6 +75,7 @@ Issues: https://github.com/erikmagkekse/btrfs-nfs-csi/issues`,
 			),
 			hashTokenCmd(),
 			agentCmd(),
+			agentsCmd(),
 			integrationCmd(),
 			controllerBackwardsCompatibilityWillBeRemovedInTheFuture(),
 			driverBackwardsCompatibilityWillBeRemovedInTheFuture(),
@@ -93,7 +94,7 @@ Issues: https://github.com/erikmagkekse/btrfs-nfs-csi/issues`,
 func agentCmd() *cli.Command {
 	return &cli.Command{
 		Name:     "agent",
-		Usage:    "Start the agent",
+		Usage:    "Start the agent (server-side)",
 		Category: "Server",
 		Action: func(_ context.Context, _ *cli.Command) error {
 			log.Info().Str("version", version).Str("commit", commit).Msg("starting btrfs-nfs-csi agent by Erik Groh <me@eriks.life> (https://github.com/erikmagkekse)")
@@ -102,6 +103,14 @@ func agentCmd() *cli.Command {
 			}
 			return nil
 		},
+	}
+}
+
+func agentsCmd() *cli.Command {
+	return &cli.Command{
+		Name:     "agents",
+		Usage:    "Manage saved remote agents (client-side context)",
+		Commands: agentsSubcommands(),
 	}
 }
 

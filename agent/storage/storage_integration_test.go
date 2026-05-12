@@ -418,7 +418,7 @@ func (s *StorageIntegrationSuite) TestStartScrub() {
 
 	// wait for completion
 	var tsk *task.Task
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		tsk, err = s.storage.Tasks().Get(taskID)
 		s.Require().NoError(err)
 		if tsk.Status == task.TaskCompleted || tsk.Status == task.TaskFailed {
@@ -473,7 +473,7 @@ func (s *StorageIntegrationSuite) TestStartBalance_UsageFilter() {
 	s.Assert().NotEmpty(taskID)
 
 	var tsk *task.Task
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		tsk, err = s.storage.Tasks().Get(taskID)
 		s.Require().NoError(err)
 		if tsk.Status == task.TaskCompleted || tsk.Status == task.TaskFailed {
@@ -509,7 +509,7 @@ func (s *StorageIntegrationSuite) TestStartBalance_Cancel() {
 	s.Require().NoError(s.storage.Tasks().Cancel(taskID))
 
 	var tsk *task.Task
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		tsk, err = s.storage.Tasks().Get(taskID)
 		s.Require().NoError(err)
 		if tsk.Status != task.TaskRunning && tsk.Status != task.TaskPending {
@@ -600,7 +600,7 @@ func (s *StorageIntegrationSuite) TestScrubOnEmptyFilesystem() {
 	taskID, err := s.storage.StartScrub(s.ctx, nil, nil, 0)
 	s.Require().NoError(err)
 
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		tsk, err := s.storage.Tasks().Get(taskID)
 		s.Require().NoError(err)
 		if tsk.Status == task.TaskCompleted || tsk.Status == task.TaskFailed {
@@ -638,7 +638,7 @@ func (s *StorageIntegrationSuite) TestScrubRestartRecovery() {
 	s.Require().NoError(err)
 	s.Assert().NotEmpty(newID)
 
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		t, _ := tm.Get(newID)
 		if t.Status == task.TaskCompleted || t.Status == task.TaskFailed {
 			break

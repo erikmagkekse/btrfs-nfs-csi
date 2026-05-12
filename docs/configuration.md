@@ -58,8 +58,9 @@ Shared by CLI and all integrations (any `v1.Client` user).
 | `AGENT_URL` | - | Agent API URL |
 | `AGENT_TOKEN` | - | Tenant token |
 | `BTRFS_NFS_CSI_FORCE` | `false` | Skip delete protection when `true` |
+| `BTRFS_NFS_CSI_CONFIG_FILE` | `$HOME/.btrfs-nfs-csi/config.json` | Path to the CLI config file (saved agents, future CLI settings) |
 
-Also configurable via `--agent-url` and `--agent-token` flags.
+Also configurable via `--agent-url` and `--agent-token` flags, or per-shell via the `btrfs-nfs-csi agents` saved-agent manager (see [Operations: Saved Agents](operations.md#saved-agents)).
 
 ## TLS
 

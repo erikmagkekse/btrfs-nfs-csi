@@ -34,8 +34,8 @@ When code is pushed to `edge`, the edge-build workflow runs tests and pushes the
 | PR to `edge` | build check (no push) | lint only |
 | PR `release/vX.Y.Z` to `main` | build check (no push) | lint only |
 | PR merged to `edge` | `:edge` (rolling, amd64) | not published |
-| Tag `v0.11.1-edge` on `edge` | `:0.11.1-edge` (amd64 + arm64) | `0.3.1-edge` |
-| Tag `v0.11.1` on `main` | `:0.11.1` (amd64 + arm64) | `0.3.1` |
+| Tag `v0.11.2-edge` on `edge` | `:0.11.2-edge` (amd64 + arm64) | `0.3.2-edge` |
+| Tag `v0.11.2` on `main` | `:0.11.2` (amd64 + arm64) | `0.3.2` |
 
 Container images: `ghcr.io/erikmagkekse/btrfs-nfs-csi`
 Helm charts: `oci://ghcr.io/erikmagkekse/charts/btrfs-nfs-csi`
@@ -48,9 +48,9 @@ Three files must be updated together:
 
 | File | Field | Example |
 |------|-------|---------|
-| `VERSION` | app version | `0.11.1` |
-| `charts/btrfs-nfs-csi/Chart.yaml` | `appVersion` | `"0.11.1"` |
-| `charts/btrfs-nfs-csi/Chart.yaml` | `version` | `0.3.1` |
+| `VERSION` | app version | `0.11.2` |
+| `charts/btrfs-nfs-csi/Chart.yaml` | `appVersion` | `"0.11.2"` |
+| `charts/btrfs-nfs-csi/Chart.yaml` | `version` | `0.3.2` |
 
 If `go.mod` or `go.sum` changed since the last release, also update `vendorHash` in `package.nix`:
 
@@ -65,15 +65,15 @@ nix build .# 2>&1 | grep 'got:' | awk '{print $2}'
 **Stable release** (from `main`):
 
 ```bash
-git tag v0.11.1
-git push origin v0.11.1
+git tag v0.11.2
+git push origin v0.11.2
 ```
 
 **Edge pre-release** (from `edge`):
 
 ```bash
-git tag v0.11.1-edge
-git push origin v0.11.1-edge
+git tag v0.11.2-edge
+git push origin v0.11.2-edge
 ```
 
 ### 3. Automated checks
@@ -101,7 +101,7 @@ Edge and stable releases use the same pipeline. The `-edge` suffix is detected a
 
 ## Version Scheme
 
-- App version (`VERSION`): semver, e.g. `0.11.1`
+- App version (`VERSION`): semver, e.g. `0.11.2`
 - Chart version (`Chart.yaml` `version`): independent semver for Helm chart changes
-- Edge builds append `-edge` to both, e.g. `0.11.1-edge`, `0.3.1-edge`
+- Edge builds append `-edge` to both, e.g. `0.11.2-edge`, `0.3.2-edge`
 - The `:edge` container tag is a rolling tag updated on every PR merge to `edge`
