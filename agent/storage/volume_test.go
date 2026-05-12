@@ -239,9 +239,7 @@ func TestCreateVolume(t *testing.T) {
 			successes, conflicts, internal atomic.Int64
 		)
 		for range N {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				_, err := s.CreateVolume(ctx, "test", req)
 				switch {
 				case err == nil:
@@ -251,7 +249,7 @@ func TestCreateVolume(t *testing.T) {
 				default:
 					internal.Add(1)
 				}
-			}()
+			})
 		}
 		wg.Wait()
 

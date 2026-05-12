@@ -25,7 +25,7 @@ func mustNewManager(t *testing.T, dir string, maxConcurrent int, pollInterval ti
 // awaitStatus polls until a task reaches the expected status or times out.
 func awaitStatus(t *testing.T, tm *Manager, id string, status TaskStatus) *Task {
 	t.Helper()
-	for i := 0; i < 2000; i++ {
+	for range 2000 {
 		tsk, err := tm.Get(id)
 		if err == nil && tsk.Status == status {
 			return tsk
@@ -40,7 +40,7 @@ func awaitStatus(t *testing.T, tm *Manager, id string, status TaskStatus) *Task 
 // awaitDone polls until a task is completed, failed, or cancelled.
 func awaitDone(t *testing.T, tm *Manager, id string) *Task {
 	t.Helper()
-	for i := 0; i < 2000; i++ {
+	for range 2000 {
 		tsk, err := tm.Get(id)
 		if err == nil && (tsk.Status == TaskCompleted || tsk.Status == TaskFailed || tsk.Status == TaskCancelled) {
 			return tsk
@@ -288,14 +288,12 @@ func TestManager_ConcurrentSubmit(t *testing.T) {
 
 	ids := make([]string, 50)
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			ids[idx] = tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
+	for i := range 50 {
+		wg.Go(func() {
+			ids[i] = tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 				return nil
 			})
-		}(i)
+		})
 	}
 	wg.Wait()
 
@@ -497,11 +495,9 @@ func TestManager_Stress(t *testing.T) {
 
 	ids := make([]string, total)
 	var wg sync.WaitGroup
-	for i := 0; i < total; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-			ids[idx] = tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
+	for i := range total {
+		wg.Go(func() {
+			ids[i] = tm.Create("test", TaskOpts{}, func(ctx context.Context, update *Update) error {
 				cur := running.Add(1)
 				for {
 					old := maxRunning.Load()
@@ -513,7 +509,7 @@ func TestManager_Stress(t *testing.T) {
 				running.Add(-1)
 				return update.SetResult(map[string]string{"ok": "true"})
 			})
-		}(i)
+		})
 	}
 	wg.Wait()
 
