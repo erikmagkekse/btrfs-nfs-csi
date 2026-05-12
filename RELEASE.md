@@ -5,6 +5,8 @@
 CLI saved-agent endpoints so the bearer token no longer has to live in shell history, plus a Go 1.26.3 toolchain bump that pulls in the GO-2026-4918 stdlib fix and refreshes the Kubernetes client family to v0.36.0. No breaking changes.
 
 > **Successor:** Active development moves to a hard fork named **ButterStore**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived.
+>
+> *The name plays on the colloquial pronunciation of btrfs as "butter-FS" plus its role as a storage backend.*
 
 ---
 
