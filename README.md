@@ -10,7 +10,7 @@ Instant snapshots, writable clones, per-volume quotas, compression, NoCOW (no co
 
 <p align="center"><img src="docs/assets/images/butterstore_mark.svg" alt="ButterStore" width="200"></p>
 
-> **Successor:** Active development moves to a hard fork named **ButterStore**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived. Published artifacts (container images, Helm charts) stay available.
+> **Successor:** Active development moves to a hard fork named **[ButterStore](https://github.com/butterstore)**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived. Published artifacts (container images, Helm charts) stay available.
 >
 > *The name plays on the colloquial pronunciation of btrfs as "butter-FS" plus its role as a storage backend.*
 
