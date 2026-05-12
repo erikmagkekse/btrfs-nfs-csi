@@ -8,7 +8,7 @@
 **Turn any Linux box with a btrfs disk into a very capable storage backend.**
 Instant snapshots, writable clones, per-volume quotas, compression, NoCOW (no copy-on-write) for databases, and automatic NFS exports. All from a single Go binary and a REST API. 
 
-<p align="center"><img src="docs/assets/images/butterstore_mark.svg" alt="ButterStore" width="240"></p>
+<p align="center"><img src="docs/assets/images/butterstore_mark.svg" alt="ButterStore" width="200"></p>
 
 > **Successor:** Active development moves to a hard fork named **ButterStore**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived. Published artifacts (container images, Helm charts) stay available.
 >
