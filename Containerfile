@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine AS build
+FROM golang:1.26.7-alpine3.24@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS build
 
 ARG VERSION="dev"
 ARG COMMIT="unknown"
@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build \
     -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o btrfs-nfs-csi ./cmd/btrfs-nfs-csi
 
-FROM alpine:3.21
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
 LABEL org.opencontainers.image.title="btrfs-nfs-csi" \
       org.opencontainers.image.description="Kubernetes CSI driver that turns any btrfs filesystem into a full-featured NFS storage backend with instant snapshots, clones, and quotas" \
@@ -19,7 +19,8 @@ LABEL org.opencontainers.image.title="btrfs-nfs-csi" \
       org.opencontainers.image.source="https://github.com/erikmagkekse/btrfs-nfs-csi" \
       org.opencontainers.image.documentation="https://github.com/erikmagkekse/btrfs-nfs-csi#readme" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.vendor="Erik Groh <me@eriks.life>"
+      org.opencontainers.image.vendor="Erik Groh" \
+      org.opencontainers.image.authors="Erik Groh <me@eriks.life>"
 
 RUN apk add --no-cache btrfs-progs e2fsprogs nfs-utils flock
 

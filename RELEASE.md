@@ -1,70 +1,61 @@
-# Release v0.11.2
+# Release v0.11.3
 
-**Previous: v0.11.1** | **Date: 2026-05-12**
+**Previous: v0.11.2** | **Date: 2026-08-27**
 
-CLI saved-agent endpoints so the bearer token no longer has to live in shell history, plus a Go 1.26.3 toolchain bump that pulls in the GO-2026-4918 stdlib fix and refreshes the Kubernetes client family to v0.36.0. No breaking changes.
+Routine dependency refresh across the Kubernetes client family, gRPC, echo/v5, `golang.org/x/*`, and Prometheus client. Container build and runtime stages now pinned by SHA256 digest to `golang:1.26.7-alpine3.24` and `alpine:3.24` respectively. No behavior, manifest, or API changes.
 
 > **Successor:** Active development moves to a hard fork named **[ButterStore](https://github.com/butterstore)**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived. Published artifacts (container images, Helm charts) stay available.
+>
+> *Coming in the first ButterStore release:* snapshot streaming through `snapshot send` / `snapshot receive`. Dump a snapshot to a file, feed one back from a file, or pipe the two commands together to move a snapshot between agents. Auth is capability-token-based, rate limits are configurable globally, per tenant, and per task, and transfers are tracked as tasks that resume from an offset header if the connection drops, so a flaky network doesn't restart the whole thing. Scheduled replication comes later.
 >
 > *The name plays on the colloquial pronunciation of btrfs as "butter-FS" plus its role as a storage backend.*
 
 ---
 
-## Highlights
+## Security notes
 
-### Saved CLI agents
-
-`btrfs-nfs-csi agents login <name> --url ...` verifies the token via `/v1/whoami`, saves the endpoint to `~/.btrfs-nfs-csi/config.json` (file `0600`, dir `0700`), and makes it active. Every subsequent CLI command falls back per field to the active entry, so plain `btrfs-nfs-csi volume list` works in a fresh shell without exporting `AGENT_URL`/`AGENT_TOKEN`.
-
-```bash
-echo "$TOKEN" | btrfs-nfs-csi agents login prod --url https://agent.example.com:8080
-btrfs-nfs-csi agents ls
-btrfs-nfs-csi agents use prod
-btrfs-nfs-csi volume list
-btrfs-nfs-csi agents verify --all
-```
-
-Subcommands: `login`, `logout [<name>]`, `ls` (`-o wide`/`-o json`), `use <name>`, `verify [<name>] [--all]`. The token reads from a no-echo prompt or a stdin pipe, never as a flag value that would land in shell history. Precedence is `flag > env > active entry`, so the existing env-based workflow keeps working for one-off shells and CI. Tenant, role, and token fingerprint are cached at login time so `agents ls` works offline. `verify` re-checks the token against the running agent and flags any cached field that drifted. Per-agent `--tls-skip-verify` is persisted for self-signed endpoints. Override the config path with `BTRFS_NFS_CSI_CONFIG_FILE`.
-
-### Go 1.26.3 and GO-2026-4918
-
-The toolchain moves from 1.25.0 to 1.26.3 and picks up the stdlib fix for `GO-2026-4918`.
-
-### Kubernetes client family to v0.36.0
-
-`k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, and `k8s.io/mount-utils` jump from `0.35.4` to `0.36.0`. Cluster-side API compatibility is unchanged, this is a routine library refresh that follows upstream's stable release cadence.
+- **Go stdlib (container base pinned to 1.26.7)**: CVE-2026-56862 (`crypto/tls` KeyUpdate DoS), CVE-2026-56853 (`net/http` ReadHeaderTimeout bypass on HTTP/2 preface), CVE-2026-56860 (`net/url`), CVE-2026-56859 (`encoding/xml`), CVE-2026-56858 (`html/template`), CVE-2026-56864 / CVE-2026-56865 (`cmd/go` GOSUMDB/GOPROXY bypass).
+- **google.golang.org/grpc 1.81.0 → 1.83.2**: past the 1.82.1 fix for GHSA-hrxh-6v49-42gf / GO-2026-6061 (server-side HTTP/2 transport + xDS RBAC).
+- **github.com/labstack/echo/v5 5.1.1 → 5.3.1**: past the 5.2.0 fix for CVE-2026-55677 (encoded-slash bypass of route-level middleware when a broader static-file root sits under a protected prefix; not reachable from this codebase).
+- **golang.org/x/mod 0.38.0 → 0.40.0**: GO-2026-6180 / CVE-2026-56864 (`cmd/go` GOSUMDB bypass) and GO-2026-6179 / CVE-2026-56865 (`sumdb/tlog` transparency-log tile verification bypass). Also lifts `golang.org/x/tools` to 0.49.0.
+- **golang.org/x/crypto 0.51.0 → 0.55.0**: rolls through the June 2026 x/crypto advisory batch.
 
 ---
 
-## Features
-
-- `agents` subcommand for managing saved remote endpoints (#166). See Highlights.
-
-## Security
-
-- Bump Go to 1.26.3, fixes GO-2026-4918 (#168).
-
 ## Dependencies
 
-- Bump `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, `k8s.io/mount-utils` from 0.35.4 to 0.36.0 (#168)
-- Bump `google.golang.org/grpc` from 1.80.0 to 1.81.0 (#165)
-- Bump `golang.org/x/term` from 0.42.0 to 0.43.0 (#167)
-- Bump `golang.org/x/crypto` from 0.50.0 to 0.51.0 (#168)
-- Refresh remaining direct and indirect dependencies, including `caarlos0/env`, `labstack/echo`, the swagger/go-openapi stack, and the gnostic/cbor toolchain (#168)
+- Bump `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, `k8s.io/mount-utils` from 0.36.0 to 0.36.4
+- Bump `github.com/kubernetes-csi/external-snapshotter/client/v8` from 8.4.0 to 8.6.0
+- Bump `github.com/container-storage-interface/spec` from 1.12.0 to 1.13.0
+- Bump `google.golang.org/protobuf` to 1.36.12 (out of pre-release)
+- Bump `golang.org/x/sys` from 0.44.0 to 0.47.0
+- Bump `golang.org/x/term` from 0.43.0 to 0.45.0
+- Bump `github.com/prometheus/client_golang` from 1.23.2 to 1.24.1
+- Bump `github.com/stretchr/testify` from 1.11.1 to 1.12.1
+- Bump `github.com/urfave/cli/v3` from 3.8.0 to 3.11.0
+- Refresh remaining indirect dependencies
 
 ---
 
 ## Upgrade Guide
 
-Drop-in from v0.11.1. Bump the image tag to `0.11.2`.
+Drop-in from v0.11.2. Bump the image tag to `0.11.3`. No manifest, RBAC, StorageClass, config, or CLI changes.
 
-- **Kubernetes CSI users:** no action required. The new `k8s.io/*` client libraries stay backwards compatible with the same cluster versions, and there are no manifest, RBAC, or StorageClass changes.
-- **CLI users:** existing `AGENT_URL`/`AGENT_TOKEN` workflows keep working unchanged. To switch to the new saved-agent flow, run `agents login <name> --url ...` once per endpoint and pipe the token in. The file under `~/.btrfs-nfs-csi/` is plain JSON with the bearer token, `0600` on the file and `0700` on the directory, treat it like an SSH private key.
-- **CI / one-off shells:** keep using env vars or `--agent-url`/`--agent-token` flags. Flags and env still take precedence over the saved entry, so a single CI shell can override the active agent without touching the config file.
-- **Operators rebuilding from source:** Go 1.26.3 is now the minimum toolchain, the `go.mod` directive is `go 1.26.3`.
+Operators rebuilding from source: `go.mod` requires Go `>=1.26.5`. The `Containerfile` pins both build (`golang:1.26.7-alpine3.24`) and runtime (`alpine:3.24`) stages by SHA256 digest for reproducible builds.
+
+---
+
+## Packaging
+
+- Container image OCI annotations now render on the ghcr.io package page (title, description, source, license).
+- `image.vendor` / `image.authors` split for OCI convention.
 
 ---
 
 ## Deprecations
 
 None.
+
+---
+
+*Cut aboard Lufthansa flight LH717.*

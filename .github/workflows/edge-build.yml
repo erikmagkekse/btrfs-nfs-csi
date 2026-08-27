@@ -54,6 +54,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index,manifest
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=edge
+          labels: |
+            org.opencontainers.image.title=btrfs-nfs-csi
+            org.opencontainers.image.description=Kubernetes CSI driver that turns any btrfs filesystem into a full-featured NFS storage backend with instant snapshots, clones, and quotas
+            org.opencontainers.image.url=https://github.com/erikmagkekse/btrfs-nfs-csi
+            org.opencontainers.image.source=https://github.com/erikmagkekse/btrfs-nfs-csi
+            org.opencontainers.image.documentation=https://github.com/erikmagkekse/btrfs-nfs-csi#readme
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.vendor=Erik Groh
+            org.opencontainers.image.authors=Erik Groh <me@eriks.life>
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
       - name: Build and push image
         uses: docker/build-push-action@v7
         with:
@@ -61,12 +82,11 @@ jobs:
           file: Containerfile
           push: true
           platforms: linux/amd64
-          tags: ${{ env.IMAGE }}:edge
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ steps.version.outputs.commit }}
-          labels: |
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
-            org.opencontainers.image.revision=${{ steps.version.outputs.commit }}
