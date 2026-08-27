@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.11.3
+
+Routine dependency refresh across the Kubernetes client family, gRPC, echo/v5, `golang.org/x/*`, and Prometheus client. Container build and runtime stages now pinned by SHA256 digest (build: `golang:1.26.7-alpine3.24`; runtime: `alpine:3.24`). No behavior changes.
+
+### Security notes
+- Container build stage pinned to Go 1.26.7 (`golang:1.26.7-alpine3.24` by SHA256 digest), includes the August 2026 stdlib CVE fixes: CVE-2026-56862 (`crypto/tls`), CVE-2026-56853 (`net/http`), CVE-2026-56860 (`net/url`), CVE-2026-56859 (`encoding/xml`), CVE-2026-56858 (`html/template`), CVE-2026-56864/56865 (`cmd/go`).
+- `google.golang.org/grpc` past 1.82.1 → GHSA-hrxh-6v49-42gf / GO-2026-6061 (server-side HTTP/2 transport + xDS RBAC).
+- `github.com/labstack/echo/v5` past 5.2.0 → CVE-2026-55677 (encoded-slash bypass of route-level middleware for static-file roots; not called from this codebase).
+- `golang.org/x/mod` 0.38.0 → 0.40.0 → GO-2026-6180 / CVE-2026-56864 (`cmd/go` GOSUMDB bypass) and GO-2026-6179 / CVE-2026-56865 (`sumdb/tlog` verification bypass). Pulls `golang.org/x/tools` to 0.49.0.
+- `golang.org/x/crypto` 0.51.0 → 0.55.0, rolls through the June 2026 advisory batch.
+
+### Dependencies
+- Bump `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, `k8s.io/mount-utils` from 0.36.0 to 0.36.4
+- Bump `github.com/kubernetes-csi/external-snapshotter/client/v8` from 8.4.0 to 8.6.0
+- Bump `github.com/container-storage-interface/spec` from 1.12.0 to 1.13.0
+- Bump `google.golang.org/grpc` from 1.81.0 to 1.83.2
+- Bump `google.golang.org/protobuf` to 1.36.12 (out of pre-release)
+- Bump `golang.org/x/crypto` from 0.51.0 to 0.55.0
+- Bump `golang.org/x/sys` from 0.44.0 to 0.47.0
+- Bump `golang.org/x/term` from 0.43.0 to 0.45.0
+- Bump `github.com/labstack/echo/v5` from 5.1.1 to 5.3.1
+- Bump `github.com/prometheus/client_golang` from 1.23.2 to 1.24.1
+- Bump `github.com/stretchr/testify` from 1.11.1 to 1.12.1
+- Bump `github.com/urfave/cli/v3` from 3.8.0 to 3.11.0
+- Refresh remaining indirect dependencies
+
+### Packaging
+- Set OCI annotations on the container index manifest so ghcr.io shows title, description, source, and license.
+- Split `image.vendor` / `image.authors` in `Chart.yaml` and `Containerfile` to match OCI convention.
+
 ## v0.11.2
 
 CLI saved-agent endpoints, Go 1.26.3 toolchain bump with the GO-2026-4918 stdlib fix, and a dependency refresh across the tree. Penultimate v0.11.x stop before the project is replaced by ButterStore (see `RELEASE.md`).
