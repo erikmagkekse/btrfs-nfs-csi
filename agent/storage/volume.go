@@ -25,11 +25,11 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	if req.SizeBytes == 0 {
 		return nil, &StorageError{Code: ErrInvalid, Message: "size_bytes is required"}
 	}
-	if req.NoCOW && req.Compression != "" && req.Compression != "none" {
-		return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
-	}
 	if !utils.IsValidCompression(req.Compression) {
 		return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
+	}
+	if req.NoCOW && req.Compression != "" {
+		return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
 	}
 	if req.QuotaBytes == 0 {
 		req.QuotaBytes = req.SizeBytes
@@ -113,7 +113,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		}
 	}
 
-	if req.Compression != "" && req.Compression != "none" {
+	if req.Compression != "" {
 		if err := s.btrfs.SetCompression(ctx, dataDir, req.Compression); err != nil {
 			log.Error().Err(err).Str("path", dataDir).Str("algo", req.Compression).Msg("failed to set compression")
 			cleanup()
@@ -237,13 +237,17 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	if req.SizeBytes != nil && *req.SizeBytes < cur.SizeBytes {
 		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("new size %d must be at least current size %d", *req.SizeBytes, cur.SizeBytes)}
 	}
+	if req.Compression != nil && !utils.IsValidCompression(*req.Compression) {
+		return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
+	}
+	// Check the resulting state, since either side can create the conflict.
+	nextNoCOW := cur.NoCOW || (req.NoCOW != nil && *req.NoCOW)
+	nextCompression := cur.Compression
 	if req.Compression != nil {
-		if !utils.IsValidCompression(*req.Compression) {
-			return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
-		}
-		if cur.NoCOW && *req.Compression != "" && *req.Compression != "none" {
-			return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
-		}
+		nextCompression = *req.Compression
+	}
+	if nextNoCOW && nextCompression != "" {
+		return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
 	}
 	if req.UID != nil {
 		if err := utils.ValidateUID(*req.UID); err != nil {
@@ -272,6 +276,15 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		}
 	}
 
+	// Runs before NoCOW, because btrfs rejects chattr +C while a compression
+	// property is set.
+	if req.Compression != nil {
+		if err := s.btrfs.SetCompression(ctx, dataDir, *req.Compression); err != nil {
+			log.Error().Err(err).Msg("failed to set compression")
+			return nil, fmt.Errorf("set compression failed: %w", err)
+		}
+	}
+
 	if req.NoCOW != nil && *req.NoCOW && !cur.NoCOW {
 		if err := s.btrfs.SetNoCOW(ctx, dataDir); err != nil {
 			log.Error().Err(err).Msg("failed to set nocow")
@@ -280,13 +293,6 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	} else if req.NoCOW != nil && !*req.NoCOW && cur.NoCOW {
 		log.Warn().Str("volume", name).Msg("nocow cannot be reverted, ignoring")
 		req.NoCOW = nil
-	}
-
-	if req.Compression != nil && *req.Compression != "" && *req.Compression != "none" {
-		if err := s.btrfs.SetCompression(ctx, dataDir, *req.Compression); err != nil {
-			log.Error().Err(err).Msg("failed to set compression")
-			return nil, fmt.Errorf("set compression failed: %w", err)
-		}
 	}
 
 	if req.UID != nil || req.GID != nil {

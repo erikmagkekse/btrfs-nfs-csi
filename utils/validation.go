@@ -40,6 +40,9 @@ func ValidateMode(s string) (uint64, error) {
 	return mode, nil
 }
 
+// IsValidCompression accepts the three btrfs states. "" leaves the property
+// unset so the mount option decides, "none" turns compression off even when the
+// filesystem is mounted with compress=, and an algorithm turns it on.
 func IsValidCompression(s string) bool {
 	if s == "" || s == "none" {
 		return true

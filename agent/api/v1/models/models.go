@@ -100,7 +100,7 @@ type VolumeCreateRequest struct {
 	Name        string            `json:"name"`             // ^[a-zA-Z0-9_-]{1,128}$
 	SizeBytes   uint64            `json:"size_bytes"`       // subvolume size in bytes
 	NoCOW       bool              `json:"nocow"`            // disable copy-on-write (chattr +C)
-	Compression string            `json:"compression"`      // "zstd", "zstd:3", "zlib", "zlib:5", "lzo", or ""
+	Compression string            `json:"compression"`      // "zstd", "zstd:3", "zlib", "zlib:5", "lzo", "none" (off), or "" (mount decides)
 	QuotaBytes  uint64            `json:"quota_bytes"`      // btrfs qgroup limit (0 = no quota)
 	UID         int               `json:"uid"`              // owner UID (0-65534)
 	GID         int               `json:"gid"`              // owner GID (0-65534)
@@ -201,7 +201,7 @@ type VolumeDetailResponse struct {
 	Path         string                 `json:"path"`                     // absolute path on the agent host
 	SizeBytes    uint64                 `json:"size_bytes"`               // subvolume size in bytes
 	NoCOW        bool                   `json:"nocow"`                    // copy-on-write disabled (chattr +C)
-	Compression  string                 `json:"compression"`              // compression algorithm (e.g. "zstd", "zlib", "lzo", "")
+	Compression  string                 `json:"compression"`              // "zstd", "zstd:3", "zlib", "zlib:5", "lzo", "none" (off), or "" (mount decides)
 	QuotaBytes   uint64                 `json:"quota_bytes"`              // btrfs qgroup limit in bytes
 	UsedBytes    uint64                 `json:"used_bytes"`               // bytes used (btrfs qgroup accounting)
 	UID          int                    `json:"uid"`                      // owner UID
