@@ -22,7 +22,7 @@ LABEL org.opencontainers.image.title="btrfs-nfs-csi" \
       org.opencontainers.image.vendor="Erik Groh" \
       org.opencontainers.image.authors="Erik Groh <me@eriks.life>"
 
-RUN apk add --no-cache btrfs-progs e2fsprogs nfs-utils flock
+RUN apk add --no-cache btrfs-progs e2fsprogs e2fsprogs-extra nfs-utils flock
 
 COPY --from=build /build/btrfs-nfs-csi /usr/local/bin/btrfs-nfs-csi
 

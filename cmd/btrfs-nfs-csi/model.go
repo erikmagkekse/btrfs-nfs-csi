@@ -84,7 +84,7 @@ func volumeCmd() *cli.Command {
 				Usage:     "create a volume",
 				ArgsUsage: "<name> <size>",
 				Flags: []cli.Flag{
-					&cli.StringFlag{Name: "compression", Aliases: []string{"c"}, Usage: "compression: zstd, lzo, zlib"},
+					&cli.StringFlag{Name: "compression", Aliases: []string{"c"}, Usage: `compression: zstd, lzo, zlib, none ("" unsets)`},
 					&cli.BoolFlag{Name: "nocow", Aliases: []string{"C"}, Usage: "disable copy-on-write (for databases)"},
 					&cli.IntFlag{Name: "uid", Aliases: []string{"u"}, Usage: "owner UID"},
 					&cli.IntFlag{Name: "gid", Aliases: []string{"g"}, Usage: "owner GID"},
@@ -113,7 +113,7 @@ func volumeCmd() *cli.Command {
 					&cli.IntFlag{Name: "uid", Aliases: []string{"u"}, Usage: "owner UID"},
 					&cli.IntFlag{Name: "gid", Aliases: []string{"g"}, Usage: "owner GID"},
 					&cli.StringFlag{Name: "mode", Aliases: []string{"m"}, Usage: "directory mode (octal)"},
-					&cli.StringFlag{Name: "compression", Usage: "compression: zstd, lzo, zlib, none"},
+					&cli.StringFlag{Name: "compression", Usage: `compression: zstd, lzo, zlib, none ("" unsets)`},
 					&cli.BoolFlag{Name: "nocow", Usage: "disable copy-on-write"},
 				},
 				Action: volumeSet,

@@ -43,6 +43,11 @@ func TestCreateVolume(t *testing.T) {
 			{name: "invalid_compression", req: VolumeCreateRequest{
 				Name: "vol", SizeBytes: 1024, Compression: "brotli",
 			}, code: ErrInvalid},
+			// "none" is a real btrfs property, so it blocks chattr +C just like
+			// an algorithm does.
+			{name: "nocow_with_compression_none", req: VolumeCreateRequest{
+				Name: "vol", SizeBytes: 1024, NoCOW: true, Compression: "none",
+			}, code: ErrInvalid},
 			{name: "invalid_compression_level", req: VolumeCreateRequest{
 				Name: "vol", SizeBytes: 1024, Compression: "zstd:99",
 			}, code: ErrInvalid},
@@ -107,14 +112,15 @@ func TestCreateVolume(t *testing.T) {
 		assert.Equal(t, labels, ondisk.Labels)
 	})
 
-	t.Run("nocow_with_compression_none_allowed", func(t *testing.T) {
+	t.Run("nocow_with_compression_off_allowed", func(t *testing.T) {
 		s, _, _, _ := newTestStorage(t)
 
 		meta, err := s.CreateVolume(ctx, "test", VolumeCreateRequest{
-			Name: "vol", SizeBytes: 1024, NoCOW: true, Compression: "none",
+			Name: "vol", SizeBytes: 1024, NoCOW: true, Compression: "",
 		})
-		require.NoError(t, err, "nocow+compression=none should be allowed")
+		require.NoError(t, err, `nocow+compression="" should be allowed`)
 		assert.True(t, meta.NoCOW)
+		assert.Empty(t, meta.Compression)
 	})
 
 	t.Run("success_minimal", func(t *testing.T) {
@@ -155,6 +161,20 @@ func TestCreateVolume(t *testing.T) {
 		require.Len(t, runner.Calls, 2, "expected subvolume create + set compression")
 		assert.Equal(t, []string{"subvolume", "create", dataDir}, runner.Calls[0])
 		assert.Equal(t, []string{"property", "set", dataDir, "compression", "zstd"}, runner.Calls[1])
+	})
+
+	t.Run("success_with_compression_none", func(t *testing.T) {
+		s, bp, runner, _ := newTestStorage(t)
+
+		meta, err := s.CreateVolume(ctx, "test", VolumeCreateRequest{
+			Name: "nonevol", SizeBytes: 2048, Compression: "none",
+		})
+		require.NoError(t, err, "CreateVolume")
+		assert.Equal(t, "none", meta.Compression)
+
+		dataDir := filepath.Join(bp, "nonevol", config.DataDir)
+		require.Len(t, runner.Calls, 2, `"none" must reach btrfs, it overrides a compress= mount option`)
+		assert.Equal(t, []string{"property", "set", dataDir, "compression", "none"}, runner.Calls[1])
 	})
 
 	t.Run("success_with_nocow", func(t *testing.T) {
@@ -458,6 +478,27 @@ func TestUpdateVolume(t *testing.T) {
 				code: ErrInvalid,
 			},
 			{
+				name: "compression_with_nocow",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024, Compression: "zstd"},
+				req:  VolumeUpdateRequest{NoCOW: ptrBool(true)},
+				code: ErrInvalid,
+			},
+			{
+				name: "nocow_and_compression_in_one_request",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
+				req:  VolumeUpdateRequest{NoCOW: ptrBool(true), Compression: ptrString("zstd")},
+				code: ErrInvalid,
+			},
+			{
+				name: "compression_while_reverting_nocow",
+				vol:  "vol",
+				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024, NoCOW: true},
+				req:  VolumeUpdateRequest{NoCOW: ptrBool(false), Compression: ptrString("zstd")},
+				code: ErrInvalid,
+			},
+			{
 				name: "invalid_mode",
 				vol:  "vol",
 				meta: VolumeMetadata{Name: "vol", SizeBytes: 1024},
@@ -563,6 +604,55 @@ func TestUpdateVolume(t *testing.T) {
 		dataDir := filepath.Join(bp, "vol", config.DataDir)
 		require.Len(t, runner.Calls, 1, "expected set compression call")
 		assert.Equal(t, []string{"property", "set", dataDir, "compression", "lzo"}, runner.Calls[0])
+	})
+
+	t.Run("update_compression_unset_reaches_btrfs", func(t *testing.T) {
+		s, bp, runner, _ := newTestStorage(t)
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Compression: "zstd"})
+
+		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
+			Compression: ptrString(""),
+		})
+		require.NoError(t, err, "UpdateVolume")
+		assert.Empty(t, meta.Compression)
+
+		dataDir := filepath.Join(bp, "vol", config.DataDir)
+		require.Len(t, runner.Calls, 1, "clearing compression must reach btrfs")
+		assert.Equal(t, []string{"property", "set", dataDir, "compression", ""}, runner.Calls[0])
+	})
+
+	t.Run("update_compression_none_reaches_btrfs", func(t *testing.T) {
+		s, bp, runner, _ := newTestStorage(t)
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Compression: "zstd"})
+
+		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
+			Compression: ptrString("none"),
+		})
+		require.NoError(t, err, "UpdateVolume")
+		assert.Equal(t, "none", meta.Compression)
+
+		dataDir := filepath.Join(bp, "vol", config.DataDir)
+		require.Len(t, runner.Calls, 1, `"none" must reach btrfs, it overrides a compress= mount option`)
+		assert.Equal(t, []string{"property", "set", dataDir, "compression", "none"}, runner.Calls[0])
+	})
+
+	t.Run("update_compression_off_then_nocow", func(t *testing.T) {
+		s, bp, runner, _ := newTestStorage(t)
+		setupVol(t, s, bp, "vol", VolumeMetadata{Name: "vol", SizeBytes: 1024, Compression: "zstd"})
+
+		meta, err := s.UpdateVolume(ctx, "test", "vol", VolumeUpdateRequest{
+			Compression: ptrString(""),
+			NoCOW:       ptrBool(true),
+		})
+		require.NoError(t, err, "UpdateVolume")
+		assert.True(t, meta.NoCOW)
+		assert.Empty(t, meta.Compression)
+
+		dataDir := filepath.Join(bp, "vol", config.DataDir)
+		require.Len(t, runner.Calls, 2)
+		assert.Equal(t, []string{"property", "set", dataDir, "compression", ""}, runner.Calls[0],
+			"compression must be cleared before chattr +C, which btrfs rejects otherwise")
+		assert.Equal(t, []string{"+C", dataDir}, runner.Calls[1])
 	})
 
 	t.Run("update_nocow_enable", func(t *testing.T) {

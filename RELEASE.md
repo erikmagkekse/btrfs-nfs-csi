@@ -1,14 +1,21 @@
 # Release v0.11.3
 
-**Previous: v0.11.2** | **Date: 2026-08-27**
+**Previous: v0.11.2** | **Date: 2026-08-28**
 
-Routine dependency refresh across the Kubernetes client family, gRPC, echo/v5, `golang.org/x/*`, and Prometheus client. Container build and runtime stages now pinned by SHA256 digest to `golang:1.26.7-alpine3.24` and `alpine:3.24` respectively. No behavior, manifest, or API changes.
+Routine dependency refresh across the Kubernetes client family, gRPC, echo/v5, `golang.org/x/*`, and Prometheus client. Container build and runtime stages now pinned by SHA256 digest to `golang:1.26.7-alpine3.24` and `alpine:3.24` respectively. NoCOW and compression fixes below. No manifest or API changes.
 
 > **Successor:** Active development moves to a hard fork named **[ButterStore](https://github.com/butterstore)**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived. Published artifacts (container images, Helm charts) stay available.
 >
 > *Coming in the first ButterStore release:* snapshot streaming through `snapshot send` / `snapshot receive`. Dump a snapshot to a file, feed one back from a file, or pipe the two commands together to move a snapshot between agents. Auth is capability-token-based, rate limits are configurable globally, per tenant, and per task, and transfers are tracked as tasks that resume from an offset header if the connection drops, so a flaky network doesn't restart the whole thing. Scheduled replication comes later.
 >
 > *The name plays on the colloquial pronunciation of btrfs as "butter-FS" plus its role as a storage backend.*
+
+---
+
+## Fixes
+
+- `volume set --nocow` on a compressed volume recorded NoCOW as enabled without applying it. Update now rejects the combination like create does.
+- `compression: none` never reached btrfs and did nothing. It now sets the property, which turns compression off even under a `compress=` mount. Combining it with `nocow` is refused, `""` stays the value that leaves NoCOW possible.
 
 ---
 
@@ -49,6 +56,7 @@ Operators rebuilding from source: `go.mod` requires Go `>=1.26.5`. The `Containe
 
 - Container image OCI annotations now render on the ghcr.io package page (title, description, source, license).
 - `image.vendor` / `image.authors` split for OCI convention.
+- `e2fsprogs-extra` added to the container image. Its `chattr` reports a failed ioctl with a non-zero exit, the busybox applet does not.
 
 ---
 
