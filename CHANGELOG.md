@@ -29,6 +29,7 @@ Dependency refresh release. Pins the container build and runtime stages by SHA25
 - Bump `github.com/stretchr/testify` from 1.11.1 to 1.12.1 (#182)
 - Bump `github.com/urfave/cli/v3` from 3.8.0 to 3.11.0 (#182)
 - Refresh remaining indirect dependencies (#182)
+- Bump `actions/checkout` and `actions/setup-go` from 6 to 7, `docker/metadata-action` from 5 to 6 (#183)
 
 ## v0.11.2
 
