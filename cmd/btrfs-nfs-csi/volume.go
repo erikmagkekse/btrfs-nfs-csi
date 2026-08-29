@@ -67,6 +67,7 @@ func volumeGet(ctx context.Context, cmd *cli.Command) error {
 	return output(cmd, resp, func() {
 		fmt.Printf("Name:         %s\n", resp.Name)
 		fmt.Printf("Path:         %s\n", resp.Path)
+		fmt.Printf("UUID:         %s\n", resp.UUID)
 		fmt.Printf("Size:         %s\n", utils.FormatBytes(resp.SizeBytes))
 		fmt.Printf("Used:         %s (%.0f%%)\n", utils.FormatBytes(resp.UsedBytes), usedPct(resp.UsedBytes, resp.SizeBytes))
 		fmt.Printf("Quota:        %s\n", utils.FormatBytes(resp.QuotaBytes))

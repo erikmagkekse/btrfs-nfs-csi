@@ -67,16 +67,19 @@ func TestCreateSnapshot(t *testing.T) {
 		assert.Equal(t, "srcvol", meta.Volume)
 		assert.Equal(t, uint64(1024), meta.SizeBytes)
 		assert.False(t, meta.CreatedAt.IsZero(), "CreatedAt should be set")
+		assert.Equal(t, testSubvolUUID, meta.UUID, "UUID should be read from the snapshot subvolume")
 
 		snapDir := filepath.Join(bp, config.SnapshotsDir, "mysnap")
 		var ondisk SnapshotMetadata
 		readTestJSON(t, filepath.Join(snapDir, config.MetadataFile), &ondisk)
 		assert.Equal(t, "mysnap", ondisk.Name)
+		assert.Equal(t, testSubvolUUID, ondisk.UUID, "UUID should be persisted")
 		// btrfs snapshot called with -r (readonly) flag
 		srcData := filepath.Join(bp, "srcvol", config.DataDir)
 		dstData := filepath.Join(snapDir, config.DataDir)
-		require.Len(t, runner.Calls, 1, "expected exactly 1 btrfs call")
+		require.Len(t, runner.Calls, 2, "expected snapshot + show")
 		assert.Equal(t, []string{"subvolume", "snapshot", "-r", srcData, dstData}, runner.Calls[0])
+		assert.Equal(t, []string{"subvolume", "show", dstData}, runner.Calls[1])
 	})
 
 	t.Run("btrfs_fails_cleanup", func(t *testing.T) {

@@ -92,7 +92,7 @@ func (s *StorageIntegrationSuite) SetupSuite() {
 
 	// Default permissive mock exporter
 	exporter := &nfs.MockExporter{}
-	exporter.On("Export", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	exporter.On("Export", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	exporter.On("Unexport", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	exporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{}, nil).Maybe()
 
@@ -135,11 +135,18 @@ func (s *StorageIntegrationSuite) TestVolumeLifecycle() {
 	dataDir := filepath.Join(s.tenantDir, "lifecycle-vol", config.DataDir)
 	s.Assert().True(s.storage.btrfs.SubvolumeExists(s.ctx, dataDir))
 
+	// UUID recorded at creation matches the subvolume
+	realUUID, err := s.storage.btrfs.SubvolumeUUID(s.ctx, dataDir)
+	s.Require().NoError(err)
+	s.Assert().Equal(realUUID, meta.UUID, "metadata uuid must match btrfs subvolume show")
+	s.Assert().Equal(realUUID, readVolumeMeta(s.T(), filepath.Join(s.tenantDir, "lifecycle-vol")).UUID, "uuid must be persisted")
+
 	// Get
 	got, err := s.storage.GetVolume("test", "lifecycle-vol")
 	s.Require().NoError(err)
 	s.Assert().Equal(meta.Name, got.Name)
 	s.Assert().Equal(meta.SizeBytes, got.SizeBytes)
+	s.Assert().Equal(realUUID, got.UUID)
 
 	// List
 	vols, err := s.storage.ListVolumes("test")
@@ -169,6 +176,30 @@ func (s *StorageIntegrationSuite) TestVolumeLifecycle() {
 	s.Assert().False(s.storage.btrfs.SubvolumeExists(s.ctx, dataDir))
 	_, statErr := os.Stat(filepath.Join(s.tenantDir, "lifecycle-vol"))
 	s.Assert().True(os.IsNotExist(statErr))
+}
+
+func (s *StorageIntegrationSuite) TestMigrateSubvolumeUUID() {
+	meta, err := s.storage.CreateVolume(s.ctx, "test", VolumeCreateRequest{
+		Name: "migrate-vol", SizeBytes: 10 * 1024 * 1024,
+	})
+	s.Require().NoError(err)
+	realUUID := meta.UUID
+	s.Require().NotEmpty(realUUID)
+
+	// rewrite metadata as an older agent would: no uuid, one exported client
+	_, err = s.storage.volumes.Update("test", "migrate-vol", func(m *VolumeMetadata) {
+		m.UUID = ""
+		m.Exports = []ExportMetadata{{IP: "10.0.0.1", Labels: map[string]string{"pv": "x"}}}
+	})
+	s.Require().NoError(err)
+
+	s.storage.MigrateSubvolumeUUIDs(s.ctx)
+
+	got, err := s.storage.GetVolume("test", "migrate-vol")
+	s.Require().NoError(err)
+	s.Assert().Equal(realUUID, got.UUID, "migration must read the real subvolume uuid")
+	s.Require().Len(got.Exports, 1)
+	s.Assert().Equal("true", got.Exports[0].Labels[config.LabelExportFSIDCRC32], "attached client keeps the crc32 scheme")
 }
 
 func (s *StorageIntegrationSuite) TestVolumeWithQuota() {
@@ -265,6 +296,11 @@ func (s *StorageIntegrationSuite) TestSnapshotLifecycle() {
 	snapDataDir := filepath.Join(s.tenantDir, config.SnapshotsDir, "my-snapshot", config.DataDir)
 	s.Assert().True(s.storage.btrfs.SubvolumeExists(s.ctx, snapDataDir))
 
+	// Snapshot carries its own subvolume uuid
+	snapUUID, err := s.storage.btrfs.SubvolumeUUID(s.ctx, snapDataDir)
+	s.Require().NoError(err)
+	s.Assert().Equal(snapUUID, snap.UUID, "snapshot uuid must match btrfs subvolume show")
+
 	// Get
 	got, err := s.storage.GetSnapshot("test", "my-snapshot")
 	s.Require().NoError(err)
@@ -321,8 +357,13 @@ func (s *StorageIntegrationSuite) TestCloneLifecycle() {
 	s.Require().NoError(err)
 	s.Assert().Equal("my-clone", clone.Name)
 
-	// Verify data exists in clone
+	// Clone carries its own subvolume uuid
 	cloneDataDir := filepath.Join(s.tenantDir, "my-clone", config.DataDir)
+	cloneUUID, err := s.storage.btrfs.SubvolumeUUID(s.ctx, cloneDataDir)
+	s.Require().NoError(err)
+	s.Assert().Equal(cloneUUID, clone.UUID, "clone uuid must match btrfs subvolume show")
+
+	// Verify data exists in clone
 	content, err := os.ReadFile(filepath.Join(cloneDataDir, "testfile.txt"))
 	s.Require().NoError(err)
 	s.Assert().Equal("hello from volume", string(content))
@@ -343,7 +384,7 @@ func (s *StorageIntegrationSuite) TestExportMetadataPersistence() {
 	s.Require().NoError(err)
 
 	volDir := filepath.Join(s.tenantDir, "export-vol")
-	exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(nil)
+	exporter.On("Export", mock.Anything, volDir, "10.0.0.1", mock.Anything).Return(nil)
 	exporter.On("Unexport", mock.Anything, volDir, "10.0.0.1").Return(nil)
 
 	// Export
@@ -368,7 +409,7 @@ func (s *StorageIntegrationSuite) TestExportMetadataPersistence() {
 
 	// Restore default permissive exporter for remaining tests
 	defaultExporter := &nfs.MockExporter{}
-	defaultExporter.On("Export", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	defaultExporter.On("Export", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	defaultExporter.On("Unexport", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	defaultExporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{}, nil).Maybe()
 	s.storage.exporter = defaultExporter

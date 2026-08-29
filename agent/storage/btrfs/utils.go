@@ -2,6 +2,7 @@ package btrfs
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -278,11 +279,13 @@ func parseQuotaRescanStatus(out string) *QuotaRescanStatus {
 // subvolEntry holds a parsed line from `btrfs subvolume list -o`.
 type subvolEntry struct {
 	ID   string
+	UUID string
 	Path string
 }
 
 // parseSubvolumeListFull parses `btrfs subvolume list -o` output into ID + path pairs.
 // Format: ID 259 gen 12 top level 5 path tenant/vol1/data
+// With -u: ID 259 gen 12 top level 5 uuid 8f3c1c2e-... path tenant/vol1/data
 func parseSubvolumeListFull(out string) []subvolEntry {
 	var entries []subvolEntry
 	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
@@ -293,16 +296,44 @@ func parseSubvolumeListFull(out string) []subvolEntry {
 		if len(fields) < 9 || fields[0] != "ID" {
 			continue
 		}
-		_, path, ok := strings.Cut(line, " path ")
+		before, path, ok := strings.Cut(line, " path ")
 		if !ok {
 			continue
 		}
+		var uuid string
+		if _, u, ok := strings.Cut(before, " uuid "); ok {
+			uuid = strings.TrimSpace(u)
+		}
 		entries = append(entries, subvolEntry{
 			ID:   fields[1],
+			UUID: uuid,
 			Path: path,
 		})
 	}
 	return entries
+}
+
+// subvolumeShowField returns the value of the `key` line in `btrfs subvolume show`
+// output, "" if absent. Prefix match, so "UUID:" skips "Parent UUID:" and
+// "Received UUID:".
+func subvolumeShowField(out, key string) string {
+	for line := range strings.SplitSeq(out, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), key); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+var canonicalUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// parseSubvolumeUUID extracts the lowercased UUID from `btrfs subvolume show` output.
+func parseSubvolumeUUID(out string) (string, error) {
+	uuid := strings.ToLower(subvolumeShowField(out, "UUID:"))
+	if !canonicalUUID.MatchString(uuid) {
+		return "", fmt.Errorf("invalid subvolume uuid %q", uuid)
+	}
+	return uuid, nil
 }
 
 // parseQgroupMap parses `btrfs qgroup show -re --raw` output into a map keyed by qgroup ID.

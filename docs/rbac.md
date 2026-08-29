@@ -62,7 +62,7 @@ A token without an identity keeps Level 2 behavior unchanged. That's useful for 
 
 **Source-ownership**. Without it, another identity in your tenant could snapshot your volume and clone that snapshot to walk away with a copy of your data. The agent blocks that by checking ownership against the **source** (the volume or snapshot being acted on), not just the new resource. Covers snapshots, clones, exports, and defragment tasks. See the matrix below for the full list.
 
-**Update boundary**. When a client replaces a volume's labels, they cannot change `created-by` or set the `tenant` label. If they leave `created-by` out, the existing value stays. Without this guard, an owner could overwrite `created-by` and hand off the volume or its history. Admins follow the same rule: their ownership bypass doesn't let them rewrite `created-by`.
+**Update boundary**. When a client replaces a volume's labels, they cannot change `created-by` or set the `tenant` label. If they leave `created-by` out, the existing value stays. Without this guard, an owner could overwrite `created-by` and hand off the volume or its history. Admins follow the same rule: their ownership bypass doesn't let them rewrite `created-by`. Resources that carry none are the exception, there the supplied value adopts them.
 
 ### Migration (pre v0.10.0)
 
@@ -112,7 +112,7 @@ The agent enforces `created-by == identity` on create, and `identity == created-
 | Create FS-global     |   ✓   |       |
 | Cancel Task          |       |   ✓   |
 
-¹ Update Volume doesn't write a new `created-by`. Instead it enforces three rules: clients cannot set the `tenant` label (the server tracks which tenant a resource belongs to itself), `created-by` cannot be changed, and replacing the labels keeps the existing `created-by` even if the client omits it.
+¹ Update Volume doesn't write a new `created-by`. Instead it enforces three rules: clients cannot set the `tenant` label (the server tracks which tenant a resource belongs to itself), `created-by` cannot be changed once set, and replacing the labels keeps the existing `created-by` even if the client omits it.
 
 ## Denial telemetry
 

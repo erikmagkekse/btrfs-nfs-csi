@@ -23,29 +23,23 @@ func newTestManager(r utils.Runner) *Manager {
 	return &Manager{bin: "btrfs", cmd: r}
 }
 
-func TestQgroupUsageEx(t *testing.T) {
-	// $ btrfs subvolume show /mnt/data/vol1
-	// /mnt/data/vol1
-	// 	Name:			vol1
-	// 	UUID:			abcdef-1234
-	// 	...
-	// 	Subvolume ID:		259
-	// 	...
-	showOutput := strings.Join([]string{
-		"/mnt/data/vol1",
-		"\tName:\t\t\tvol1",
-		"\tUUID:\t\t\tabcdef-1234",
-		"\tParent UUID:\t\t-",
-		"\tReceived UUID:\t\t-",
-		"\tCreation time:\t\t2025-01-01 00:00:00 +0000",
-		"\tSubvolume ID:\t\t259",
-		"\tGeneration:\t\t42",
-		"\tGen at creation:\t42",
-		"\tParent ID:\t\t5",
-		"\tTop level ID:\t\t5",
-		"\tFlags:\t\t\t-",
-	}, "\n")
+// $ btrfs subvolume show /mnt/data/vol1
+var showOutput = strings.Join([]string{
+	"/mnt/data/vol1",
+	"\tName:\t\t\tvol1",
+	"\tUUID:\t\t\t66034490-3B5C-7645-8DE2-CE5C462FDDCA",
+	"\tParent UUID:\t\t1c2d3e4f-0000-4000-8000-000000000000",
+	"\tReceived UUID:\t\t-",
+	"\tCreation time:\t\t2025-01-01 00:00:00 +0000",
+	"\tSubvolume ID:\t\t259",
+	"\tGeneration:\t\t42",
+	"\tGen at creation:\t42",
+	"\tParent ID:\t\t5",
+	"\tTop level ID:\t\t5",
+	"\tFlags:\t\t\t-",
+}, "\n")
 
+func TestQgroupUsageEx(t *testing.T) {
 	// $ btrfs qgroup show -re --raw /mnt/data/vol1
 	// qgroupid         rfer         excl
 	// --------         ----         ----
@@ -125,7 +119,6 @@ func TestQgroupUsageEx(t *testing.T) {
 }
 
 func TestQgroupUsage(t *testing.T) {
-	showOutput := "  Subvolume ID:\t\t259\n"
 	qgroupOutput := "0/259        16384         8192\n"
 
 	m := &utils.MockRunner{
@@ -141,6 +134,81 @@ func TestQgroupUsage(t *testing.T) {
 	used, err := mgr.QgroupUsage(context.Background(), "/mnt/data/vol1")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(16384), used)
+}
+
+func TestParseSubvolumeUUID(t *testing.T) {
+	tests := []struct {
+		name    string
+		out     string
+		want    string
+		wantErr string
+	}{
+		{"canonical lowercased", showOutput, "66034490-3b5c-7645-8de2-ce5c462fddca", ""},
+		{"parent uuid does not match", "\tParent UUID:\t\t1c2d3e4f-0000-4000-8000-000000000000\n\tSubvolume ID:\t\t259\n", "", "invalid subvolume uuid"},
+		{"invalid format", "\tUUID:\t\t\tabcdef-1234\n", "", "invalid subvolume uuid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSubvolumeUUID(tt.out)
+			if tt.wantErr != "" {
+				assert.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSubvolumeUUID(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		m := &utils.MockRunner{Out: showOutput}
+		mgr := newTestManager(m)
+
+		uuid, err := mgr.SubvolumeUUID(context.Background(), "/mnt/data/vol1")
+		require.NoError(t, err)
+		assert.Equal(t, "66034490-3b5c-7645-8de2-ce5c462fddca", uuid)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"subvolume", "show", "/mnt/data/vol1"}, m.Calls[0])
+	})
+
+	t.Run("command error", func(t *testing.T) {
+		m := &utils.MockRunner{Err: fmt.Errorf("show failed")}
+		mgr := newTestManager(m)
+
+		_, err := mgr.SubvolumeUUID(context.Background(), "/mnt/data/vol1")
+		require.Error(t, err)
+	})
+}
+
+func TestSubvolumeUUIDs(t *testing.T) {
+	// $ btrfs subvolume list -u -o /mnt/data
+	listOutput := strings.Join([]string{
+		"ID 259 gen 12 top level 5 uuid 66034490-3b5c-7645-8de2-ce5c462fddca path tenant/vol1/data",
+		"ID 260 gen 13 top level 5 uuid 8f3c1c2e-4d5a-4b6c-9e7f-0a1b2c3d4e5f path tenant/snapshots/snap1/data",
+	}, "\n")
+
+	t.Run("success", func(t *testing.T) {
+		m := &utils.MockRunner{Out: listOutput}
+		mgr := newTestManager(m)
+
+		uuids, err := mgr.SubvolumeUUIDs(context.Background(), "/mnt/data")
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{
+			"tenant/vol1/data":            "66034490-3b5c-7645-8de2-ce5c462fddca",
+			"tenant/snapshots/snap1/data": "8f3c1c2e-4d5a-4b6c-9e7f-0a1b2c3d4e5f",
+		}, uuids)
+		require.Len(t, m.Calls, 1)
+		assert.Equal(t, []string{"subvolume", "list", "-u", "-o", "/mnt/data"}, m.Calls[0])
+	})
+
+	t.Run("command error", func(t *testing.T) {
+		m := &utils.MockRunner{Err: fmt.Errorf("list failed")}
+		mgr := newTestManager(m)
+
+		_, err := mgr.SubvolumeUUIDs(context.Background(), "/mnt/data")
+		require.Error(t, err)
+	})
 }
 
 func TestSubvolumeList(t *testing.T) {

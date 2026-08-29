@@ -44,6 +44,7 @@ func volumeDetailResponseFrom(meta *storage.VolumeMetadata) models.VolumeDetailR
 		Name:         meta.Name,
 		CreatedBy:    meta.Labels[config.LabelCreatedBy],
 		Path:         meta.Path,
+		UUID:         meta.UUID,
 		SizeBytes:    meta.SizeBytes,
 		NoCOW:        meta.NoCOW,
 		Compression:  meta.Compression,

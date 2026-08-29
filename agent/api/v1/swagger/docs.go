@@ -1447,6 +1447,10 @@ const docTemplate = `{
                     "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
                 },
+                "uuid": {
+                    "description": "btrfs subvolume UUID",
+                    "type": "string"
+                },
                 "volume": {
                     "description": "source volume name",
                     "type": "string"
@@ -1800,7 +1804,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "compression": {
-                    "description": "\"zstd\", \"zstd:3\", \"zlib\", \"zlib:5\", \"lzo\", or \"\"",
+                    "description": "\"zstd\", \"zstd:3\", \"zlib\", \"zlib:5\", \"lzo\", \"none\" (off), or \"\" (mount decides)",
                     "type": "string"
                 },
                 "gid": {
@@ -1851,7 +1855,7 @@ const docTemplate = `{
                     }
                 },
                 "compression": {
-                    "description": "compression algorithm (e.g. \"zstd\", \"zlib\", \"lzo\", \"\")",
+                    "description": "\"zstd\", \"zstd:3\", \"zlib\", \"zlib:5\", \"lzo\", \"none\" (off), or \"\" (mount decides)",
                     "type": "string"
                 },
                 "created_at": {
@@ -1912,6 +1916,10 @@ const docTemplate = `{
                 "used_bytes": {
                     "description": "bytes used (btrfs qgroup accounting)",
                     "type": "integer"
+                },
+                "uuid": {
+                    "description": "btrfs subvolume UUID",
+                    "type": "string"
                 }
             }
         },

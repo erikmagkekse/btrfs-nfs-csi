@@ -2,8 +2,6 @@ package storage
 
 import (
 	"encoding/json"
-	"maps"
-	"slices"
 	"time"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -14,6 +12,7 @@ import (
 type VolumeMetadata struct {
 	Name         string            `json:"name"`
 	Path         string            `json:"path"`
+	UUID         string            `json:"uuid"` // btrfs subvolume UUID of data/
 	SizeBytes    uint64            `json:"size_bytes"`
 	NoCOW        bool              `json:"nocow"`
 	Compression  string            `json:"compression"`
@@ -33,6 +32,7 @@ type SnapshotMetadata struct {
 	Name           string `json:"name"`
 	Volume         string `json:"volume"`
 	Path           string `json:"path"`
+	UUID           string `json:"uuid"` // btrfs subvolume UUID of data/
 	SizeBytes      uint64 `json:"size_bytes"`
 	UsedBytes      uint64 `json:"used_bytes"`
 	ExclusiveBytes uint64 `json:"exclusive_bytes"`
@@ -106,56 +106,6 @@ type ExportMetadata struct {
 	IP        string            `json:"ip"`
 	Labels    map[string]string `json:"labels,omitempty"`
 	CreatedAt time.Time         `json:"created_at"`
-}
-
-func uniqueExportIPs(clients []ExportMetadata) []string {
-	seen := map[string]struct{}{}
-	for _, c := range clients {
-		seen[c.IP] = struct{}{}
-	}
-	ips := make([]string, 0, len(seen))
-	for ip := range seen {
-		ips = append(ips, ip)
-	}
-	slices.Sort(ips)
-	return ips
-}
-
-func CountUniqueExportIPs(clients []ExportMetadata) int {
-	seen := map[string]struct{}{}
-	for _, c := range clients {
-		seen[c.IP] = struct{}{}
-	}
-	return len(seen)
-}
-
-func hasExport(clients []ExportMetadata, ip string, labels map[string]string) bool {
-	for _, c := range clients {
-		if c.IP == ip && maps.Equal(c.Labels, labels) {
-			return true
-		}
-	}
-	return false
-}
-
-func exportsForIP(clients []ExportMetadata, ip string) int {
-	n := 0
-	for _, c := range clients {
-		if c.IP == ip {
-			n++
-		}
-	}
-	return n
-}
-
-// labelsContain reports whether stored contains all key-value pairs from match.
-func labelsContain(stored, match map[string]string) bool {
-	for k, v := range match {
-		if stored[k] != v {
-			return false
-		}
-	}
-	return true
 }
 
 func (m *VolumeMetadata) UnmarshalJSON(data []byte) error {

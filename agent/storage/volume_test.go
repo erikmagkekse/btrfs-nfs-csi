@@ -139,13 +139,16 @@ func TestCreateVolume(t *testing.T) {
 		assert.Empty(t, meta.Compression)
 		assert.False(t, meta.CreatedAt.IsZero(), "CreatedAt should be set")
 		assert.False(t, meta.UpdatedAt.IsZero(), "UpdatedAt should be set")
+		assert.Equal(t, testSubvolUUID, meta.UUID, "UUID should be read from subvolume show")
 
 		ondisk := readVolumeMeta(t, filepath.Join(bp, "myvol"))
 		assert.Equal(t, meta.Name, ondisk.Name, "on-disk metadata should match")
+		assert.Equal(t, testSubvolUUID, ondisk.UUID, "UUID should be persisted")
 
 		dataDir := filepath.Join(bp, "myvol", config.DataDir)
-		require.Len(t, runner.Calls, 1, "expected exactly 1 btrfs call")
+		require.Len(t, runner.Calls, 2, "expected subvolume create + show")
 		assert.Equal(t, []string{"subvolume", "create", dataDir}, runner.Calls[0])
+		assert.Equal(t, []string{"subvolume", "show", dataDir}, runner.Calls[1])
 	})
 
 	t.Run("success_with_compression", func(t *testing.T) {
@@ -158,9 +161,7 @@ func TestCreateVolume(t *testing.T) {
 		assert.Equal(t, "zstd", meta.Compression)
 
 		dataDir := filepath.Join(bp, "compvol", config.DataDir)
-		require.Len(t, runner.Calls, 2, "expected subvolume create + set compression")
-		assert.Equal(t, []string{"subvolume", "create", dataDir}, runner.Calls[0])
-		assert.Equal(t, []string{"property", "set", dataDir, "compression", "zstd"}, runner.Calls[1])
+		assert.True(t, containsCall(runner.Calls, "property", "set", dataDir, "compression", "zstd"), "calls: %v", runner.Calls)
 	})
 
 	t.Run("success_with_compression_none", func(t *testing.T) {
@@ -173,8 +174,8 @@ func TestCreateVolume(t *testing.T) {
 		assert.Equal(t, "none", meta.Compression)
 
 		dataDir := filepath.Join(bp, "nonevol", config.DataDir)
-		require.Len(t, runner.Calls, 2, `"none" must reach btrfs, it overrides a compress= mount option`)
-		assert.Equal(t, []string{"property", "set", dataDir, "compression", "none"}, runner.Calls[1])
+		assert.True(t, containsCall(runner.Calls, "property", "set", dataDir, "compression", "none"),
+			`"none" must reach btrfs, it overrides a compress= mount option, calls: %v`, runner.Calls)
 	})
 
 	t.Run("success_with_nocow", func(t *testing.T) {
@@ -187,9 +188,7 @@ func TestCreateVolume(t *testing.T) {
 		assert.True(t, meta.NoCOW)
 
 		dataDir := filepath.Join(bp, "cowvol", config.DataDir)
-		require.Len(t, runner.Calls, 2, "expected subvolume create + chattr")
-		assert.Equal(t, []string{"subvolume", "create", dataDir}, runner.Calls[0])
-		assert.Equal(t, []string{"+C", dataDir}, runner.Calls[1])
+		assert.True(t, containsCall(runner.Calls, "+C", dataDir), "calls: %v", runner.Calls)
 	})
 
 	t.Run("success_with_quota", func(t *testing.T) {
@@ -203,9 +202,7 @@ func TestCreateVolume(t *testing.T) {
 		assert.Equal(t, uint64(4096), meta.QuotaBytes)
 
 		dataDir := filepath.Join(bp, "quotavol", config.DataDir)
-		require.Len(t, runner.Calls, 2, "expected subvolume create + qgroup limit")
-		assert.Equal(t, []string{"subvolume", "create", dataDir}, runner.Calls[0])
-		assert.Equal(t, []string{"qgroup", "limit", "4096", dataDir}, runner.Calls[1])
+		assert.True(t, containsCall(runner.Calls, "qgroup", "limit", "4096", dataDir), "calls: %v", runner.Calls)
 	})
 
 	t.Run("already_exists", func(t *testing.T) {
@@ -321,6 +318,9 @@ func TestCreateVolume(t *testing.T) {
 			RunFn: func(args []string) (string, error) {
 				if len(args) >= 1 && args[0] == "+C" {
 					return "", fmt.Errorf("chattr failed")
+				}
+				if isSubvolumeShow(args) {
+					return subvolumeShowOutput, nil
 				}
 				return "", nil
 			},
@@ -865,6 +865,9 @@ func (r *btrfsSimRunner) Run(_ context.Context, _ string, args ...string) (strin
 	if len(args) >= 3 && args[0] == "subvolume" && args[1] == "delete" {
 		_ = os.RemoveAll(args[2])
 		return "", nil
+	}
+	if isSubvolumeShow(args) {
+		return subvolumeShowOutput, nil
 	}
 	return "", nil
 }

@@ -93,15 +93,22 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
 	}
 
+	cleanup := func() {
+		if err := s.cleanupSubvolume(ctx, dstData, cloneDir); err != nil {
+			log.Warn().Err(err).Str("path", cloneDir).Msg("cleanup after failed create")
+		}
+	}
+
+	uuid, err := s.btrfs.SubvolumeUUID(ctx, dstData)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("read subvolume uuid: %w", err)
+	}
+
 	if s.quotaEnabled && srcVol.QuotaBytes > 0 {
 		if err := s.btrfs.QgroupLimit(ctx, dstData, srcVol.QuotaBytes); err != nil {
 			log.Error().Err(err).Str("path", dstData).Msg("failed to set qgroup limit on clone")
-			if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
-				log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
-			}
-			if rmErr := os.RemoveAll(cloneDir); rmErr != nil {
-				log.Warn().Err(rmErr).Str("path", cloneDir).Msg("cleanup: failed to remove directory")
-			}
+			cleanup()
 			return nil, fmt.Errorf("qgroup limit failed: %w", err)
 		}
 	}
@@ -110,6 +117,7 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 	vol := VolumeMetadata{
 		Name:        req.Name,
 		Path:        cloneDir,
+		UUID:        uuid,
 		SizeBytes:   srcVol.SizeBytes,
 		QuotaBytes:  srcVol.QuotaBytes,
 		Compression: srcVol.Compression,
@@ -124,12 +132,7 @@ func (s *Storage) CreateClone(ctx context.Context, tenant string, req CloneCreat
 
 	if err := s.volumes.Store(tenant, req.Name, &vol); err != nil {
 		log.Error().Err(err).Msg("failed to write clone metadata")
-		if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
-			log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
-		}
-		if rmErr := os.RemoveAll(cloneDir); rmErr != nil {
-			log.Warn().Err(rmErr).Str("path", cloneDir).Msg("cleanup: failed to remove directory")
-		}
+		cleanup()
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 

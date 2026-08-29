@@ -33,6 +33,7 @@ func snapshotDetailResponseFrom(meta *storage.SnapshotMetadata) models.SnapshotD
 		CreatedBy:      meta.Labels[config.LabelCreatedBy],
 		Volume:         meta.Volume,
 		Path:           meta.Path,
+		UUID:           meta.UUID,
 		SizeBytes:      meta.SizeBytes,
 		UsedBytes:      meta.UsedBytes,
 		ExclusiveBytes: meta.ExclusiveBytes,

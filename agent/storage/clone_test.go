@@ -71,16 +71,19 @@ func TestCreateClone(t *testing.T) {
 		assert.Equal(t, "myclone", meta.Name)
 		assert.Equal(t, filepath.Join(bp, "myclone"), meta.Path)
 		assert.False(t, meta.CreatedAt.IsZero(), "CreatedAt should be set")
+		assert.Equal(t, testSubvolUUID, meta.UUID, "UUID should be read from the new subvolume")
 
 		var ondisk VolumeMetadata
 		readTestJSON(t, filepath.Join(bp, "myclone", config.MetadataFile), &ondisk)
 		assert.Equal(t, "myclone", ondisk.Name, "on-disk metadata should match")
+		assert.Equal(t, testSubvolUUID, ondisk.UUID, "UUID should be persisted")
 
 		// btrfs snapshot called WITHOUT -r flag (writable clone)
 		srcData := filepath.Join(bp, config.SnapshotsDir, "mysnap", config.DataDir)
 		dstData := filepath.Join(bp, "myclone", config.DataDir)
-		require.Len(t, runner.Calls, 1, "expected exactly 1 btrfs call")
+		require.Len(t, runner.Calls, 2, "expected snapshot + show")
 		assert.Equal(t, []string{"subvolume", "snapshot", srcData, dstData}, runner.Calls[0])
+		assert.Equal(t, []string{"subvolume", "show", dstData}, runner.Calls[1])
 	})
 
 	t.Run("btrfs_fails_cleanup", func(t *testing.T) {
@@ -135,8 +138,7 @@ func TestCreateClone(t *testing.T) {
 		assert.Equal(t, uint64(4096), meta.QuotaBytes)
 
 		dstData := filepath.Join(bp, "quotaclone", config.DataDir)
-		require.Len(t, runner.Calls, 2, "expected snapshot + qgroup limit calls")
-		assert.Equal(t, []string{"qgroup", "limit", "4096", dstData}, runner.Calls[1])
+		assert.True(t, containsCall(runner.Calls, "qgroup", "limit", "4096", dstData), "calls: %v", runner.Calls)
 	})
 
 	t.Run("source_volume_deleted_fallback", func(t *testing.T) {

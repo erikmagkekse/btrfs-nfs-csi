@@ -88,7 +88,9 @@ UID and GID must be between 0 and 65534. Mode must be valid octal between 0000 a
 
 ## NFS Exports
 
-Export options: `rw,nohide,crossmnt,no_root_squash,no_subtree_check,fsid=<crc32>`
+Export options: `rw,nohide,crossmnt,no_root_squash,no_subtree_check,fsid=<subvolume-uuid>` (the `uuid` from `volume get`).
+
+Volumes created before v0.12.0 used crc32 of the path. Clients attached at upgrade keep that fsid, marked `nfs.fsid.crc32=true` on their export entry. Later clients get the UUID fsid.
 
 ```bash
 btrfs-nfs-csi export add my-app 10.0.1.1

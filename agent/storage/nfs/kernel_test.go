@@ -3,7 +3,6 @@ package nfs
 import (
 	"context"
 	"fmt"
-	"hash/crc32"
 	"os"
 	"slices"
 	"strings"
@@ -31,26 +30,21 @@ func TestExport(t *testing.T) {
 		m := &utils.MockRunner{}
 		e := newTestExporter(m)
 
-		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
+		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1", "1296402296")
 		require.NoError(t, err, "Export()")
 		require.Len(t, m.Calls, 1)
 
 		args := strings.Join(m.Calls[0], " ")
 		assert.Contains(t, args, "-o")
 		assert.Contains(t, args, "10.0.0.1:/data/vol1")
-
-		fsid := crc32.ChecksumIEEE([]byte("/data/vol1")) & fsidMask
-		if fsid == 0 {
-			fsid = 1
-		}
-		assert.Contains(t, args, fmt.Sprintf("fsid=%d", fsid))
+		assert.Contains(t, args, ",fsid=1296402296 ", "fsid passed through unchanged")
 	})
 
 	t.Run("ipv6_brackets", func(t *testing.T) {
 		m := &utils.MockRunner{}
 		e := newTestExporter(m)
 
-		err := e.Export(context.Background(), "/data/vol1", "::1")
+		err := e.Export(context.Background(), "/data/vol1", "::1", "1")
 		require.NoError(t, err)
 		require.Len(t, m.Calls, 1)
 
@@ -63,7 +57,7 @@ func TestExport(t *testing.T) {
 		m := &utils.MockRunner{}
 		e := newTestExporter(m)
 
-		err := e.Export(context.Background(), "/data/vol1", "2001:db8::1")
+		err := e.Export(context.Background(), "/data/vol1", "2001:db8::1", "1")
 		require.NoError(t, err)
 
 		args := strings.Join(m.Calls[0], " ")
@@ -74,7 +68,7 @@ func TestExport(t *testing.T) {
 		m := &utils.MockRunner{}
 		e := newTestExporter(m)
 
-		err := e.Export(context.Background(), "/data/vol1", "192.168.1.1")
+		err := e.Export(context.Background(), "/data/vol1", "192.168.1.1", "1")
 		require.NoError(t, err)
 
 		args := strings.Join(m.Calls[0], " ")
@@ -86,7 +80,7 @@ func TestExport(t *testing.T) {
 		m := &utils.MockRunner{Err: fmt.Errorf("permission denied")}
 		e := newTestExporter(m)
 
-		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
+		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1", "1")
 		require.Error(t, err)
 	})
 }
@@ -96,7 +90,7 @@ func TestExportCustomOptions(t *testing.T) {
 		m := &utils.MockRunner{}
 		e := &kernelExporter{bin: "exportfs", cmd: m, opts: "rw,no_root_squash,async"}
 
-		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
+		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1", "1")
 		require.NoError(t, err)
 		require.Len(t, m.Calls, 1)
 
@@ -109,15 +103,11 @@ func TestExportCustomOptions(t *testing.T) {
 		m := &utils.MockRunner{}
 		e := &kernelExporter{bin: "exportfs", cmd: m, opts: "rw"}
 
-		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1")
+		err := e.Export(context.Background(), "/data/vol1", "10.0.0.1", "1296402296")
 		require.NoError(t, err)
 
 		args := strings.Join(m.Calls[0], " ")
-		fsid := crc32.ChecksumIEEE([]byte("/data/vol1")) & fsidMask
-		if fsid == 0 {
-			fsid = 1
-		}
-		assert.Contains(t, args, fmt.Sprintf("rw,fsid=%d", fsid))
+		assert.Contains(t, args, "rw,fsid=1296402296")
 	})
 }
 

@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/btrfs"
-	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/meta"
 	"github.com/erikmagkekse/btrfs-nfs-csi/agent/storage/nfs"
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
@@ -21,31 +19,7 @@ import (
 // testStorageWithExporter creates a Storage with a temp dir and mock exporter.
 func testStorageWithExporter(t *testing.T, exporter *nfs.MockExporter) (*Storage, string) {
 	t.Helper()
-	base := t.TempDir()
-	t.Cleanup(func() {
-		_ = filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
-			if err == nil && !d.IsDir() {
-				meta.ClearImmutable(path)
-			}
-			return nil
-		})
-	})
-	tenant := "test"
-	tenantPath := filepath.Join(base, tenant)
-	require.NoError(t, os.MkdirAll(tenantPath, 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(tenantPath, config.SnapshotsDir), 0o755))
-
-	mgr := btrfs.NewManagerWithRunner("btrfs", &utils.MockRunner{})
-	s := &Storage{
-		basePath:       base,
-		btrfs:          mgr,
-		exporter:       exporter,
-		tenants:        []string{tenant},
-		defaultDirMode: 0o755,
-		volumes:        meta.NewStore[VolumeMetadata](base),
-		snapshots:      meta.NewStore[SnapshotMetadata](base, config.SnapshotsDir),
-	}
-	return s, tenantPath
+	return testStorageWithRunner(t, &utils.MockRunner{}, exporter)
 }
 
 // writeTestMetadata writes a VolumeMetadata JSON into volDir/metadata.json.
@@ -89,7 +63,7 @@ func TestReconcileExports(t *testing.T) {
 		s.reconcileExports(ctx, "test")
 
 		exporter.AssertExpectations(t)
-		exporter.AssertNotCalled(t, "Export", mock.Anything, mock.Anything, mock.Anything)
+		exporter.AssertNotCalled(t, "Export", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		exporter.AssertNotCalled(t, "Unexport", mock.Anything, mock.Anything, mock.Anything)
 	})
 
@@ -117,7 +91,7 @@ func TestReconcileExports(t *testing.T) {
 
 		exporter.AssertExpectations(t)
 		exporter.AssertCalled(t, "Unexport", mock.Anything, deletedPath, "")
-		exporter.AssertNotCalled(t, "Export", mock.Anything, mock.Anything, mock.Anything)
+		exporter.AssertNotCalled(t, "Export", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("missing_export_restored", func(t *testing.T) {
@@ -141,14 +115,41 @@ func TestReconcileExports(t *testing.T) {
 		exporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{
 			{Path: vol1, Client: "10.0.0.1"},
 		}, nil)
-		exporter.On("Export", mock.Anything, vol1, "10.0.0.2").Return(nil)
-		exporter.On("Export", mock.Anything, vol2, "10.0.0.3").Return(nil)
+		exporter.On("Export", mock.Anything, vol1, "10.0.0.2", pathFSID(vol1)).Return(nil)
+		exporter.On("Export", mock.Anything, vol2, "10.0.0.3", pathFSID(vol2)).Return(nil)
 
 		s.reconcileExports(ctx, "test")
 
 		exporter.AssertExpectations(t)
 		exporter.AssertNumberOfCalls(t, "Export", 2)
 		exporter.AssertNotCalled(t, "Unexport", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("restored_export_uses_uuid_when_present", func(t *testing.T) {
+		exporter := &nfs.MockExporter{}
+		s, bp := testStorageWithExporter(t, exporter)
+
+		newVol := seedVolume(t, s, "test", bp, VolumeMetadata{
+			Name:    "newvol",
+			UUID:    testSubvolUUID,
+			Exports: []ExportMetadata{{IP: "10.0.0.1"}},
+		})
+
+		// migrated volume: uuid known, client still on the crc32 fsid
+		marked := seedVolume(t, s, "test", bp, VolumeMetadata{
+			Name:    "markedvol",
+			UUID:    testSubvolUUID,
+			Exports: []ExportMetadata{{IP: "10.0.0.3", Labels: withCRC32FSID(nil)}},
+		})
+
+		exporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{}, nil)
+		exporter.On("Export", mock.Anything, newVol, "10.0.0.1", testSubvolFSID).Return(nil)
+		exporter.On("Export", mock.Anything, marked, "10.0.0.3", pathFSID(marked)).Return(nil)
+
+		s.reconcileExports(ctx, "test")
+
+		exporter.AssertExpectations(t)
+		exporter.AssertNumberOfCalls(t, "Export", 2)
 	})
 
 	t.Run("orphan_removal_failure_continues", func(t *testing.T) {
@@ -171,13 +172,13 @@ func TestReconcileExports(t *testing.T) {
 		}, nil)
 		exporter.On("Unexport", mock.Anything, orphan1, "").Return(fmt.Errorf("nfs error"))
 		exporter.On("Unexport", mock.Anything, orphan2, "").Return(nil)
-		exporter.On("Export", mock.Anything, healthy, "10.0.0.10").Return(nil)
+		exporter.On("Export", mock.Anything, healthy, "10.0.0.10", pathFSID(healthy)).Return(nil)
 
 		s.reconcileExports(ctx, "test")
 
 		exporter.AssertExpectations(t)
 		exporter.AssertNumberOfCalls(t, "Unexport", 2)
-		exporter.AssertCalled(t, "Export", mock.Anything, healthy, "10.0.0.10")
+		exporter.AssertCalled(t, "Export", mock.Anything, healthy, "10.0.0.10", pathFSID(healthy))
 	})
 
 	t.Run("corrupt_metadata_skipped", func(t *testing.T) {
@@ -203,13 +204,13 @@ func TestReconcileExports(t *testing.T) {
 		})
 
 		exporter.On("ListExports", mock.Anything).Return([]nfs.ExportInfo{}, nil)
-		exporter.On("Export", mock.Anything, healthy, "10.0.0.1").Return(nil)
+		exporter.On("Export", mock.Anything, healthy, "10.0.0.1", pathFSID(healthy)).Return(nil)
 
 		s.reconcileExports(ctx, "test")
 
 		exporter.AssertExpectations(t)
 		exporter.AssertNumberOfCalls(t, "Export", 1)
-		exporter.AssertCalled(t, "Export", mock.Anything, healthy, "10.0.0.1")
+		exporter.AssertCalled(t, "Export", mock.Anything, healthy, "10.0.0.1", pathFSID(healthy))
 	})
 
 	t.Run("exports_outside_basepath_ignored", func(t *testing.T) {
@@ -233,7 +234,7 @@ func TestReconcileExports(t *testing.T) {
 
 		exporter.AssertExpectations(t)
 		exporter.AssertNotCalled(t, "Unexport", mock.Anything, mock.Anything, mock.Anything)
-		exporter.AssertNotCalled(t, "Export", mock.Anything, mock.Anything, mock.Anything)
+		exporter.AssertNotCalled(t, "Export", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	t.Run("list_exports_error_aborts", func(t *testing.T) {
@@ -247,7 +248,7 @@ func TestReconcileExports(t *testing.T) {
 		})
 
 		exporter.AssertExpectations(t)
-		exporter.AssertNotCalled(t, "Export", mock.Anything, mock.Anything, mock.Anything)
+		exporter.AssertNotCalled(t, "Export", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 		exporter.AssertNotCalled(t, "Unexport", mock.Anything, mock.Anything, mock.Anything)
 	})
 }
