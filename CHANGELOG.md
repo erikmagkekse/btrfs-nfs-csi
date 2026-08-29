@@ -9,6 +9,7 @@ Subvolume UUIDs in metadata and as NFS export fsid, a dependency refresh with co
 
 ### Bug Fixes
 - Fix NoCOW and compression not being applied to btrfs in special cases (#183)
+- Fix the stale image tag in the agent quadlet and add Restart=always (#185)
 
 ### Dependencies
 - Refresh dependencies, pin container base images by digest (#182)

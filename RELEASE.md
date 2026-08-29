@@ -2,7 +2,7 @@
 
 **Previous: v0.11.2** | **Date: 2026-08-29**
 
-Routine dependency refresh across the Kubernetes client family, gRPC, echo/v5, `golang.org/x/*`, and Prometheus client. Container build and runtime stages now pinned by SHA256 digest to `golang:1.26.7-alpine3.24` and `alpine:3.24` respectively. NoCOW and compression fixes below. No manifest changes beyond the image tag.
+Routine dependency refresh across the Kubernetes client family, gRPC, echo/v5, `golang.org/x/*`, and Prometheus client. Container build and runtime stages now pinned by SHA256 digest to `golang:1.26.7-alpine3.24` and `alpine:3.24` respectively. NoCOW and compression fixes below.
 
 > **Successor:** Active development moves to a hard fork named **[ButterStore](https://github.com/butterstore)**, which reframes the project around what it has actually become: a general-purpose btrfs storage backend where the Kubernetes CSI driver is one of several integrations. Migration is a drop-in: tokens, REST API, CLI, Helm values, StorageClasses, PVCs, and VolumeSnapshots all keep working. A migration guide ships with the first ButterStore release. Once ButterStore ships, this repo gets archived. Published artifacts (container images, Helm charts) stay available.
 >
@@ -63,6 +63,7 @@ Operators rebuilding from source: `go.mod` requires Go `>=1.26.5`. The `Containe
 
 - Container image OCI annotations now render on the ghcr.io package page (title, description, source, license).
 - `image.vendor` / `image.authors` split for OCI convention.
+- The Podman quadlet template gets `Restart=always` and `RestartSec=5`, matching `agent.service`.
 - `e2fsprogs-extra` added to the container image. Its `chattr` reports a failed ioctl with a non-zero exit, the busybox applet does not.
 
 ---

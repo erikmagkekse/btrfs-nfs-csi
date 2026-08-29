@@ -46,7 +46,7 @@ kubectl logs -n btrfs-nfs-csi deploy/btrfs-nfs-csi-controller -c csi-driver
 ```
 
 ```
-INF agent healthy - vibes immaculate, bits aligned, absolutely bussin sc=btrfs-nfs version=0.11.2
+INF agent healthy - vibes immaculate, bits aligned, absolutely bussin sc=btrfs-nfs version=0.12.0
 ```
 
 > **Note:** If the agent and driver were built from slightly different commits of the same version, you'll see "agent healthy - commit mismatch" instead. This is normal and everything works fine. Only a WRN-level "version mismatch" indicates a real problem.
