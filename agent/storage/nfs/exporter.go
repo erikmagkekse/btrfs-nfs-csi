@@ -8,7 +8,7 @@ type ExportInfo struct {
 }
 
 type Exporter interface {
-	Export(ctx context.Context, path string, client string) error
+	Export(ctx context.Context, path, client, fsid string) error    // fsid: 32-hex UUID or numeric
 	Unexport(ctx context.Context, path string, client string) error // client="" removes all
 	ListExports(ctx context.Context) ([]ExportInfo, error)
 }

@@ -25,11 +25,11 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	if req.SizeBytes == 0 {
 		return nil, &StorageError{Code: ErrInvalid, Message: "size_bytes is required"}
 	}
-	if req.NoCOW && req.Compression != "" && req.Compression != "none" {
-		return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
-	}
 	if !utils.IsValidCompression(req.Compression) {
 		return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
+	}
+	if req.NoCOW && req.Compression != "" {
+		return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
 	}
 	if req.QuotaBytes == 0 {
 		req.QuotaBytes = req.SizeBytes
@@ -81,11 +81,8 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	cleanup := func() {
-		if err := s.btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
-			log.Warn().Err(err).Str("path", dataDir).Msg("cleanup: failed to delete subvolume")
-		}
-		if err := os.RemoveAll(volDir); err != nil {
-			log.Warn().Err(err).Str("path", volDir).Msg("cleanup: failed to remove directory")
+		if err := s.cleanupSubvolume(ctx, dataDir, volDir); err != nil {
+			log.Warn().Err(err).Str("path", volDir).Msg("cleanup after failed create")
 		}
 	}
 
@@ -105,6 +102,12 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs subvolume create failed: %v", err)}
 	}
 
+	uuid, err := s.btrfs.SubvolumeUUID(ctx, dataDir)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("read subvolume uuid: %w", err)
+	}
+
 	if req.NoCOW {
 		if err := s.btrfs.SetNoCOW(ctx, dataDir); err != nil {
 			log.Error().Err(err).Str("path", dataDir).Msg("failed to set nocow")
@@ -113,7 +116,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		}
 	}
 
-	if req.Compression != "" && req.Compression != "none" {
+	if req.Compression != "" {
 		if err := s.btrfs.SetCompression(ctx, dataDir, req.Compression); err != nil {
 			log.Error().Err(err).Str("path", dataDir).Str("algo", req.Compression).Msg("failed to set compression")
 			cleanup()
@@ -140,6 +143,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	meta := VolumeMetadata{
 		Name:        req.Name,
 		Path:        volDir,
+		UUID:        uuid,
 		SizeBytes:   req.SizeBytes,
 		NoCOW:       req.NoCOW,
 		Compression: req.Compression,
@@ -237,13 +241,17 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	if req.SizeBytes != nil && *req.SizeBytes < cur.SizeBytes {
 		return nil, &StorageError{Code: ErrInvalid, Message: fmt.Sprintf("new size %d must be at least current size %d", *req.SizeBytes, cur.SizeBytes)}
 	}
+	if req.Compression != nil && !utils.IsValidCompression(*req.Compression) {
+		return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
+	}
+	// Check the resulting state, since either side can create the conflict.
+	nextNoCOW := cur.NoCOW || (req.NoCOW != nil && *req.NoCOW)
+	nextCompression := cur.Compression
 	if req.Compression != nil {
-		if !utils.IsValidCompression(*req.Compression) {
-			return nil, &StorageError{Code: ErrInvalid, Message: "compression must be one of: zstd, lzo, zlib, none"}
-		}
-		if cur.NoCOW && *req.Compression != "" && *req.Compression != "none" {
-			return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
-		}
+		nextCompression = *req.Compression
+	}
+	if nextNoCOW && nextCompression != "" {
+		return nil, &StorageError{Code: ErrInvalid, Message: "nocow and compression are mutually exclusive"}
 	}
 	if req.UID != nil {
 		if err := utils.ValidateUID(*req.UID); err != nil {
@@ -272,6 +280,15 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 		}
 	}
 
+	// Runs before NoCOW, because btrfs rejects chattr +C while a compression
+	// property is set.
+	if req.Compression != nil {
+		if err := s.btrfs.SetCompression(ctx, dataDir, *req.Compression); err != nil {
+			log.Error().Err(err).Msg("failed to set compression")
+			return nil, fmt.Errorf("set compression failed: %w", err)
+		}
+	}
+
 	if req.NoCOW != nil && *req.NoCOW && !cur.NoCOW {
 		if err := s.btrfs.SetNoCOW(ctx, dataDir); err != nil {
 			log.Error().Err(err).Msg("failed to set nocow")
@@ -280,13 +297,6 @@ func (s *Storage) UpdateVolume(ctx context.Context, tenant, name string, req Vol
 	} else if req.NoCOW != nil && !*req.NoCOW && cur.NoCOW {
 		log.Warn().Str("volume", name).Msg("nocow cannot be reverted, ignoring")
 		req.NoCOW = nil
-	}
-
-	if req.Compression != nil && *req.Compression != "" && *req.Compression != "none" {
-		if err := s.btrfs.SetCompression(ctx, dataDir, *req.Compression); err != nil {
-			log.Error().Err(err).Msg("failed to set compression")
-			return nil, fmt.Errorf("set compression failed: %w", err)
-		}
 	}
 
 	if req.UID != nil || req.GID != nil {
@@ -398,11 +408,8 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	cloneData := filepath.Join(cloneDir, config.DataDir)
 
 	cleanup := func() {
-		if err := s.btrfs.SubvolumeDelete(ctx, cloneData); err != nil {
-			log.Warn().Err(err).Str("path", cloneData).Msg("cleanup: failed to delete subvolume")
-		}
-		if err := os.RemoveAll(cloneDir); err != nil {
-			log.Warn().Err(err).Str("path", cloneDir).Msg("cleanup: failed to remove directory")
+		if err := s.cleanupSubvolume(ctx, cloneData, cloneDir); err != nil {
+			log.Warn().Err(err).Str("path", cloneDir).Msg("cleanup after failed create")
 		}
 	}
 
@@ -413,6 +420,12 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		}
 		cleanup()
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
+	}
+
+	uuid, err := s.btrfs.SubvolumeUUID(ctx, cloneData)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("read subvolume uuid: %w", err)
 	}
 
 	if s.quotaEnabled {
@@ -427,6 +440,7 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	meta := VolumeMetadata{
 		Name:        req.Name,
 		Path:        cloneDir,
+		UUID:        uuid,
 		SizeBytes:   src.SizeBytes,
 		NoCOW:       src.NoCOW,
 		Compression: src.Compression,

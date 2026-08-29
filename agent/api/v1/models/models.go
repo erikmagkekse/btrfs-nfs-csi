@@ -27,10 +27,6 @@ package models
 
 import (
 	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"strconv"
 	"time"
 )
 
@@ -100,7 +96,7 @@ type VolumeCreateRequest struct {
 	Name        string            `json:"name"`             // ^[a-zA-Z0-9_-]{1,128}$
 	SizeBytes   uint64            `json:"size_bytes"`       // subvolume size in bytes
 	NoCOW       bool              `json:"nocow"`            // disable copy-on-write (chattr +C)
-	Compression string            `json:"compression"`      // "zstd", "zstd:3", "zlib", "zlib:5", "lzo", or ""
+	Compression string            `json:"compression"`      // "zstd", "zstd:3", "zlib", "zlib:5", "lzo", "none" (off), or "" (mount decides)
 	QuotaBytes  uint64            `json:"quota_bytes"`      // btrfs qgroup limit (0 = no quota)
 	UID         int               `json:"uid"`              // owner UID (0-65534)
 	GID         int               `json:"gid"`              // owner GID (0-65534)
@@ -199,9 +195,10 @@ type VolumeDetailResponse struct {
 	Name         string                 `json:"name"`                     // volume name
 	CreatedBy    string                 `json:"created_by,omitempty"`     // identity that created this volume
 	Path         string                 `json:"path"`                     // absolute path on the agent host
+	UUID         string                 `json:"uuid"`                     // btrfs subvolume UUID
 	SizeBytes    uint64                 `json:"size_bytes"`               // subvolume size in bytes
 	NoCOW        bool                   `json:"nocow"`                    // copy-on-write disabled (chattr +C)
-	Compression  string                 `json:"compression"`              // compression algorithm (e.g. "zstd", "zlib", "lzo", "")
+	Compression  string                 `json:"compression"`              // "zstd", "zstd:3", "zlib", "zlib:5", "lzo", "none" (off), or "" (mount decides)
 	QuotaBytes   uint64                 `json:"quota_bytes"`              // btrfs qgroup limit in bytes
 	UsedBytes    uint64                 `json:"used_bytes"`               // bytes used (btrfs qgroup accounting)
 	UID          int                    `json:"uid"`                      // owner UID
@@ -246,6 +243,7 @@ type SnapshotDetailResponse struct {
 	CreatedBy      string `json:"created_by,omitempty"` // identity that created this snapshot
 	Volume         string `json:"volume"`               // source volume name
 	Path           string `json:"path"`                 // absolute path on the agent host
+	UUID           string `json:"uuid"`                 // btrfs subvolume UUID
 	SizeBytes      uint64 `json:"size_bytes"`           // size in bytes (from source volume at snapshot time)
 	UsedBytes      uint64 `json:"used_bytes"`           // bytes used (btrfs qgroup accounting)
 	ExclusiveBytes uint64 `json:"exclusive_bytes"`      // exclusive bytes (not shared with other snapshots)
@@ -466,75 +464,3 @@ const (
 	TaskTypeQuotaRescan = "quota-rescan"
 	TaskTypeTest        = "test"
 )
-
-// --- Pagination helpers ---
-
-// ListOpts configures list endpoint queries (pagination + label filtering).
-type ListOpts struct {
-	After  string   // opaque cursor from a previous response's Next field
-	Limit  int      // items per page (0 or negative = use client default; positive = explicit)
-	Labels []string // label filters in "key=value" format
-}
-
-// Query builds url.Values for a list request. defaultLimit is used when Limit
-// is zero or negative (i.e. the caller did not specify an explicit page size).
-func (o ListOpts) Query(defaultLimit int) url.Values {
-	q := GenerateLabelQuery(o.Labels)
-	if o.After != "" {
-		q.Set("after", o.After)
-	}
-	limit := o.Limit
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	if limit > 0 {
-		q.Set("limit", strconv.Itoa(limit))
-	}
-	return q
-}
-
-// GenerateLabelQuery converts label filters to url.Values with repeated "label" keys.
-func GenerateLabelQuery(labels []string) url.Values {
-	v := make(url.Values)
-	for _, l := range labels {
-		v.Add("label", l)
-	}
-	return v
-}
-
-// --- Error types ---
-
-// AgentError represents an HTTP error response from the agent API.
-type AgentError struct {
-	StatusCode int
-	Code       string
-	Message    string
-}
-
-func (e *AgentError) Error() string {
-	return fmt.Sprintf("agent error %d (%s): %s", e.StatusCode, e.Code, e.Message)
-}
-
-// IsConflict reports whether err is a 409 Conflict response.
-func IsConflict(err error) bool {
-	if ae, ok := err.(*AgentError); ok {
-		return ae.StatusCode == http.StatusConflict
-	}
-	return false
-}
-
-// IsNotFound reports whether err is a 404 Not Found response.
-func IsNotFound(err error) bool {
-	if ae, ok := err.(*AgentError); ok {
-		return ae.StatusCode == http.StatusNotFound
-	}
-	return false
-}
-
-// IsLocked reports whether err is a 423 Locked response (e.g. volume has active exports).
-func IsLocked(err error) bool {
-	if ae, ok := err.(*AgentError); ok {
-		return ae.StatusCode == http.StatusLocked
-	}
-	return false
-}

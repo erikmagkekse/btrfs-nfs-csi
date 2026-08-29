@@ -67,6 +67,7 @@ func volumeGet(ctx context.Context, cmd *cli.Command) error {
 	return output(cmd, resp, func() {
 		fmt.Printf("Name:         %s\n", resp.Name)
 		fmt.Printf("Path:         %s\n", resp.Path)
+		fmt.Printf("UUID:         %s\n", resp.UUID)
 		fmt.Printf("Size:         %s\n", utils.FormatBytes(resp.SizeBytes))
 		fmt.Printf("Used:         %s (%.0f%%)\n", utils.FormatBytes(resp.UsedBytes), usedPct(resp.UsedBytes, resp.SizeBytes))
 		fmt.Printf("Quota:        %s\n", utils.FormatBytes(resp.QuotaBytes))
@@ -95,8 +96,8 @@ func volumeCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	compression := cmd.String("compression")
-	if compression != "" && compression != "none" && !utils.IsValidCompression(compression) {
-		return fmt.Errorf("invalid compression %q, expected: zstd, lzo, zlib (with optional level, e.g. zstd:3)", compression)
+	if !utils.IsValidCompression(compression) {
+		return fmt.Errorf("invalid compression %q, expected: zstd, lzo, zlib, none (with optional level, e.g. zstd:3)", compression)
 	}
 	uid := int(cmd.Int("uid"))
 	if err := utils.ValidateUID(uid); err != nil {
@@ -236,8 +237,8 @@ func volumeSet(ctx context.Context, cmd *cli.Command) error {
 	}
 	if cmd.IsSet("compression") {
 		v := cmd.String("compression")
-		if v != "" && v != "none" && !utils.IsValidCompression(v) {
-			return fmt.Errorf("invalid compression %q, expected: zstd, lzo, zlib (with optional level, e.g. zstd:3)", v)
+		if !utils.IsValidCompression(v) {
+			return fmt.Errorf("invalid compression %q, expected: zstd, lzo, zlib, none (with optional level, e.g. zstd:3)", v)
 		}
 		req.Compression = &v
 	}

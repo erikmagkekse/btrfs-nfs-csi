@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ func TestCreateVolumeExport(t *testing.T) {
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
 		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
 
-		exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(nil)
+		exporter.On("Export", mock.Anything, volDir, "10.0.0.1", pathFSID(volDir)).Return(nil)
 
 		err := s.CreateVolumeExport(ctx, "test", "myvol", "10.0.0.1", nil)
 		require.NoError(t, err, "CreateVolumeExport")
@@ -37,6 +38,54 @@ func TestCreateVolumeExport(t *testing.T) {
 		assert.Equal(t, "10.0.0.1", meta.Exports[0].IP)
 		assert.NotNil(t, meta.LastAttachAt, "LastAttachAt should be set")
 		exporter.AssertExpectations(t)
+	})
+
+	t.Run("crc32_marker_is_per_client", func(t *testing.T) {
+		s, bp, _, exporter := newTestStorage(t)
+		// migrated volume: uuid known, but a client still mounts the crc32 fsid
+		volDir := seedVolume(t, s, "test", bp, VolumeMetadata{
+			Name: "legacyvol", UUID: testSubvolUUID,
+			Exports: []ExportMetadata{{IP: "10.0.0.1", Labels: withCRC32FSID(map[string]string{"pv": "x"})}},
+		})
+
+		// a new client is unaffected and gets the uuid fsid
+		exporter.On("Export", mock.Anything, volDir, "10.0.0.2", testSubvolFSID).Return(nil)
+		labels := map[string]string{"pv": "x"}
+		require.NoError(t, s.CreateVolumeExport(ctx, "test", "legacyvol", "10.0.0.2", labels))
+		exporter.AssertExpectations(t)
+
+		meta := readVolumeMeta(t, volDir)
+		require.Len(t, meta.Exports, 2)
+		assert.NotContains(t, meta.Exports[1].Labels, config.LabelExportFSIDCRC32, "no inheritance between clients")
+
+		// re-publish of the migrated client keeps its entry, marker and all
+		require.NoError(t, s.CreateVolumeExport(ctx, "test", "legacyvol", "10.0.0.1", labels))
+		meta = readVolumeMeta(t, volDir)
+		require.Len(t, meta.Exports, 2, "no duplicate entry")
+		assert.Equal(t, "true", meta.Exports[0].Labels[config.LabelExportFSIDCRC32])
+	})
+
+	t.Run("marker_gone_with_the_client", func(t *testing.T) {
+		s, bp, _, exporter := newTestStorage(t)
+		volDir := seedVolume(t, s, "test", bp, VolumeMetadata{
+			Name: "legacyvol", UUID: testSubvolUUID,
+			Exports: []ExportMetadata{{IP: "10.0.0.1", Labels: withCRC32FSID(map[string]string{"pv": "x"})}},
+		})
+
+		exporter.On("Unexport", mock.Anything, volDir, "10.0.0.1").Return(nil)
+		require.NoError(t, s.DeleteVolumeExport(ctx, "test", "legacyvol", "10.0.0.1", map[string]string{"pv": "x"}))
+
+		meta := readVolumeMeta(t, volDir)
+		assert.Empty(t, meta.Exports)
+
+		// next export uses the uuid fsid
+		exporter.On("Export", mock.Anything, volDir, "10.0.0.1", testSubvolFSID).Return(nil)
+		require.NoError(t, s.CreateVolumeExport(ctx, "test", "legacyvol", "10.0.0.1", nil))
+		exporter.AssertExpectations(t)
+
+		meta = readVolumeMeta(t, volDir)
+		require.Len(t, meta.Exports, 1)
+		assert.NotContains(t, meta.Exports[0].Labels, config.LabelExportFSIDCRC32, "fresh export carries no marker")
 	})
 
 	t.Run("idempotent_client", func(t *testing.T) {
@@ -104,7 +153,7 @@ func TestCreateVolumeExport(t *testing.T) {
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
 		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
 
-		exporter.On("Export", mock.Anything, volDir, "::1").Return(nil)
+		exporter.On("Export", mock.Anything, volDir, "::1", pathFSID(volDir)).Return(nil)
 
 		err := s.CreateVolumeExport(ctx, "test", "myvol", "::1", nil)
 		require.NoError(t, err, "CreateVolumeExport with IPv6")
@@ -118,7 +167,7 @@ func TestCreateVolumeExport(t *testing.T) {
 		require.NoError(t, os.MkdirAll(volDir, 0o755))
 		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
 
-		exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(fmt.Errorf("exportfs: /data/vol1: command failed"))
+		exporter.On("Export", mock.Anything, volDir, "10.0.0.1", pathFSID(volDir)).Return(fmt.Errorf("exportfs: /data/vol1: command failed"))
 
 		err := s.CreateVolumeExport(ctx, "test", "myvol", "10.0.0.1", nil)
 		require.Error(t, err)
@@ -142,7 +191,7 @@ func TestCreateVolumeExport(t *testing.T) {
 		writeTestMetadata(t, s, volDir, VolumeMetadata{Name: "myvol"})
 
 		// first export for this IP: Export called
-		exporter.On("Export", mock.Anything, volDir, "10.0.0.1").Return(nil).Once()
+		exporter.On("Export", mock.Anything, volDir, "10.0.0.1", pathFSID(volDir)).Return(nil).Once()
 
 		labels1 := map[string]string{testLabelVolumeID: "vol1"}
 		labels2 := map[string]string{testLabelVolumeID: "vol2"}

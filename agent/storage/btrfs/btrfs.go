@@ -3,7 +3,6 @@ package btrfs
 import (
 	"context"
 	"fmt"
-	"strings"
 	"syscall"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
@@ -64,14 +63,7 @@ func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, e
 	if err != nil {
 		return QgroupInfo{}, err
 	}
-	var subvolID string
-	for line := range strings.SplitSeq(showOut, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if v, ok := strings.CutPrefix(trimmed, "Subvolume ID:"); ok {
-			subvolID = strings.TrimSpace(v)
-			break
-		}
-	}
+	subvolID := subvolumeShowField(showOut, "Subvolume ID:")
 	if subvolID == "" {
 		return QgroupInfo{}, fmt.Errorf("subvolume ID not found for %s", path)
 	}
@@ -90,6 +82,32 @@ func (m *Manager) QgroupUsageEx(ctx context.Context, path string) (QgroupInfo, e
 		return QgroupInfo{}, fmt.Errorf("qgroup %s not found for %s", qgroupID, path)
 	}
 	return info, nil
+}
+
+// SubvolumeUUID returns the subvolume UUID in canonical dashed form.
+func (m *Manager) SubvolumeUUID(ctx context.Context, path string) (string, error) {
+	out, err := m.cmd.Run(ctx, m.bin, "subvolume", "show", path)
+	if err != nil {
+		return "", err
+	}
+	return parseSubvolumeUUID(out)
+}
+
+// SubvolumeUUIDs returns the UUIDs of all subvolumes below path, keyed by
+// path relative to the filesystem root, from one `subvolume list -u -o`.
+func (m *Manager) SubvolumeUUIDs(ctx context.Context, path string) (map[string]string, error) {
+	out, err := m.cmd.Run(ctx, m.bin, "subvolume", "list", "-u", "-o", path)
+	if err != nil {
+		return nil, err
+	}
+	entries := parseSubvolumeListFull(out)
+	result := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if e.UUID != "" {
+			result[e.Path] = e.UUID
+		}
+	}
+	return result, nil
 }
 
 func (m *Manager) SetNoCOW(ctx context.Context, path string) error {

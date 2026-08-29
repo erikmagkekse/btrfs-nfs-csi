@@ -1,9 +1,12 @@
 package storage
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/config"
@@ -29,6 +32,18 @@ type StorageError struct {
 }
 
 func (e *StorageError) Error() string { return e.Message }
+
+// relToMount keys a data directory into a btrfs bulk-list map. A path outside
+// the mount point yields a miss, which every caller already handles.
+func (s *Storage) relToMount(dataDir string) string {
+	rel, _ := filepath.Rel(s.mountPoint, dataDir)
+	return rel
+}
+
+// cleanupSubvolume rolls back a failed create: subvolume, then its directory.
+func (s *Storage) cleanupSubvolume(ctx context.Context, dataDir, dir string) error {
+	return errors.Join(s.btrfs.SubvolumeDelete(ctx, dataDir), os.RemoveAll(dir))
+}
 
 // isSubvolumeAlreadyExistsError reports whether a btrfs subvolume create or
 // snapshot error indicates that the target path already exists. The btrfs CLI

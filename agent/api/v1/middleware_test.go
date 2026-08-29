@@ -546,6 +546,15 @@ func TestPolicyApply(t *testing.T) {
 			wantStamped: "ci-bot",
 		},
 		{
+			name:        "UpdateVolume adopts an ownerless volume",
+			policy:      policyUpdateVolume,
+			role:        models.RoleUser,
+			identity:    "ci-bot",
+			owner:       map[string]string{},
+			stamp:       map[string]string{config.LabelCreatedBy: "ci-bot"},
+			wantStamped: "ci-bot",
+		},
+		{
 			name:     "UpdateVolume rewrites created-by: 403",
 			policy:   policyUpdateVolume,
 			role:     models.RoleUser,
@@ -770,6 +779,7 @@ func TestPolicyApply_RejectsHardReservedLabels(t *testing.T) {
 		config.LabelTenant,
 		config.LabelCloneSourceType,
 		config.LabelCloneSourceName,
+		config.LabelExportFSIDCRC32,
 	}
 
 	for _, p := range policies {

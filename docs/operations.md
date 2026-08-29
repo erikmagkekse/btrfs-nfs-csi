@@ -50,7 +50,8 @@ btrfs-nfs-csi volume expand my-app +5Gi     # relative
 | `zstd` | Recommended. Optional level: `zstd:3` (1-15) |
 | `lzo` | Fastest, lower ratio. No level suffix (bare `lzo` only) |
 | `zlib` | Highest ratio, slowest. Optional level: `zlib:6` (1-9) |
-| `none` | Disable |
+| `none` | Disable, also when the filesystem is mounted with `compress=` |
+| `""` | Default. No property is set, so a `compress=` mount option applies |
 
 ```bash
 btrfs-nfs-csi volume create logs 5Gi --compression zstd
@@ -67,6 +68,8 @@ btrfs-nfs-csi volume create postgres-data 50Gi --nocow
 ```
 
 Trade-off: no snapshots/clones, no checksums, no compression. Better random write performance.
+
+On an existing volume, clear the compression property first (`volume set --compression ""`) and note that only files written afterwards are NoCOW. `--compression none` does not work here, it sets a property of its own that btrfs also refuses to combine with NoCOW.
 
 ## Quota
 
@@ -85,7 +88,9 @@ UID and GID must be between 0 and 65534. Mode must be valid octal between 0000 a
 
 ## NFS Exports
 
-Export options: `rw,nohide,crossmnt,no_root_squash,no_subtree_check,fsid=<crc32>`
+Export options: `rw,nohide,crossmnt,no_root_squash,no_subtree_check,fsid=<subvolume-uuid>` (the `uuid` from `volume get`).
+
+Volumes created before v0.12.0 used crc32 of the path. Clients attached at upgrade keep that fsid, marked `nfs.fsid.crc32=true` on their export entry. Later clients get the UUID fsid.
 
 ```bash
 btrfs-nfs-csi export add my-app 10.0.1.1

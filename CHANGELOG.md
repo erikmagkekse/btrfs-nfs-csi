@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.12.0
+
+Subvolume UUIDs in metadata and as NFS export fsid, a dependency refresh with container stages pinned by SHA256 digest, OCI annotations on the published image, and NoCOW and compression fixes.
+
+### Improvements
+- Derive the NFS export fsid from the btrfs subvolume UUID (#184)
+
+### Bug Fixes
+- Fix NoCOW and compression not being applied to btrfs in special cases (#183)
+- Fix the stale image tag in the agent quadlet and add Restart=always (#185)
+
+### Dependencies
+- Refresh dependencies, pin container base images by digest (#182)
+
 ## v0.11.2
 
 CLI saved-agent endpoints, Go 1.26.3 toolchain bump with the GO-2026-4918 stdlib fix, and a dependency refresh across the tree. Penultimate v0.11.x stop before the project is replaced by ButterStore (see `RELEASE.md`).

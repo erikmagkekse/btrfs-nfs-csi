@@ -207,6 +207,7 @@ func Run(version, commit string) error {
 func (a *Agent) Start(ctx context.Context) (<-chan error, error) {
 	startMetricsServer(a.cfg.MetricsAddr)
 
+	a.store.MigrateSubvolumeUUIDs(ctx)
 	a.store.StartWorkers(ctx, a.cfg.UsageInterval, a.cfg.NFSReconcileInterval, a.cfg.DeviceIOInterval, a.cfg.DeviceStatsInterval, a.cfg.TaskCleanupInterval)
 
 	ln, err := net.Listen("tcp", a.cfg.ListenAddr)

@@ -10,8 +10,8 @@ type MockExporter struct {
 	mock.Mock
 }
 
-func (m *MockExporter) Export(ctx context.Context, path string, client string) error {
-	args := m.Called(ctx, path, client)
+func (m *MockExporter) Export(ctx context.Context, path, client, fsid string) error {
+	args := m.Called(ctx, path, client, fsid)
 	return args.Error(0)
 }
 

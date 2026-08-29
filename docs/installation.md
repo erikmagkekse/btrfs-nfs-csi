@@ -19,8 +19,8 @@ The fastest way to get the agent running. Requires a mounted btrfs filesystem wi
 # export AGENT_TENANTS=default:$(openssl rand -hex 16)
 # export AGENT_LISTEN_ADDR=:8080
 # export AGENT_BLOCK_DISK=/dev/sdX  # optional, auto-format as btrfs + mount to AGENT_BASE_PATH 
-# export VERSION=0.11.2
-# export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.11.2  # override full image ref
+# export VERSION=0.12.0
+# export IMAGE=ghcr.io/erikmagkekse/btrfs-nfs-csi:0.12.0  # override full image ref
 # export SKIP_PACKAGE_INSTALL=1
 
 curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scripts/quickstart-agent.sh | sudo -E bash
@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/erikmagkekse/btrfs-nfs-csi/main/scr
 | `AGENT_BASE_PATH` | `/export/data` | btrfs mount point |
 | `AGENT_TENANTS` | `default:<random>` | tenant:token pairs |
 | `AGENT_LISTEN_ADDR` | `:8080` | listen address |
-| `VERSION` | `0.11.2` | container image tag |
+| `VERSION` | `0.12.0` | container image tag |
 | `IMAGE` | `ghcr.io/erikmagkekse/btrfs-nfs-csi:<VERSION>` | full container image reference (overrides `VERSION`) |
 | `AGENT_BLOCK_DISK` | (unset) | block device to auto-format as btrfs and mount (e.g. `/dev/sdb`) |
 | `SKIP_PACKAGE_INSTALL` | (unset) | set to `1` to skip package installation |
