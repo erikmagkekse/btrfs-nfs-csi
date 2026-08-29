@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/erikmagkekse/btrfs-nfs-csi/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,6 +55,7 @@ func TestVolumeMetadata_UnmarshalJSON_Migration(t *testing.T) {
 	t.Run("roundtrip_new_format", func(t *testing.T) {
 		orig := VolumeMetadata{
 			Name: "vol",
+			UUID: testSubvolUUID,
 			Exports: []ExportMetadata{
 				{IP: "10.0.0.1", Labels: map[string]string{testLabelVolumeID: "sc|vol1"}},
 				{IP: "10.0.0.2"},
@@ -65,7 +67,33 @@ func TestVolumeMetadata_UnmarshalJSON_Migration(t *testing.T) {
 		var m VolumeMetadata
 		require.NoError(t, json.Unmarshal(data, &m))
 		assert.Equal(t, orig.Exports, m.Exports)
+		assert.Equal(t, testSubvolUUID, m.UUID)
 	})
+}
+
+func TestExportFSID(t *testing.T) {
+	m := VolumeMetadata{UUID: testSubvolUUID, Exports: []ExportMetadata{
+		{IP: "10.0.0.1", Labels: withCRC32FSID(nil)},
+		{IP: "10.0.0.2"},
+	}}
+	assert.Equal(t, pathFSID("/data/t/vol"), m.exportFSID("10.0.0.1", "/data/t/vol"), "marked entry keeps the path fsid")
+	assert.Equal(t, testSubvolFSID, m.exportFSID("10.0.0.2", "/data/t/vol"), "unpinned entry: uuid without dashes")
+	assert.Equal(t, pathFSID("/data/t/vol"), (&VolumeMetadata{}).exportFSID("10.0.0.1", "/data/t/vol"), "no uuid, nothing pinned: path fsid")
+
+	// crc32("/data/vol1") & 0x7FFFFFFF, must stay stable across releases
+	assert.Equal(t, "1296402296", pathFSID("/data/vol1"))
+}
+
+func TestHasExportIgnoresFSIDType(t *testing.T) {
+	stored := []ExportMetadata{{IP: "10.0.0.1", Labels: withCRC32FSID(map[string]string{"pv": "x"})}}
+	assert.True(t, hasExport(stored, "10.0.0.1", map[string]string{"pv": "x"}))
+	assert.False(t, hasExport(stored, "10.0.0.1", map[string]string{"pv": "y"}))
+	assert.False(t, hasExport(stored, "10.0.0.1", nil))
+	assert.False(t, hasExport(stored, "10.0.0.2", map[string]string{"pv": "x"}))
+	assert.Equal(t, "true", stored[0].Labels[config.LabelExportFSIDCRC32], "stored labels must not be modified")
+
+	onlyLabel := []ExportMetadata{{IP: "10.0.0.1", Labels: withCRC32FSID(nil)}}
+	assert.True(t, hasExport(onlyLabel, "10.0.0.1", nil))
 }
 
 func TestUniqueClientIPs(t *testing.T) {

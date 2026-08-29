@@ -38,7 +38,7 @@ func (s *KernelExporterSuite) TearDownTest() {
 }
 
 func (s *KernelExporterSuite) TestExportAndList() {
-	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1")
+	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1", "1")
 	s.Require().NoError(err, "Export")
 
 	exports, err := s.exp.ListExports(s.ctx)
@@ -49,10 +49,10 @@ func (s *KernelExporterSuite) TestExportAndList() {
 }
 
 func (s *KernelExporterSuite) TestExportMultipleClients() {
-	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1")
+	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1", "1")
 	s.Require().NoError(err, "Export client 1")
 
-	err = s.exp.Export(s.ctx, s.dir, "127.0.0.2")
+	err = s.exp.Export(s.ctx, s.dir, "127.0.0.2", "1")
 	s.Require().NoError(err, "Export client 2")
 
 	exports, err := s.exp.ListExports(s.ctx)
@@ -65,10 +65,10 @@ func (s *KernelExporterSuite) TestExportMultipleClients() {
 }
 
 func (s *KernelExporterSuite) TestUnexportSingleClient() {
-	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1")
+	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1", "1")
 	s.Require().NoError(err, "Export client 1")
 
-	err = s.exp.Export(s.ctx, s.dir, "127.0.0.2")
+	err = s.exp.Export(s.ctx, s.dir, "127.0.0.2", "1")
 	s.Require().NoError(err, "Export client 2")
 
 	err = s.exp.Unexport(s.ctx, s.dir, "127.0.0.1")
@@ -84,10 +84,10 @@ func (s *KernelExporterSuite) TestUnexportSingleClient() {
 }
 
 func (s *KernelExporterSuite) TestUnexportAllClients() {
-	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1")
+	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1", "1")
 	s.Require().NoError(err, "Export client 1")
 
-	err = s.exp.Export(s.ctx, s.dir, "127.0.0.2")
+	err = s.exp.Export(s.ctx, s.dir, "127.0.0.2", "1")
 	s.Require().NoError(err, "Export client 2")
 
 	err = s.exp.Unexport(s.ctx, s.dir, "")
@@ -108,10 +108,10 @@ func (s *KernelExporterSuite) TestUnexportNotFound() {
 }
 
 func (s *KernelExporterSuite) TestExportIdempotent() {
-	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1")
+	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1", "1")
 	s.Require().NoError(err, "Export first call")
 
-	err = s.exp.Export(s.ctx, s.dir, "127.0.0.1")
+	err = s.exp.Export(s.ctx, s.dir, "127.0.0.1", "1")
 	s.Require().NoError(err, "Export second call (idempotent)")
 
 	exports, err := s.exp.ListExports(s.ctx)
@@ -137,7 +137,7 @@ func (s *KernelExporterSuite) TestExportLongPath() {
 	err := os.MkdirAll(nested, 0o755)
 	s.Require().NoError(err, "MkdirAll")
 
-	err = s.exp.Export(s.ctx, nested, "127.0.0.1")
+	err = s.exp.Export(s.ctx, nested, "127.0.0.1", "2")
 	s.Require().NoError(err, "Export long path")
 
 	// TearDownTest only cleans s.dir; also clean the nested export.
@@ -148,6 +148,17 @@ func (s *KernelExporterSuite) TestExportLongPath() {
 
 	s.Assert().True(containsExport(exports, nested, "127.0.0.1"),
 		"expected long path %s in exports: %v", nested, exports)
+}
+
+func (s *KernelExporterSuite) TestExportUUIDFSID() {
+	err := s.exp.Export(s.ctx, s.dir, "127.0.0.1", "660344903b5c76458de2ce5c462fddca")
+	s.Require().NoError(err, "Export with uuid fsid")
+
+	// ListExports drops the options, read them from exportfs -v directly.
+	out, err := exec.Command("exportfs", "-v").CombinedOutput()
+	s.Require().NoError(err, "exportfs -v: %s", out)
+	s.Assert().Contains(string(out), "fsid=660344903b5c76458de2ce5c462fddca",
+		"nfsd must accept the uuid as fsid: %s", out)
 }
 
 func containsExport(exports []ExportInfo, path, client string) bool {

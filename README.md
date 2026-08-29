@@ -126,7 +126,7 @@ AGENT_BLOCK_DISK=/dev/sdb curl -fsSL \
 | `AGENT_TENANTS` | `default:<random>` | tenant:token pairs |
 | `AGENT_LISTEN_ADDR` | `:8080` | Listen address |
 | `AGENT_BLOCK_DISK` | | Optional block device to auto-format as btrfs |
-| `VERSION` | `0.11.3` | Image tag |
+| `VERSION` | `0.12.0` | Image tag |
 
 </details>
 

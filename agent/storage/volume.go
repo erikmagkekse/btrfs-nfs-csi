@@ -81,11 +81,8 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	}
 
 	cleanup := func() {
-		if err := s.btrfs.SubvolumeDelete(ctx, dataDir); err != nil {
-			log.Warn().Err(err).Str("path", dataDir).Msg("cleanup: failed to delete subvolume")
-		}
-		if err := os.RemoveAll(volDir); err != nil {
-			log.Warn().Err(err).Str("path", volDir).Msg("cleanup: failed to remove directory")
+		if err := s.cleanupSubvolume(ctx, dataDir, volDir); err != nil {
+			log.Warn().Err(err).Str("path", volDir).Msg("cleanup after failed create")
 		}
 	}
 
@@ -103,6 +100,12 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 		}
 		log.Error().Err(err).Str("path", dataDir).Msg("failed to create subvolume")
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs subvolume create failed: %v", err)}
+	}
+
+	uuid, err := s.btrfs.SubvolumeUUID(ctx, dataDir)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("read subvolume uuid: %w", err)
 	}
 
 	if req.NoCOW {
@@ -140,6 +143,7 @@ func (s *Storage) CreateVolume(ctx context.Context, tenant string, req VolumeCre
 	meta := VolumeMetadata{
 		Name:        req.Name,
 		Path:        volDir,
+		UUID:        uuid,
 		SizeBytes:   req.SizeBytes,
 		NoCOW:       req.NoCOW,
 		Compression: req.Compression,
@@ -404,11 +408,8 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	cloneData := filepath.Join(cloneDir, config.DataDir)
 
 	cleanup := func() {
-		if err := s.btrfs.SubvolumeDelete(ctx, cloneData); err != nil {
-			log.Warn().Err(err).Str("path", cloneData).Msg("cleanup: failed to delete subvolume")
-		}
-		if err := os.RemoveAll(cloneDir); err != nil {
-			log.Warn().Err(err).Str("path", cloneDir).Msg("cleanup: failed to remove directory")
+		if err := s.cleanupSubvolume(ctx, cloneData, cloneDir); err != nil {
+			log.Warn().Err(err).Str("path", cloneDir).Msg("cleanup after failed create")
 		}
 	}
 
@@ -419,6 +420,12 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 		}
 		cleanup()
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
+	}
+
+	uuid, err := s.btrfs.SubvolumeUUID(ctx, cloneData)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("read subvolume uuid: %w", err)
 	}
 
 	if s.quotaEnabled {
@@ -433,6 +440,7 @@ func (s *Storage) CloneVolume(ctx context.Context, tenant string, req VolumeClon
 	meta := VolumeMetadata{
 		Name:        req.Name,
 		Path:        cloneDir,
+		UUID:        uuid,
 		SizeBytes:   src.SizeBytes,
 		NoCOW:       src.NoCOW,
 		Compression: src.Compression,

@@ -3,20 +3,17 @@ package nfs
 import (
 	"context"
 	"fmt"
-	"hash/crc32"
+	"regexp"
 	"strings"
 
 	"github.com/erikmagkekse/btrfs-nfs-csi/utils"
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	// fsidMask ensures the generated fsid is a positive 31-bit value.
-	fsidMask = 0x7FFFFFFF
-
-	// errNotFound is the exportfs error substring for missing exports.
-	errNotFound = "Could not find"
-)
+// validFSID is what nfsd accepts after fsid=: a number or a 32-digit hex UUID.
+// Checked here because fsid is the only part of the option string that comes
+// from stored data, and a comma in it would append further export options.
+var validFSID = regexp.MustCompile(`^([0-9]{1,10}|[0-9a-f]{32})$`)
 
 type kernelExporter struct {
 	bin  string
@@ -45,12 +42,11 @@ func unwrapBrackets(client string) string {
 	return client
 }
 
-func (e *kernelExporter) Export(ctx context.Context, path string, client string) error {
-	fsid := crc32.ChecksumIEEE([]byte(path)) & fsidMask
-	if fsid == 0 {
-		fsid = 1
+func (e *kernelExporter) Export(ctx context.Context, path, client, fsid string) error {
+	if !validFSID.MatchString(fsid) {
+		return fmt.Errorf("invalid fsid %q", fsid)
 	}
-	opts := fmt.Sprintf("%s,fsid=%d", e.opts, fsid)
+	opts := fmt.Sprintf("%s,fsid=%s", e.opts, fsid)
 	return e.run(ctx, "-o", opts, fmt.Sprintf("%s:%s", exportfsClient(client), path))
 }
 
@@ -147,7 +143,7 @@ func (e *kernelExporter) run(ctx context.Context, args ...string) error {
 // tryUnexport removes an export, silently ignoring already removed entries.
 func (e *kernelExporter) tryUnexport(ctx context.Context, args ...string) error {
 	out, err := e.exec(ctx, args...)
-	if err != nil && strings.Contains(out, errNotFound) {
+	if err != nil && strings.Contains(out, "Could not find") {
 		log.Debug().Str("args", strings.Join(args, " ")).Msg("export not found, skipping unexport")
 		return nil
 	}

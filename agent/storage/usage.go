@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -86,7 +85,7 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 		// detect usage drift
 		var used uint64
 		if meta.QuotaBytes > 0 && usageMap != nil {
-			relPath, _ := filepath.Rel(s.mountPoint, dataDir)
+			relPath := s.relToMount(dataDir)
 			if qi, ok := usageMap[relPath]; ok {
 				used = qi.Referenced
 			} else {
@@ -154,7 +153,7 @@ func (s *Storage) updateAll(ctx context.Context, mgr *btrfs.Manager, tenant stri
 		if usageMap == nil {
 			return true
 		}
-		relPath, _ := filepath.Rel(s.mountPoint, dataDir)
+		relPath := s.relToMount(dataDir)
 		qi, ok := usageMap[relPath]
 		if !ok {
 			log.Warn().Str("snapshot", name).Str("path", relPath).Msg("usage updater: snapshot not found in bulk qgroup data")

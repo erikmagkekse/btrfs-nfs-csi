@@ -103,6 +103,21 @@ func (s *BtrfsIntegrationSuite) TestSnapshot() {
 	s.Assert().True(s.mgr.SubvolumeExists(s.ctx, roSnap), "ro snapshot should exist")
 }
 
+func (s *BtrfsIntegrationSuite) TestSubvolumeUUID() {
+	src := filepath.Join(s.mnt, "uuidvol")
+	snap := filepath.Join(s.mnt, "uuidsnap")
+
+	s.Require().NoError(s.mgr.SubvolumeCreate(s.ctx, src), "SubvolumeCreate")
+	s.Require().NoError(s.mgr.SubvolumeSnapshot(s.ctx, src, snap, true), "SubvolumeSnapshot")
+
+	srcUUID, err := s.mgr.SubvolumeUUID(s.ctx, src)
+	s.Require().NoError(err, "SubvolumeUUID(src)")
+
+	snapUUID, err := s.mgr.SubvolumeUUID(s.ctx, snap)
+	s.Require().NoError(err, "SubvolumeUUID(snap)")
+	s.Assert().NotEqual(srcUUID, snapUUID, "snapshot must have its own uuid")
+}
+
 func (s *BtrfsIntegrationSuite) TestQgroupLimit() {
 	subPath := filepath.Join(s.mnt, "quotavol")
 	err := s.mgr.SubvolumeCreate(s.ctx, subPath)

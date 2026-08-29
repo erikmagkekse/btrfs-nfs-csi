@@ -72,11 +72,24 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 		return nil, &StorageError{Code: ErrInternal, Message: fmt.Sprintf("btrfs snapshot failed: %v", err)}
 	}
 
+	cleanup := func() {
+		if err := s.cleanupSubvolume(ctx, dstData, snapDir); err != nil {
+			log.Warn().Err(err).Str("path", snapDir).Msg("cleanup after failed create")
+		}
+	}
+
+	uuid, err := s.btrfs.SubvolumeUUID(ctx, dstData)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("read subvolume uuid: %w", err)
+	}
+
 	now := time.Now().UTC()
 	meta := SnapshotMetadata{
 		Name:        req.Name,
 		Volume:      req.Volume,
 		Path:        snapDir,
+		UUID:        uuid,
 		SizeBytes:   volMeta.SizeBytes,
 		QuotaBytes:  volMeta.QuotaBytes,
 		NoCOW:       volMeta.NoCOW,
@@ -91,12 +104,7 @@ func (s *Storage) CreateSnapshot(ctx context.Context, tenant string, req Snapsho
 
 	if err := s.snapshots.Store(tenant, req.Name, &meta); err != nil {
 		log.Error().Err(err).Msg("failed to write snapshot metadata")
-		if delErr := s.btrfs.SubvolumeDelete(ctx, dstData); delErr != nil {
-			log.Warn().Err(delErr).Str("path", dstData).Msg("cleanup: failed to delete subvolume")
-		}
-		if rmErr := os.RemoveAll(snapDir); rmErr != nil {
-			log.Warn().Err(rmErr).Str("path", snapDir).Msg("cleanup: failed to remove directory")
-		}
+		cleanup()
 		return nil, fmt.Errorf("failed to write metadata: %w", err)
 	}
 

@@ -137,6 +137,8 @@ func enforceCreatedBy(c *echo.Context, labelsPtr *map[string]string) error {
 
 // preserveCreatedBy guards against a labels-replace clearing or rewriting
 // created-by: admins bypass ownership but still cannot edit audit trail.
+// Resources from before ownership enforcement carry no created-by, the first
+// update that supplies one adopts them.
 func preserveCreatedBy(c *echo.Context, ownerLabels map[string]string, labelsPtr *map[string]string) error {
 	if *labelsPtr == nil {
 		*labelsPtr = map[string]string{}
@@ -147,7 +149,7 @@ func preserveCreatedBy(c *echo.Context, ownerLabels map[string]string, labelsPtr
 	}
 	existing := ownerLabels[config.LabelCreatedBy]
 	supplied, clientSet := labels[config.LabelCreatedBy]
-	if clientSet && supplied != existing {
+	if clientSet && existing != "" && supplied != existing {
 		denialLog(c, denialIdentityMismatch).
 			Str("supplied", supplied).
 			Str("existing", existing).

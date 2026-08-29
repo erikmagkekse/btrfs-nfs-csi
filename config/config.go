@@ -32,6 +32,10 @@ const (
 const (
 	LabelCloneSourceType = "clone.source.type"
 	LabelCloneSourceName = "clone.source.name"
+	// LabelExportFSIDCRC32 marks an export entry whose client mounted the
+	// pre-UUID, path-derived fsid. Agent-owned: only the startup migration
+	// sets it.
+	LabelExportFSIDCRC32 = "nfs.fsid.crc32"
 )
 
 const (
@@ -51,12 +55,13 @@ var ReservedTenantNames = []string{TasksDir, SnapshotsDir, DataDir, MetadataDir}
 // SoftReservedLabelKeys are server-managed labels. CLI and K8s integrations
 // reject these client-side for UX; Agent API consumers should use v1.Client
 // which handles them automatically.
-var SoftReservedLabelKeys = []string{LabelCreatedBy, LabelCloneSourceType, LabelCloneSourceName, LabelTenant}
+var SoftReservedLabelKeys = []string{LabelCreatedBy, LabelCloneSourceType, LabelCloneSourceName, LabelTenant, LabelExportFSIDCRC32}
 
 // HardReservedLabelKeys are rejected by the HTTP API itself if a client
-// tries to set them. `created-by` is not listed here because the API
-// handles it via identity matching (stamp/preserve), not blanket rejection.
-var HardReservedLabelKeys = []string{LabelTenant, LabelCloneSourceType, LabelCloneSourceName}
+// tries to set them. Every soft-reserved key except `created-by`, which the
+// API handles via identity matching (stamp/preserve) instead.
+var HardReservedLabelKeys = slices.DeleteFunc(slices.Clone(SoftReservedLabelKeys),
+	func(k string) bool { return k == LabelCreatedBy })
 
 // ValidationError is returned by ValidateName and ValidateLabels.
 // Consumers can type-assert to distinguish validation errors from other errors.

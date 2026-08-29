@@ -1,35 +1,17 @@
 # Changelog
 
-## v0.11.3
+## v0.12.0
 
-Dependency refresh release. Pins the container build and runtime stages by SHA256 digest, adds OCI annotations to the published image, and fixes NoCOW and compression never reaching btrfs.
+Subvolume UUIDs in metadata and as NFS export fsid, a dependency refresh with container stages pinned by SHA256 digest, OCI annotations on the published image, and NoCOW and compression fixes.
 
 ### Improvements
-- Set OCI annotations on the container index manifest so ghcr.io shows title, description, source, and license (#182)
-- Split `image.vendor` / `image.authors` in `Chart.yaml` and `Containerfile` to match OCI convention (#182)
-
-### Security
-- Pin container build stage to Go 1.26.7, fixes the August 2026 stdlib CVEs in `crypto/tls`, `net/http`, `net/url`, `encoding/xml`, `html/template` and `cmd/go` (#182)
-- Bump `google.golang.org/grpc` to 1.83.2, fixes GHSA-hrxh-6v49-42gf / GO-2026-6061 (#182)
-- Bump `github.com/labstack/echo/v5` to 5.3.1, fixes CVE-2026-55677 (#182)
-- Bump `golang.org/x/mod` to 0.40.0, fixes CVE-2026-56864 and CVE-2026-56865 (#182)
-- Bump `golang.org/x/crypto` to 0.55.0, rolls through the June 2026 advisory batch (#182)
+- Derive the NFS export fsid from the btrfs subvolume UUID (#184)
 
 ### Bug Fixes
 - Fix NoCOW and compression not being applied to btrfs in special cases (#183)
 
 ### Dependencies
-- Bump `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, `k8s.io/mount-utils` from 0.36.0 to 0.36.4 (#182)
-- Bump `github.com/kubernetes-csi/external-snapshotter/client/v8` from 8.4.0 to 8.6.0 (#182)
-- Bump `github.com/container-storage-interface/spec` from 1.12.0 to 1.13.0 (#182)
-- Bump `google.golang.org/protobuf` to 1.36.12 (#182)
-- Bump `golang.org/x/sys` from 0.44.0 to 0.47.0 (#182)
-- Bump `golang.org/x/term` from 0.43.0 to 0.45.0 (#182)
-- Bump `github.com/prometheus/client_golang` from 1.23.2 to 1.24.1 (#182)
-- Bump `github.com/stretchr/testify` from 1.11.1 to 1.12.1 (#182)
-- Bump `github.com/urfave/cli/v3` from 3.8.0 to 3.11.0 (#182)
-- Refresh remaining indirect dependencies (#182)
-- Bump `actions/checkout` and `actions/setup-go` from 6 to 7, `docker/metadata-action` from 5 to 6 (#183)
+- Refresh dependencies, pin container base images by digest (#182)
 
 ## v0.11.2
 

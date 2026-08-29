@@ -1,9 +1,11 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -56,11 +58,62 @@ func testStorageWithRunner(t *testing.T, runner utils.Runner, exporter *nfs.Mock
 	return s, tenantPath
 }
 
+// testSubvolUUID is the UUID reported by the default `btrfs subvolume show` fixture,
+// testSubvolFSID its nfsd form.
+const (
+	testSubvolUUID = "8f3c1c2e-4d5a-4b6c-9e7f-0a1b2c3d4e5f"
+	testSubvolFSID = "8f3c1c2e4d5a4b6c9e7f0a1b2c3d4e5f"
+)
+
+// subvolumeShowOutput is the `btrfs subvolume show` line parseSubvolumeUUID reads.
+const subvolumeShowOutput = "\tUUID:\t\t\t" + testSubvolUUID
+
+// withCRC32FSID returns labels plus the agent-owned crc32 marker, as the
+// migration writes it onto an export entry.
+func withCRC32FSID(labels map[string]string) map[string]string {
+	out := make(map[string]string, len(labels)+1)
+	maps.Copy(out, labels)
+	out[config.LabelExportFSIDCRC32] = "true"
+	return out
+}
+
+// isSubvolumeShow reports whether args is a `btrfs subvolume show` call.
+func isSubvolumeShow(args []string) bool {
+	return len(args) >= 2 && args[0] == "subvolume" && args[1] == "show"
+}
+
+// subvolumeListRunFn answers `subvolume list -u -o` with one line per
+// relPath -> uuid and keeps the `subvolume show` fixture, so it can replace
+// the runner installed by newTestStorage. Everything else succeeds empty.
+func subvolumeListRunFn(uuids map[string]string) func(args []string) (string, error) {
+	var out string
+	for p, u := range uuids {
+		out += "ID 1 gen 1 top level 5 uuid " + u + " path " + p + "\n"
+	}
+	return func(args []string) (string, error) {
+		switch {
+		case len(args) >= 3 && args[0] == "subvolume" && args[1] == "list" && args[2] == "-u":
+			return out, nil
+		case isSubvolumeShow(args):
+			return subvolumeShowOutput, nil
+		}
+		return "", nil
+	}
+}
+
 // newTestStorage creates a Storage with fresh MockRunner and MockExporter.
 // Returns all four components for assertions.
+// The runner answers `subvolume show` with a fixture carrying testSubvolUUID
+// so create paths can read the UUID; everything else returns runner.Out/Err.
 func newTestStorage(t *testing.T) (*Storage, string, *utils.MockRunner, *nfs.MockExporter) {
 	t.Helper()
 	runner := &utils.MockRunner{}
+	runner.RunFn = func(args []string) (string, error) {
+		if isSubvolumeShow(args) {
+			return subvolumeShowOutput, nil
+		}
+		return runner.Out, runner.Err
+	}
 	exporter := &nfs.MockExporter{}
 	s, bp := testStorageWithRunner(t, runner, exporter)
 	return s, bp, runner, exporter
@@ -146,6 +199,58 @@ func ptrString(v string) *string { return &v }
 func ptrBool(v bool) *bool       { return &v }
 
 // --- unit tests ---
+
+// TestCreateRollsBackOnUUIDFailure: every create path rolls its subvolume back when the uuid cannot be read.
+func TestCreateRollsBackOnUUIDFailure(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name   string
+		setup  func(t *testing.T, s *Storage, bp string)
+		create func(s *Storage) error
+		dir    string
+	}{
+		{"volume", func(*testing.T, *Storage, string) {}, func(s *Storage) error {
+			_, err := s.CreateVolume(ctx, "test", VolumeCreateRequest{Name: "failuuid", SizeBytes: 1024})
+			return err
+		}, "failuuid"},
+		{"clone", func(t *testing.T, s *Storage, bp string) {
+			snapDir := seedSnapshot(t, s, "test", bp, SnapshotMetadata{Name: "mysnap", Volume: "srcvol"})
+			require.NoError(t, os.MkdirAll(filepath.Join(snapDir, config.DataDir), 0o755))
+			seedVolume(t, s, "test", bp, VolumeMetadata{Name: "srcvol", SizeBytes: 4096})
+		}, func(s *Storage) error {
+			_, err := s.CreateClone(ctx, "test", CloneCreateRequest{Name: "failuuid", Snapshot: "mysnap"})
+			return err
+		}, "failuuid"},
+		{"snapshot", func(t *testing.T, s *Storage, bp string) {
+			dir := seedVolume(t, s, "test", bp, VolumeMetadata{Name: "srcvol", SizeBytes: 1024})
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, config.DataDir), 0o755))
+		}, func(s *Storage) error {
+			_, err := s.CreateSnapshot(ctx, "test", SnapshotCreateRequest{Name: "failuuid", Volume: "srcvol"})
+			return err
+		}, filepath.Join(config.SnapshotsDir, "failuuid")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runner := &utils.MockRunner{RunFn: func(args []string) (string, error) {
+				if isSubvolumeShow(args) {
+					return "", fmt.Errorf("show failed")
+				}
+				return "", nil
+			}}
+			s, bp := testStorageWithRunner(t, runner, &nfs.MockExporter{})
+			tc.setup(t, s, bp)
+
+			err := tc.create(s)
+			require.ErrorContains(t, err, "read subvolume uuid")
+
+			dir := filepath.Join(bp, tc.dir)
+			_, statErr := os.Stat(dir)
+			assert.True(t, os.IsNotExist(statErr), "dir should be cleaned up after failure")
+			assert.True(t, containsCall(runner.Calls, "subvolume", "delete", filepath.Join(dir, config.DataDir)),
+				"cleanup should call subvolume delete, got: %v", runner.Calls)
+		})
+	}
+}
 
 func TestValidateName(t *testing.T) {
 	tests := []struct {
