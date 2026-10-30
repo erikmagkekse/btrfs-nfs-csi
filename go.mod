@@ -6,7 +6,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/container-storage-interface/spec v1.13.0
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0
-	github.com/labstack/echo/v5 v5.3.1
+	github.com/labstack/echo/v5 v5.4.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.1

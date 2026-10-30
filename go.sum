@@ -73,8 +73,8 @@ github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0 h1:FtGewu2k6HWw6
 github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0/go.mod h1:Vxl89NySJ45J+ah3NTMan/KJXW+NpcGHE2Tw0GSw53k=
 github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
-github.com/labstack/echo/v5 v5.3.1 h1:75maCxkQVGualckLc/5s/ihgpH1a1Dc6AuGWNVNs6bw=
-github.com/labstack/echo/v5 v5.3.1/go.mod h1:4iEGNQiPPZnkfYpNR/L6fINd3NLiGWUD5+eBotFALas=
+github.com/labstack/echo/v5 v5.4.1 h1:pxn7LF+AIepRAoSXRS6GMdjWysbOBt8B18G0VPjPH3U=
+github.com/labstack/echo/v5 v5.4.1/go.mod h1:4iEGNQiPPZnkfYpNR/L6fINd3NLiGWUD5+eBotFALas=
 github.com/mattn/go-colorable v0.1.14 h1:9A9LHSqF/7dyVVX6g0U9cwm9pG3kP9gSzcuIPHPsaIE=
 github.com/mattn/go-colorable v0.1.14/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/mattn/go-isatty v0.0.22 h1:j8l17JJ9i6VGPUFUYoTUKPSgKe/83EYU2zBC7YNKMw4=
